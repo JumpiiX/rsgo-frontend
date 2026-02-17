@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RSGO - Multiplayer FPS</title>
+    <style>
+        body { 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden; 
+            background: #000; 
+            font-family: Arial, sans-serif;
+        }
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            z-index: 100;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 4px;
+            height: 4px;
+            background: white;
+            border-radius: 2px;
+            z-index: 100;
+        }
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            z-index: 100;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="nameScreen" style="position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000;">
+        <div style="background: #333; padding: 40px; border-radius: 10px; text-align: center;">
+            <h2 style="color: white; margin-bottom: 20px;">Enter Your Name</h2>
+            <input type="text" id="playerName" placeholder="Your name..." style="padding: 10px; font-size: 16px; margin-bottom: 20px; width: 200px;">
+            <br>
+            <button id="joinGame" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">Join Game</button>
+        </div>
+    </div>
+
+    <div id="gameContainer" style="display: none;">
+        <div id="ui">
+            <div>Health: <span id="health">100</span></div>
+            <div>Players: <span id="playerCount">0</span></div>
+            <div>You: <span id="yourName"></span></div>
+        </div>
+        <div id="crosshair"></div>
+        <div id="instructions">
+            WASD: Move | Mouse: Look | Click: Shoot | ESC: Release cursor
+        </div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+        }
+    }
+    </script>
+    
+    <!-- Make THREE global for compatibility -->
+    <script type="module">
+        import * as THREE from 'three';
+        window.THREE = THREE;
+    </script>
+    
+    <script type="module" src="src/main.js"></script>
+</body>
+</html>
