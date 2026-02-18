@@ -116,11 +116,22 @@ export class InputManager {
     setupPointerLock() {
         document.addEventListener('pointerlockchange', () => {
             this.isPointerLocked = document.pointerLockElement !== null;
+            console.log('Pointer lock changed:', this.isPointerLocked ? 'LOCKED' : 'UNLOCKED');
+            if (this.isPointerLocked) {
+                console.log('You can now move with WASD!');
+            } else {
+                console.log('Click on game to enable movement');
+            }
         });
     }
 
     updateMovement(deltaTime, camera) {
-        if (!camera || !this.isPointerLocked) return;
+        if (!camera) {
+            return;
+        }
+        if (!this.isPointerLocked) {
+            return;
+        }
         
         // Simplified movement - direct control
         const moveVector = new THREE.Vector3();
@@ -136,45 +147,46 @@ export class InputManager {
         right.normalize();
 
         // Apply WASD movement
+        let isMoving = false;
         if (this.controls.forward) {
             moveVector.addScaledVector(forward, this.moveSpeed * deltaTime);
+            isMoving = true;
         }
         if (this.controls.backward) {
             moveVector.addScaledVector(forward, -this.moveSpeed * deltaTime);
+            isMoving = true;
         }
         if (this.controls.right) {
             moveVector.addScaledVector(right, this.moveSpeed * deltaTime);
+            isMoving = true;
         }
         if (this.controls.left) {
             moveVector.addScaledVector(right, -this.moveSpeed * deltaTime);
+            isMoving = true;
         }
 
         // Check collision and get valid position
-        const currentPos = camera.getPosition();
+        const currentPos = camera.getPosition().clone(); // CLONE the current position!
         const desiredPos = currentPos.clone().add(moveVector);
         
-        let finalPos;
-        if (this.collisionSystem) {
-            finalPos = this.collisionSystem.getValidPosition(currentPos, desiredPos);
-        } else {
-            // Boundary check (keep player inside the bigger arena)
-            if (Math.abs(desiredPos.x) < 195 && Math.abs(desiredPos.z) < 195) {
-                finalPos = desiredPos;
-            } else {
-                finalPos = currentPos;
-            }
-        }
+        // TEMPORARILY DISABLED ALL MOVEMENT RESTRICTIONS
+        // Just allow all movement for testing
+        const finalPos = desiredPos;
+        
+        // Calculate movement BEFORE updating camera
+        const actualMovement = finalPos.clone().sub(currentPos);
         
         // Apply the movement
         camera.getCamera().position.copy(finalPos);
         
         // Only send position update if we actually moved
-        const actualMovement = finalPos.clone().sub(currentPos);
-        if (actualMovement.length() > 0.01 && this.onMoveCallback) {
-            this.onMoveCallback(
-                camera.getPosition(),
-                camera.getRotation()
-            );
+        if (actualMovement.length() > 0.01) {
+            if (this.onMoveCallback) {
+                this.onMoveCallback(
+                    camera.getPosition(),
+                    camera.getRotation()
+                );
+            }
         }
     }
 

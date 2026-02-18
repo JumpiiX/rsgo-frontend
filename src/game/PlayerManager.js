@@ -11,6 +11,8 @@ export class PlayerManager {
             return;
         }
         
+        console.log('Adding new player:', player.id, player.name, 'at position', player.x, player.y, player.z);
+        
         // Create a simple colored cube for other players
         const geometry = new THREE.CapsuleGeometry(1, 4, 4, 8);
         const material = new THREE.MeshLambertMaterial({ color: 0xff4444 });
@@ -49,8 +51,11 @@ export class PlayerManager {
     updatePlayer(message) {
         const player = this.otherPlayers.get(message.player_id);
         if (player) {
+            console.log('Updating player', message.player_id, 'position to', message.x.toFixed(1), message.y.toFixed(1), message.z.toFixed(1));
             player.mesh.position.set(message.x, message.y, message.z);
             player.mesh.rotation.y = message.rotation_y;
+        } else {
+            console.log('Player not found in otherPlayers map:', message.player_id);
         }
     }
 

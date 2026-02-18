@@ -53,6 +53,7 @@ export class NetworkClient {
                 
             case 'player_moved':
                 if (this.onPlayerMovedCallback && message.player_id !== this.playerId) {
+                    console.log('Received player movement:', message.player_id, 'at', message.x.toFixed(1), message.y.toFixed(1), message.z.toFixed(1));
                     this.onPlayerMovedCallback(message);
                 }
                 break;
@@ -94,6 +95,7 @@ export class NetworkClient {
 
     sendMove(position, rotation) {
         if (this.isConnected()) {
+            console.log('Sending position to server:', position.x.toFixed(1), position.y.toFixed(1), position.z.toFixed(1));
             this.send({
                 type: 'move',
                 x: position.x,

@@ -50,9 +50,11 @@ export class Game {
     setupSystems() {
         this.lighting.setupLights();
         this.mapBuilder.buildMap();
-        this.collisionSystem.setupBuildingColliders();
+        // COLLISION DISABLED FOR NOW
+        // this.collisionSystem.setupBuildingColliders();
         this.input.setupControls(this.camera.getCamera());
-        this.input.setCollisionSystem(this.collisionSystem);
+        // COLLISION DISABLED FOR NOW
+        // this.input.setCollisionSystem(this.collisionSystem);
         this.network.connect();
         
         // Bind network events to player manager
@@ -114,8 +116,11 @@ export class Game {
     }
 
     handleMove(position, rotation) {
+        console.log('handleMove called with position:', position.x.toFixed(1), position.y.toFixed(1), position.z.toFixed(1));
         if (this.network && this.gameStarted) {
             this.network.sendMove(position, rotation);
+        } else {
+            console.log('Not sending - network:', !!this.network, 'gameStarted:', this.gameStarted);
         }
     }
 

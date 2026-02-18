@@ -29,7 +29,8 @@ export class CollisionSystem {
         this.colliders.push(collider);
     }
 
-    checkCollision(position, radius = 2) {
+    checkCollision(position, radius = 1.5) {
+        // Smaller radius for better movement near walls
         for (const bounds of this.buildingBounds) {
             // Check if position + radius intersects with building bounds
             // Only check X and Z, ignore Y for now (player height is around 10)
@@ -43,7 +44,7 @@ export class CollisionSystem {
         return false;
     }
 
-    getValidPosition(currentPos, newPos, radius = 2) {
+    getValidPosition(currentPos, newPos, radius = 1.5) {
         // If new position has no collision, return it
         if (!this.checkCollision(newPos, radius)) {
             return newPos;
@@ -71,39 +72,127 @@ export class CollisionSystem {
     }
 
     setupBuildingColliders() {
-        // Main left building - smaller and properly positioned
+        // Match the actual buildings from MapBuilder.js
+        
+        // Central plaza area
         this.addBuildingCollider(
-            new THREE.Vector3(-100, 30, -80),
-            new THREE.Vector3(40, 60, 40)
+            new THREE.Vector3(0, 8, 0),
+            new THREE.Vector3(40, 16, 30)
         );
         
-        // Main right building - smaller collision box
+        // Residential blocks
         this.addBuildingCollider(
-            new THREE.Vector3(120, 35, 80),
-            new THREE.Vector3(50, 70, 45)
+            new THREE.Vector3(-120, 15, -120),
+            new THREE.Vector3(60, 30, 40)
+        );
+        this.addBuildingCollider(
+            new THREE.Vector3(120, 15, 120),
+            new THREE.Vector3(60, 30, 40)
+        );
+        this.addBuildingCollider(
+            new THREE.Vector3(-120, 12, 80),
+            new THREE.Vector3(50, 24, 35)
+        );
+        this.addBuildingCollider(
+            new THREE.Vector3(120, 12, -80),
+            new THREE.Vector3(50, 24, 35)
         );
         
-        // Industrial complex at (-180, 20) - adjusted size
+        // Smaller buildings
         this.addBuildingCollider(
-            new THREE.Vector3(-180, 25, 20),
-            new THREE.Vector3(40, 50, 40)
+            new THREE.Vector3(-80, 10, -40),
+            new THREE.Vector3(30, 20, 25)
+        );
+        this.addBuildingCollider(
+            new THREE.Vector3(80, 10, 40),
+            new THREE.Vector3(30, 20, 25)
+        );
+        this.addBuildingCollider(
+            new THREE.Vector3(-40, 8, -100),
+            new THREE.Vector3(25, 16, 20)
+        );
+        this.addBuildingCollider(
+            new THREE.Vector3(40, 8, 100),
+            new THREE.Vector3(25, 16, 20)
         );
         
-        // Corner tower structure at (130, -130) - smaller
+        // Industrial buildings
         this.addBuildingCollider(
-            new THREE.Vector3(130, 20, -130),
-            new THREE.Vector3(30, 40, 30)
+            new THREE.Vector3(-160, 18, 0),
+            new THREE.Vector3(35, 36, 60)
+        );
+        this.addBuildingCollider(
+            new THREE.Vector3(160, 18, 0),
+            new THREE.Vector3(35, 36, 60)
         );
         
-        // Additional small buildings
+        // Map boundary walls
         this.addBuildingCollider(
-            new THREE.Vector3(-50, 15, 100),
-            new THREE.Vector3(25, 30, 25)
+            new THREE.Vector3(0, 12.5, -200),
+            new THREE.Vector3(400, 25, 4)
+        );
+        this.addBuildingCollider(
+            new THREE.Vector3(0, 12.5, 200),
+            new THREE.Vector3(400, 25, 4)
+        );
+        this.addBuildingCollider(
+            new THREE.Vector3(-200, 12.5, 0),
+            new THREE.Vector3(4, 25, 400)
+        );
+        this.addBuildingCollider(
+            new THREE.Vector3(200, 12.5, 0),
+            new THREE.Vector3(4, 25, 400)
         );
         
+        // Tactical cover spots
+        // Dumpsters
         this.addBuildingCollider(
-            new THREE.Vector3(50, 15, -50),
-            new THREE.Vector3(25, 30, 25)
+            new THREE.Vector3(-60, 2, -80),
+            new THREE.Vector3(6, 4, 4)
+        );
+        this.addBuildingCollider(
+            new THREE.Vector3(60, 2, 80),
+            new THREE.Vector3(6, 4, 4)
+        );
+        
+        // Car wrecks
+        this.addBuildingCollider(
+            new THREE.Vector3(25, 2, -15),
+            new THREE.Vector3(8, 4, 3)
+        );
+        this.addBuildingCollider(
+            new THREE.Vector3(-25, 2, 15),
+            new THREE.Vector3(8, 4, 3)
+        );
+        
+        // Shipping containers
+        this.addBuildingCollider(
+            new THREE.Vector3(140, 4, -140),
+            new THREE.Vector3(15, 8, 6)
+        );
+        this.addBuildingCollider(
+            new THREE.Vector3(-140, 4, 140),
+            new THREE.Vector3(15, 8, 6)
+        );
+        
+        // Small kiosks
+        this.addBuildingCollider(
+            new THREE.Vector3(70, 3, -70),
+            new THREE.Vector3(4, 6, 4)
+        );
+        this.addBuildingCollider(
+            new THREE.Vector3(-70, 3, 70),
+            new THREE.Vector3(4, 6, 4)
+        );
+        
+        // Corner barriers
+        this.addBuildingCollider(
+            new THREE.Vector3(90, 1.5, -90),
+            new THREE.Vector3(3, 3, 12)
+        );
+        this.addBuildingCollider(
+            new THREE.Vector3(-90, 1.5, 90),
+            new THREE.Vector3(3, 3, 12)
         );
     }
 }

@@ -49,8 +49,13 @@ export class BulletSystem {
         this.raycaster.set(startPos, direction);
         this.raycaster.far = startPos.distanceTo(endPos);
         
+        // Filter out sprites and other objects that can't be raycast properly
+        const raycastableObjects = this.scene.children.filter(obj => {
+            return obj.type === 'Mesh' || obj.type === 'Group';
+        });
+        
         // Get all objects that can be hit (buildings, ground, etc)
-        const intersects = this.raycaster.intersectObjects(this.scene.children, true);
+        const intersects = this.raycaster.intersectObjects(raycastableObjects, true);
         
         if (intersects.length > 0) {
             const impact = intersects[0];

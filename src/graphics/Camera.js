@@ -2,20 +2,30 @@ export class Camera {
     constructor() {
         this.camera = null;
         this.spawnPoints = [
-            // Near central plaza - safe open area
-            { x: 20, y: 10, z: 20 },
+            // Central street crossing - completely open
+            { x: 0, y: 10, z: 30 },
             
-            // Near left building - front courtyard
-            { x: -100, y: 10, z: -80 },
+            // Street left side - far from buildings
+            { x: -60, y: 10, z: 0 },
             
-            // Near right building - open area
-            { x: 120, y: 10, z: 80 },
+            // Street right side - far from buildings  
+            { x: 60, y: 10, z: 0 },
             
-            // Near industrial area - loading dock
-            { x: -180, y: 10, z: 20 },
+            // North street area - safe zone
+            { x: 0, y: 10, z: -150 },
             
-            // Near corner structure - open plaza
-            { x: 130, y: 10, z: -130 }
+            // South street area - safe zone
+            { x: 0, y: 10, z: 150 },
+            
+            // West street area
+            { x: -150, y: 10, z: 0 },
+            
+            // East street area
+            { x: 150, y: 10, z: 0 },
+            
+            // Diagonal open areas
+            { x: -90, y: 10, z: -90 },
+            { x: 90, y: 10, z: 90 }
         ];
         this.init();
     }
