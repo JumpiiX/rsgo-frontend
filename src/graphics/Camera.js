@@ -2,30 +2,26 @@ export class Camera {
     constructor() {
         this.camera = null;
         this.spawnPoints = [
-            // Central street crossing - completely open
-            { x: 0, y: 10, z: 30 },
+            // T-Side spawns (attacking team)
+            { x: 0, y: 10, z: 350 },        // South main spawn
+            { x: -50, y: 10, z: 330 },      // South left spawn
+            { x: 50, y: 10, z: 330 },       // South right spawn
+            { x: -100, y: 10, z: 300 },     // South wide left
+            { x: 100, y: 10, z: 300 },      // South wide right
             
-            // Street left side - far from buildings
-            { x: -60, y: 10, z: 0 },
+            // CT-Side spawns (defending team)
+            { x: 0, y: 10, z: -350 },       // North main spawn
+            { x: -50, y: 10, z: -330 },     // North left spawn
+            { x: 50, y: 10, z: -330 },      // North right spawn
+            { x: -100, y: 10, z: -300 },    // North wide left
+            { x: 100, y: 10, z: -300 },     // North wide right
             
-            // Street right side - far from buildings  
-            { x: 60, y: 10, z: 0 },
-            
-            // North street area - safe zone
-            { x: 0, y: 10, z: -150 },
-            
-            // South street area - safe zone
-            { x: 0, y: 10, z: 150 },
-            
-            // West street area
-            { x: -150, y: 10, z: 0 },
-            
-            // East street area
-            { x: 150, y: 10, z: 0 },
-            
-            // Diagonal open areas
-            { x: -90, y: 10, z: -90 },
-            { x: 90, y: 10, z: 90 }
+            // Mid spawns for deathmatch mode
+            { x: -300, y: 10, z: 0 },       // West warehouse spawn
+            { x: 300, y: 10, z: 0 },        // East warehouse spawn
+            { x: 0, y: 10, z: 0 },          // Center spawn
+            { x: -150, y: 10, z: -150 },    // Northwest tactical spawn
+            { x: 150, y: 10, z: 150 },      // Southeast tactical spawn
         ];
         this.init();
     }
