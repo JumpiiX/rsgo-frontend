@@ -17,7 +17,7 @@ export class MapBuilder {
         this.createHidingSpots();
         this.createCityProps();
         this.createDecorations();
-        // this.createSpawnMarkers(); // DEBUG: Show spawn points - DISABLED
+        // this.createSpawnMarkers(); // DEBUG: Show spawn points - DISABLED AGAIN
     }
 
     createGround() {
@@ -628,14 +628,14 @@ export class MapBuilder {
         // DEBUG: Visual markers for spawn points
         const spawnPoints = [
             // T-Side spawns (attacking team)
-            { x: 0, y: 10, z: 350 },        // South main spawn
+            { x: -30, y: 10, z: 320 },      // South main spawn (moved left to avoid wall)
             { x: -50, y: 10, z: 330 },      // South left spawn
             { x: 50, y: 10, z: 330 },       // South right spawn
             { x: -100, y: 10, z: 300 },     // South wide left
             { x: 100, y: 10, z: 300 },      // South wide right
             
             // CT-Side spawns (defending team)
-            { x: 0, y: 10, z: -350 },       // North main spawn
+            // Removed problematic spawn #6
             { x: -50, y: 10, z: -330 },     // North left spawn
             { x: 50, y: 10, z: -330 },      // North right spawn
             { x: -100, y: 10, z: -300 },    // North wide left
@@ -649,23 +649,23 @@ export class MapBuilder {
             { x: 100, y: 10, z: 100 },      // Southeast open area
         ];
         
-        // Unique colors for each spawn point
+        // New unique colors for each spawn point (different from before)
         const spawnColors = [
-            0xFF0000,  // 1: Red
-            0xFF8800,  // 2: Orange  
-            0xFFFF00,  // 3: Yellow
-            0x00FF00,  // 4: Lime
-            0x00FF88,  // 5: Mint
-            0x00FFFF,  // 6: Cyan
-            0x0088FF,  // 7: Sky Blue
-            0x0000FF,  // 8: Blue
-            0x8800FF,  // 9: Purple
-            0xFF00FF,  // 10: Magenta
-            0xFF0088,  // 11: Pink
-            0x888888,  // 12: Gray
-            0xFFFFFF,  // 13: White
-            0x88FF00,  // 14: Chartreuse
-            0x00FF00,  // 15: Green
+            0xFF1493,  // 1: Deep Pink
+            0xFF4500,  // 2: Orange Red  
+            0xFFD700,  // 3: Gold
+            0x32CD32,  // 4: Lime Green
+            0x00CED1,  // 5: Dark Turquoise
+            0x1E90FF,  // 6: Dodger Blue
+            0x8A2BE2,  // 7: Blue Violet
+            0xDC143C,  // 8: Crimson
+            0xFF69B4,  // 9: Hot Pink
+            0x00FA9A,  // 10: Medium Spring Green
+            0xFFB6C1,  // 11: Light Pink
+            0x20B2AA,  // 12: Light Sea Green
+            0xF0E68C,  // 13: Khaki
+            0x9ACD32,  // 14: Yellow Green
+            0xFF6347,  // 15: Tomato
         ];
         
         spawnPoints.forEach((spawn, index) => {
@@ -694,6 +694,9 @@ export class MapBuilder {
             this.scene.add(sphere);
         });
         
-        console.log('DEBUG: Spawn markers created - Red=T-Side, Blue=CT-Side, Yellow=Mid');
+        console.log('DEBUG: Spawn markers RE-ENABLED with new colors:');
+        console.log('  T-Side (1-5): Deep Pink, Orange Red, Gold, Lime Green, Dark Turquoise');
+        console.log('  CT-Side (6-10): Dodger Blue, Blue Violet, Crimson, Hot Pink, Medium Spring Green'); 
+        console.log('  Mid (11-15): Light Pink, Light Sea Green, Khaki, Yellow Green, Tomato');
     }
 }

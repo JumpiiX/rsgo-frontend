@@ -112,9 +112,8 @@ export class PlayerManager {
             player.mesh.visible = false;
             this.respawning.set(playerId, true);
             
-            setTimeout(() => {
-                this.respawnPlayer(playerId);
-            }, 5000);
+            // Don't auto-respawn after 5 seconds - player stays invisible until manual respawn
+            // setTimeout removed - wait for PlayerRespawned message from server
         }
     }
 

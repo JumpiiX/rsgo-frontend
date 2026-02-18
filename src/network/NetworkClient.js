@@ -130,6 +130,14 @@ export class NetworkClient {
             });
         }
     }
+    
+    sendRespawn() {
+        if (this.isConnected()) {
+            this.send({
+                type: 'respawn'
+            });
+        }
+    }
 
     send(data) {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {

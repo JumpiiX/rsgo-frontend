@@ -3,14 +3,14 @@ export class Camera {
         this.camera = null;
         this.spawnPoints = [
             // T-Side spawns (attacking team)
-            { x: 0, y: 10, z: 350 },        // South main spawn
+            { x: -30, y: 10, z: 320 },      // South main spawn (moved left to avoid wall)
             { x: -50, y: 10, z: 330 },      // South left spawn
             { x: 50, y: 10, z: 330 },       // South right spawn
             { x: -100, y: 10, z: 300 },     // South wide left
             { x: 100, y: 10, z: 300 },      // South wide right
             
             // CT-Side spawns (defending team)
-            { x: 0, y: 10, z: -350 },       // North main spawn
+            // Removed problematic spawn #6
             { x: -50, y: 10, z: -330 },     // North left spawn
             { x: 50, y: 10, z: -330 },      // North right spawn
             { x: -100, y: 10, z: -300 },    // North wide left
