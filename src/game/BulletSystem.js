@@ -19,29 +19,75 @@ export class BulletSystem {
         });
         const bulletMesh = new THREE.Mesh(geometry, material);
         
+        // Mark this as a bullet to avoid raycasting it
+        bulletMesh.userData.isBullet = true;
+        
         bulletMesh.position.copy(startPos);
         this.scene.add(bulletMesh);
         
-        const direction = new THREE.Vector3().subVectors(endPos, startPos).normalize();
-        const distance = startPos.distanceTo(endPos);
-        const speed = distance / 0.5; // 0.5 seconds travel time
+        // Find the actual impact point (where bullet should stop)
+        const actualEndPos = this.findImpactPoint(startPos, endPos);
+        
+        const direction = new THREE.Vector3().subVectors(actualEndPos, startPos).normalize();
+        const distance = startPos.distanceTo(actualEndPos);
+        
+        // Calculate travel time based on a constant bullet speed (e.g., 200 units/second)
+        const bulletSpeed = 200; // units per second
+        const travelTime = Math.max(0.1, distance / bulletSpeed); // Minimum 0.1 seconds
         
         const bullet = {
             mesh: bulletMesh,
             direction: direction,
-            speed: speed,
+            speed: bulletSpeed,
             timeAlive: 0,
-            maxTime: 0.5,
+            maxTime: travelTime,  // Dynamic time based on actual distance
             startPos: startPos.clone(),
-            endPos: endPos.clone()
+            endPos: actualEndPos.clone()  // Use actual impact point, not original target
         };
         
         this.bullets.set(bulletId, bullet);
         
-        // Check for impact point
+        // Create impact mark at actual impact point
         this.createImpactMark(startPos, endPos, isOwnBullet);
         
         return bulletId;
+    }
+    
+    findImpactPoint(startPos, endPos) {
+        const direction = new THREE.Vector3().subVectors(endPos, startPos).normalize();
+        this.raycaster.set(startPos, direction);
+        this.raycaster.far = startPos.distanceTo(endPos);
+        
+        // Filter out bullets, impact marks, and other non-solid objects
+        const raycastableObjects = this.scene.children.filter(obj => {
+            // Skip bullets and impact marks to prevent them from blocking each other
+            if (obj.userData && (obj.userData.isBullet || obj.userData.isImpactMark)) {
+                return false;
+            }
+            // Skip spheres (which are bullets)
+            if (obj.geometry && obj.geometry.type === 'SphereGeometry') {
+                return false;
+            }
+            // Skip player capsules (other players)
+            if (obj.geometry && obj.geometry.type === 'CapsuleGeometry') {
+                return false;
+            }
+            // Skip sprites (name labels)
+            if (obj.type === 'Sprite') {
+                return false;
+            }
+            return obj.type === 'Mesh' || obj.type === 'Group';
+        });
+        
+        // Get all objects that can be hit (buildings, ground, etc)
+        const intersects = this.raycaster.intersectObjects(raycastableObjects, true);
+        
+        if (intersects.length > 0) {
+            const impact = intersects[0];
+            return impact.point;  // Return the actual impact point
+        }
+        
+        return endPos;  // If no impact, return original target
     }
     
     createImpactMark(startPos, endPos, isOwnBullet) {
@@ -49,8 +95,24 @@ export class BulletSystem {
         this.raycaster.set(startPos, direction);
         this.raycaster.far = startPos.distanceTo(endPos);
         
-        // Filter out sprites and other objects that can't be raycast properly
+        // Filter out bullets, impact marks, and other non-solid objects
         const raycastableObjects = this.scene.children.filter(obj => {
+            // Skip bullets and impact marks to prevent them from blocking each other
+            if (obj.userData && (obj.userData.isBullet || obj.userData.isImpactMark)) {
+                return false;
+            }
+            // Skip spheres (which are bullets)
+            if (obj.geometry && obj.geometry.type === 'SphereGeometry') {
+                return false;
+            }
+            // Skip player capsules (other players)
+            if (obj.geometry && obj.geometry.type === 'CapsuleGeometry') {
+                return false;
+            }
+            // Skip sprites (name labels)
+            if (obj.type === 'Sprite') {
+                return false;
+            }
             return obj.type === 'Mesh' || obj.type === 'Group';
         });
         
@@ -61,24 +123,33 @@ export class BulletSystem {
             const impact = intersects[0];
             const impactPos = impact.point;
             
-            // Create impact mark
-            const geometry = new THREE.PlaneGeometry(2, 2);
+            // Create impact mark as a sphere/dot
+            const geometry = new THREE.SphereGeometry(2, 8, 8);  // Bigger sphere for far visibility
             const material = new THREE.MeshBasicMaterial({
                 color: isOwnBullet ? 0x4444ff : 0xff4444,
+                emissive: isOwnBullet ? 0x4444ff : 0xff4444,
+                emissiveIntensity: 1,
                 transparent: true,
-                opacity: 0.7,
-                side: THREE.DoubleSide
+                opacity: 1,
+                fog: false  // Don't let fog hide the markers
             });
             const impactMark = new THREE.Mesh(geometry, material);
             
+            // Mark this as an impact mark
+            impactMark.userData.isImpactMark = true;
+            
             impactMark.position.copy(impactPos);
             
-            // Align impact mark with surface normal
+            // Move slightly away from surface to prevent z-fighting
             if (impact.face) {
                 const normal = impact.face.normal.clone();
                 normal.transformDirection(impact.object.matrixWorld);
-                impactMark.lookAt(impactPos.clone().add(normal));
+                impactMark.position.add(normal.multiplyScalar(0.1));
             }
+            
+            // Make sure it renders at maximum priority for visibility
+            impactMark.renderOrder = 1000;
+            impactMark.material.depthWrite = false;  // Don't write to depth buffer to avoid z-fighting
             
             this.scene.add(impactMark);
             

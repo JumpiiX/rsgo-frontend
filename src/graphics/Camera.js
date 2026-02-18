@@ -17,11 +17,11 @@ export class Camera {
             { x: 100, y: 10, z: -300 },     // North wide right
             
             // Mid spawns for deathmatch mode
-            { x: -300, y: 10, z: 0 },       // West warehouse spawn
-            { x: 300, y: 10, z: 0 },        // East warehouse spawn
-            { x: 0, y: 10, z: 0 },          // Center spawn
-            { x: -150, y: 10, z: -150 },    // Northwest tactical spawn
-            { x: 150, y: 10, z: 150 },      // Southeast tactical spawn
+            { x: -200, y: 10, z: 100 },     // West mid open area
+            { x: 200, y: 10, z: -100 },     // East mid open area
+            { x: -50, y: 10, z: 150 },      // South-west open area (moved from 0,200)
+            { x: -100, y: 10, z: -100 },    // Northwest open area
+            { x: 100, y: 10, z: 100 },      // Southeast open area
         ];
         this.init();
     }

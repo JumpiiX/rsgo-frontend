@@ -33,12 +33,12 @@ export class Game {
         this.scene = new Scene();
         this.camera = new Camera();
         this.lighting = new LightingSystem(this.scene.getScene());
-        this.mapBuilder = new MapBuilder(this.scene.getScene());
+        this.collisionSystem = new CollisionSystem(this.scene.getScene());
+        this.mapBuilder = new MapBuilder(this.scene.getScene(), this.collisionSystem);
         this.input = new InputManager();
         this.network = new NetworkClient();
         this.playerManager = new PlayerManager(this.scene.getScene());
         this.bulletSystem = new BulletSystem(this.scene.getScene());
-        this.collisionSystem = new CollisionSystem(this.scene.getScene());
 
         // Add renderer canvas to DOM
         document.getElementById('gameContainer').appendChild(this.renderer.getRenderer().domElement);
@@ -50,11 +50,8 @@ export class Game {
     setupSystems() {
         this.lighting.setupLights();
         this.mapBuilder.buildMap();
-        // COLLISION DISABLED FOR NOW
-        // this.collisionSystem.setupBuildingColliders();
         this.input.setupControls(this.camera.getCamera());
-        // COLLISION DISABLED FOR NOW
-        // this.input.setCollisionSystem(this.collisionSystem);
+        this.input.setCollisionSystem(this.collisionSystem);
         this.network.connect();
         
         // Bind network events to player manager
@@ -134,7 +131,7 @@ export class Game {
             this.bulletSystem.createBullet(startPos, target, true);
             
             this.checkHit(target);
-            this.network.sendShoot(target);
+            this.network.sendShoot(startPos, target);  // Send both start and target
         }
     }
 

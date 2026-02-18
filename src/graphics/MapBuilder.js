@@ -1,8 +1,9 @@
 import { MaterialManager } from '../utils/MaterialManager.js';
 
 export class MapBuilder {
-    constructor(scene) {
+    constructor(scene, collisionSystem = null) {
         this.scene = scene;
+        this.collisionSystem = collisionSystem;
         this.materials = new MaterialManager();
     }
 
@@ -16,6 +17,7 @@ export class MapBuilder {
         this.createHidingSpots();
         this.createCityProps();
         this.createDecorations();
+        // this.createSpawnMarkers(); // DEBUG: Show spawn points - DISABLED
     }
 
     createGround() {
@@ -62,6 +64,15 @@ export class MapBuilder {
             mesh.position.set(...wall.pos);
             mesh.castShadow = true;
             this.scene.add(mesh);
+            
+            // Add collision
+            if (this.collisionSystem) {
+                this.collisionSystem.addBoxCollider(
+                    new THREE.Vector3(...wall.pos),
+                    new THREE.Vector3(...wall.size),
+                    'wall'
+                );
+            }
         });
     }
 
@@ -136,6 +147,15 @@ export class MapBuilder {
             building.position.set(...block.pos);
             building.castShadow = true;
             this.scene.add(building);
+            
+            // Add collision
+            if (this.collisionSystem) {
+                this.collisionSystem.addBoxCollider(
+                    new THREE.Vector3(...block.pos),
+                    new THREE.Vector3(...block.size),
+                    'building'
+                );
+            }
 
             // Add windows to taller buildings
             if (block.size[1] > 15) {
@@ -283,6 +303,20 @@ export class MapBuilder {
                     this.scene.add(wheel);
                 });
             }
+            
+            // Add collision for vehicle
+            if (this.collisionSystem) {
+                // Use box collider for vehicle body
+                const vehicleSize = vehicle.type === 'bus' ? 
+                    new THREE.Vector3(10, 4, 25) : 
+                    new THREE.Vector3(8, 3, 15);
+                
+                this.collisionSystem.addBoxCollider(
+                    new THREE.Vector3(vehicle.pos[0], vehicle.pos[1] + vehicleSize.y / 2, vehicle.pos[2]),
+                    vehicleSize,
+                    'vehicle'
+                );
+            }
         });
     }
     
@@ -363,6 +397,16 @@ export class MapBuilder {
             leaves3.position.set(tree.pos[0], tree.pos[1] + 16 * tree.size, tree.pos[2]);
             leaves3.castShadow = true;
             this.scene.add(leaves3);
+            
+            // Add collision for tree trunk
+            if (this.collisionSystem) {
+                this.collisionSystem.addCylinderCollider(
+                    new THREE.Vector3(tree.pos[0], tree.pos[1], tree.pos[2]),
+                    tree.size * 1.5,  // radius slightly larger than trunk
+                    20 * tree.size,   // height of tree
+                    'tree'
+                );
+            }
         });
     }
     
@@ -408,6 +452,16 @@ export class MapBuilder {
                 lampLight.position.set(prop.pos[0], prop.pos[1] + 14, prop.pos[2]);
                 this.scene.add(lampLight);
                 
+                // Add collision for lamp post
+                if (this.collisionSystem) {
+                    this.collisionSystem.addCylinderCollider(
+                        new THREE.Vector3(prop.pos[0], prop.pos[1], prop.pos[2]),
+                        0.5,  // radius
+                        15,   // height
+                        'prop'
+                    );
+                }
+                
             } else if (prop.type === 'bench') {
                 const benchGeometry = new THREE.BoxGeometry(6, 1, 2);
                 const benchMaterial = new THREE.MeshLambertMaterial({ color: 0x4a3a2a });
@@ -416,12 +470,31 @@ export class MapBuilder {
                 bench.rotation.y = prop.rot;
                 this.scene.add(bench);
                 
+                // Add collision for bench
+                if (this.collisionSystem) {
+                    this.collisionSystem.addBoxCollider(
+                        new THREE.Vector3(...prop.pos),
+                        new THREE.Vector3(6, 1, 2),
+                        'prop'
+                    );
+                }
+                
             } else if (prop.type === 'bin') {
                 const binGeometry = new THREE.CylinderGeometry(1, 1.2, 3, 6);
                 const binMaterial = new THREE.MeshLambertMaterial({ color: 0x2a4a2a });
                 const bin = new THREE.Mesh(binGeometry, binMaterial);
                 bin.position.set(prop.pos[0], prop.pos[1] + 1.5, prop.pos[2]);
                 this.scene.add(bin);
+                
+                // Add collision for bin
+                if (this.collisionSystem) {
+                    this.collisionSystem.addCylinderCollider(
+                        new THREE.Vector3(prop.pos[0], prop.pos[1], prop.pos[2]),
+                        1.2,  // radius
+                        3,    // height
+                        'prop'
+                    );
+                }
                 
             } else if (prop.type === 'busStop') {
                 // Bus stop shelter
@@ -435,6 +508,15 @@ export class MapBuilder {
                 shelter.position.set(prop.pos[0], prop.pos[1] + 5, prop.pos[2]);
                 shelter.rotation.y = prop.rot;
                 this.scene.add(shelter);
+                
+                // Add collision for bus stop
+                if (this.collisionSystem) {
+                    this.collisionSystem.addBoxCollider(
+                        new THREE.Vector3(prop.pos[0], prop.pos[1] + 5, prop.pos[2]),
+                        new THREE.Vector3(8, 10, 3),
+                        'prop'
+                    );
+                }
             }
         });
     }
@@ -540,5 +622,78 @@ export class MapBuilder {
             towerLight.position.set(pos[0], pos[1] + 35, pos[2]);
             this.scene.add(towerLight);
         });
+    }
+    
+    createSpawnMarkers() {
+        // DEBUG: Visual markers for spawn points
+        const spawnPoints = [
+            // T-Side spawns (attacking team)
+            { x: 0, y: 10, z: 350 },        // South main spawn
+            { x: -50, y: 10, z: 330 },      // South left spawn
+            { x: 50, y: 10, z: 330 },       // South right spawn
+            { x: -100, y: 10, z: 300 },     // South wide left
+            { x: 100, y: 10, z: 300 },      // South wide right
+            
+            // CT-Side spawns (defending team)
+            { x: 0, y: 10, z: -350 },       // North main spawn
+            { x: -50, y: 10, z: -330 },     // North left spawn
+            { x: 50, y: 10, z: -330 },      // North right spawn
+            { x: -100, y: 10, z: -300 },    // North wide left
+            { x: 100, y: 10, z: -300 },     // North wide right
+            
+            // Mid spawns for deathmatch mode
+            { x: -200, y: 10, z: 100 },     // West mid open area
+            { x: 200, y: 10, z: -100 },     // East mid open area
+            { x: -50, y: 10, z: 150 },      // South-west open area (moved from 0,200)
+            { x: -100, y: 10, z: -100 },    // Northwest open area
+            { x: 100, y: 10, z: 100 },      // Southeast open area
+        ];
+        
+        // Unique colors for each spawn point
+        const spawnColors = [
+            0xFF0000,  // 1: Red
+            0xFF8800,  // 2: Orange  
+            0xFFFF00,  // 3: Yellow
+            0x00FF00,  // 4: Lime
+            0x00FF88,  // 5: Mint
+            0x00FFFF,  // 6: Cyan
+            0x0088FF,  // 7: Sky Blue
+            0x0000FF,  // 8: Blue
+            0x8800FF,  // 9: Purple
+            0xFF00FF,  // 10: Magenta
+            0xFF0088,  // 11: Pink
+            0x888888,  // 12: Gray
+            0xFFFFFF,  // 13: White
+            0x88FF00,  // 14: Chartreuse
+            0x00FF00,  // 15: Green
+        ];
+        
+        spawnPoints.forEach((spawn, index) => {
+            const color = spawnColors[index];
+            
+            // Create tall colored line going up to the sky
+            const lineGeometry = new THREE.CylinderGeometry(1, 1, 200, 8);
+            const lineMaterial = new THREE.MeshBasicMaterial({ 
+                color: color,
+                emissive: color,
+                emissiveIntensity: 1
+            });
+            const line = new THREE.Mesh(lineGeometry, lineMaterial);
+            line.position.set(spawn.x, spawn.y + 100, spawn.z); // 100 units up from spawn point
+            this.scene.add(line);
+            
+            // Add matching colored sphere at base
+            const sphereGeometry = new THREE.SphereGeometry(3, 8, 8);
+            const sphereMaterial = new THREE.MeshBasicMaterial({ 
+                color: color,
+                emissive: color,
+                emissiveIntensity: 0.5
+            });
+            const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+            sphere.position.set(spawn.x, spawn.y, spawn.z);
+            this.scene.add(sphere);
+        });
+        
+        console.log('DEBUG: Spawn markers created - Red=T-Side, Blue=CT-Side, Yellow=Mid');
     }
 }

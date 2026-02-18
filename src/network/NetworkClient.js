@@ -107,10 +107,13 @@ export class NetworkClient {
         }
     }
 
-    sendShoot(target) {
+    sendShoot(startPos, target) {
         if (this.isConnected()) {
             this.send({
                 type: 'shoot',
+                start_x: startPos.x,
+                start_y: startPos.y,
+                start_z: startPos.z,
                 target_x: target.x,
                 target_y: target.y,
                 target_z: target.z

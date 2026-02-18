@@ -169,9 +169,10 @@ export class InputManager {
         const currentPos = camera.getPosition().clone(); // CLONE the current position!
         const desiredPos = currentPos.clone().add(moveVector);
         
-        // TEMPORARILY DISABLED ALL MOVEMENT RESTRICTIONS
-        // Just allow all movement for testing
-        const finalPos = desiredPos;
+        // Apply collision detection if system is available
+        const finalPos = this.collisionSystem ? 
+            this.collisionSystem.getValidPosition(currentPos, desiredPos, 1.5) : 
+            desiredPos;
         
         // Calculate movement BEFORE updating camera
         const actualMovement = finalPos.clone().sub(currentPos);
