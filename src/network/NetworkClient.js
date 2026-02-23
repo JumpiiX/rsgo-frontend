@@ -13,7 +13,8 @@ export class NetworkClient {
     }
 
     connect() {
-        this.ws = new WebSocket('ws://localhost:8080');
+        const wsHost = window.location.hostname;
+        this.ws = new WebSocket(`ws://${wsHost}:8080`);
         
         this.ws.onopen = () => {
             this.connected = true;
