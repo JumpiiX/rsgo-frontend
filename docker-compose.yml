@@ -7,3 +7,9 @@ services:
       - "80:80"
     restart: unless-stopped
     container_name: rsgo-frontend
+    networks:
+      - rsgo-network
+
+networks:
+  rsgo-network:
+    external: true

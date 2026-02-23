@@ -13,9 +13,10 @@ export class NetworkClient {
     }
 
     connect() {
-        // Use IP for WebSocket since domain only points to port 80
-        const wsHost = window.location.hostname === 'localhost' ? 'localhost' : '188.34.160.197';
-        this.ws = new WebSocket(`ws://${wsHost}:8080`);
+        const wsUrl = window.location.hostname === 'localhost'
+            ? 'ws://localhost:8080' 
+            : `ws://${window.location.hostname}/ws`;
+        this.ws = new WebSocket(wsUrl);
         
         this.ws.onopen = () => {
             this.connected = true;
