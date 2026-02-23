@@ -7,3 +7,14 @@ services:
       - "8081:80"
     restart: unless-stopped
     container_name: rsgo-frontend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rsgo.rule=Host(`rsgo.unterguggenberger.ch`)"
+      - "traefik.http.routers.rsgo.entrypoints=web"
+      - "traefik.http.services.rsgo.loadbalancer.server.port=80"
+    networks:
+      - traefik
+
+networks:
+  traefik:
+    external: true
