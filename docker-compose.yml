@@ -4,6 +4,6 @@ services:
   frontend:
     build: .
     ports:
-      - "80:80"
+      - "8081:80"
     restart: unless-stopped
     container_name: rsgo-frontend
