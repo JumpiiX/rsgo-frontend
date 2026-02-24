@@ -24,6 +24,7 @@ jobs:
           cd rsgo-frontend
           docker stop rsgo-frontend || true
           docker rm rsgo-frontend || true
+          docker network create rsgo-shared-network 2>/dev/null || true
           docker-compose down || true
           docker-compose build --no-cache
-          docker-compose up -d
+          docker run -d --name rsgo-frontend --network rsgo-shared-network -p 80:80 --restart unless-stopped rsgo-frontend-frontend:latest
