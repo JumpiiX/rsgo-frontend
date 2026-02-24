@@ -22,6 +22,8 @@ jobs:
           rm -rf rsgo-frontend
           git clone https://github.com/JumpiiX/rsgo-frontend.git
           cd rsgo-frontend
+          docker stop rsgo-frontend || true
+          docker rm rsgo-frontend || true
           docker-compose down || true
           docker-compose build --no-cache
           docker-compose up -d
