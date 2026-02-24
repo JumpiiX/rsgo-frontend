@@ -135,7 +135,7 @@ export class Game {
             const forward = new THREE.Vector3();
             this.camera.getCamera().getWorldDirection(forward);
             const startPos = this.camera.getPosition().clone();
-            const target = startPos.clone().add(forward.multiplyScalar(100));
+            const target = startPos.clone().add(forward.multiplyScalar(1000));  // Increased from 100 to 1000 for long range
             
             this.bulletSystem.createBullet(startPos, target, true);
             
@@ -154,46 +154,105 @@ export class Game {
         const playerPosition = this.camera.getPosition();
         const shootDirection = new THREE.Vector3().subVectors(target, playerPosition).normalize();
         
-        console.log('=== CHECKING HIT ===');
+        // Create raycaster for accurate hit detection
+        const raycaster = new THREE.Raycaster();
+        raycaster.set(playerPosition, shootDirection);
+        raycaster.far = 1000; // Check up to 1000 units away
+        // Set camera for sprite intersection
+        raycaster.camera = this.camera.getCamera();
+        
+        console.log('=== CHECKING HIT (RAYCASTING) ===');
         console.log('Player position:', playerPosition.x.toFixed(1), playerPosition.y.toFixed(1), playerPosition.z.toFixed(1));
         console.log('Shoot direction:', shootDirection.x.toFixed(3), shootDirection.y.toFixed(3), shootDirection.z.toFixed(3));
-        console.log('Target position:', target.x.toFixed(1), target.y.toFixed(1), target.z.toFixed(1));
         console.log('Other players count:', this.playerManager.otherPlayers.size);
+        console.log('Max range: 1000 units');
+        
+        // Check raycast against all player meshes
+        let closestHit = null;
+        let closestDistance = Infinity;
         
         this.playerManager.otherPlayers.forEach((player, playerId) => {
             const playerPos = player.mesh.position;
             const distanceToPlayer = playerPosition.distanceTo(playerPos);
+            console.log(`Checking player ${playerId} at distance ${distanceToPlayer.toFixed(1)} units`);
             
-            console.log(`Player ${playerId}:`);
-            console.log('  - Position:', playerPos.x.toFixed(1), playerPos.y.toFixed(1), playerPos.z.toFixed(1));
-            console.log('  - Distance:', distanceToPlayer.toFixed(1));
+            // Only intersect with the capsule mesh, not children (sprites)
+            const intersects = raycaster.intersectObject(player.mesh, false);
             
-            if (distanceToPlayer <= 100) {
-                const directionToPlayer = new THREE.Vector3().subVectors(playerPos, playerPosition).normalize();
-                const dot = shootDirection.dot(directionToPlayer);
+            if (intersects.length > 0) {
+                const distance = intersects[0].distance;
+                console.log(`  ✓ RAYCAST HIT at distance ${distance.toFixed(1)} units!`);
                 
-                console.log('  - Direction to player:', directionToPlayer.x.toFixed(3), directionToPlayer.y.toFixed(3), directionToPlayer.z.toFixed(3));
-                console.log('  - Dot product:', dot.toFixed(3));
-                console.log('  - Within range (≤100):', true);
-                console.log('  - Aimed well (>0.90):', dot > 0.90);
-                console.log('  - Close enough (≤50):', distanceToPlayer <= 50);
-                
-                if (dot > 0.90 && distanceToPlayer <= 50) {
-                    console.log('  *** HIT DETECTED! ***');
-                    const killed = this.playerManager.hitPlayer(playerId);
-                    if (this.network) {
-                        console.log('  - Sending hit to server, killed:', killed);
-                        this.network.sendHit(playerId, killed);
-                    }
-                } else {
-                    console.log('  - No hit (dot too low or too far)');
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestHit = { playerId, player, distance };
                 }
             } else {
-                console.log('  - Too far away (>100 units)');
+                console.log(`  ✗ Raycast missed player`);
+                
+                // Fallback to proximity check for very close range only
+                if (distanceToPlayer <= 5) { // Very close range
+                    const directionToPlayer = new THREE.Vector3().subVectors(playerPos, playerPosition).normalize();
+                    const dot = shootDirection.dot(directionToPlayer);
+                    
+                    if (dot > 0.85) { // Slightly more forgiving at close range
+                        console.log(`  ✓ Close range hit at ${distanceToPlayer.toFixed(1)} units (dot: ${dot.toFixed(2)})`);
+                        if (distanceToPlayer < closestDistance) {
+                            closestDistance = distanceToPlayer;
+                            closestHit = { playerId, player, distance: distanceToPlayer };
+                        }
+                    }
+                }
             }
         });
         
+        // Hit the closest player if any
+        if (closestHit) {
+            console.log(`*** HIT DETECTED on player ${closestHit.playerId} at distance ${closestHit.distance.toFixed(1)} ***`);
+            
+            // Add bullet impact on player
+            this.addPlayerImpact(closestHit.player.mesh, playerPosition, shootDirection);
+            
+            const killed = this.playerManager.hitPlayer(closestHit.playerId);
+            if (this.network) {
+                console.log('Sending hit to server, killed:', killed);
+                this.network.sendHit(closestHit.playerId, killed);
+            }
+        } else {
+            console.log('No hit detected');
+        }
+        
         console.log('=== END HIT CHECK ===');
+    }
+    
+    addPlayerImpact(playerMesh, shooterPos, shootDirection) {
+        // Create bullet hole on player body
+        const geometry = new THREE.SphereGeometry(0.3, 6, 6);
+        const material = new THREE.MeshBasicMaterial({
+            color: 0x800000,  // Dark red for blood
+            emissive: 0x400000,
+            emissiveIntensity: 0.5
+        });
+        const impactMark = new THREE.Mesh(geometry, material);
+        
+        // Mark it as a player impact so we can clean it up
+        impactMark.userData.isPlayerImpact = true;
+        
+        // Calculate impact position on player surface
+        const toPlayer = new THREE.Vector3().subVectors(playerMesh.position, shooterPos).normalize();
+        const impactOffset = toPlayer.multiplyScalar(2.2); // Slightly outside the capsule radius
+        impactMark.position.copy(playerMesh.position).sub(impactOffset);
+        impactMark.position.y += 1; // Adjust height to body center
+        
+        // Attach to player so it moves with them
+        playerMesh.add(impactMark);
+        
+        // Remove after 5 seconds
+        setTimeout(() => {
+            if (impactMark.parent) {
+                impactMark.parent.remove(impactMark);
+            }
+        }, 5000);
     }
 
     handlePlayerHit(message) {

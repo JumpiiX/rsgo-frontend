@@ -58,29 +58,25 @@ export class BulletSystem {
         this.raycaster.set(startPos, direction);
         this.raycaster.far = startPos.distanceTo(endPos);
         
-        // Filter out bullets, impact marks, and other non-solid objects
-        const raycastableObjects = this.scene.children.filter(obj => {
-            // Skip bullets and impact marks to prevent them from blocking each other
-            if (obj.userData && (obj.userData.isBullet || obj.userData.isImpactMark)) {
-                return false;
+        // Get all mesh objects but filter out unwanted ones
+        const meshes = [];
+        this.scene.traverse((obj) => {
+            // Only include actual mesh objects
+            if (obj.type === 'Mesh') {
+                // Skip bullets and impact marks
+                if (obj.userData && (obj.userData.isBullet || obj.userData.isImpactMark)) {
+                    return;
+                }
+                // Skip spheres that are bullets (but not all spheres)
+                if (obj.geometry && obj.geometry.type === 'SphereGeometry' && obj.userData.isBullet) {
+                    return;
+                }
+                meshes.push(obj);
             }
-            // Skip spheres (which are bullets)
-            if (obj.geometry && obj.geometry.type === 'SphereGeometry') {
-                return false;
-            }
-            // Skip player capsules (other players)
-            if (obj.geometry && obj.geometry.type === 'CapsuleGeometry') {
-                return false;
-            }
-            // Skip sprites (name labels)
-            if (obj.type === 'Sprite') {
-                return false;
-            }
-            return obj.type === 'Mesh' || obj.type === 'Group';
         });
         
-        // Get all objects that can be hit (buildings, ground, etc)
-        const intersects = this.raycaster.intersectObjects(raycastableObjects, true);
+        // Get all objects that can be hit (buildings, ground, players, etc)
+        const intersects = this.raycaster.intersectObjects(meshes, false);
         
         if (intersects.length > 0) {
             const impact = intersects[0];
@@ -95,29 +91,25 @@ export class BulletSystem {
         this.raycaster.set(startPos, direction);
         this.raycaster.far = startPos.distanceTo(endPos);
         
-        // Filter out bullets, impact marks, and other non-solid objects
-        const raycastableObjects = this.scene.children.filter(obj => {
-            // Skip bullets and impact marks to prevent them from blocking each other
-            if (obj.userData && (obj.userData.isBullet || obj.userData.isImpactMark)) {
-                return false;
+        // Get all mesh objects but filter out unwanted ones
+        const meshes = [];
+        this.scene.traverse((obj) => {
+            // Only include actual mesh objects
+            if (obj.type === 'Mesh') {
+                // Skip bullets and impact marks
+                if (obj.userData && (obj.userData.isBullet || obj.userData.isImpactMark)) {
+                    return;
+                }
+                // Skip spheres that are bullets (but not all spheres)
+                if (obj.geometry && obj.geometry.type === 'SphereGeometry' && obj.userData.isBullet) {
+                    return;
+                }
+                meshes.push(obj);
             }
-            // Skip spheres (which are bullets)
-            if (obj.geometry && obj.geometry.type === 'SphereGeometry') {
-                return false;
-            }
-            // Skip player capsules (other players)
-            if (obj.geometry && obj.geometry.type === 'CapsuleGeometry') {
-                return false;
-            }
-            // Skip sprites (name labels)
-            if (obj.type === 'Sprite') {
-                return false;
-            }
-            return obj.type === 'Mesh' || obj.type === 'Group';
         });
         
-        // Get all objects that can be hit (buildings, ground, etc)
-        const intersects = this.raycaster.intersectObjects(raycastableObjects, true);
+        // Get all objects that can be hit (buildings, ground, players, etc)
+        const intersects = this.raycaster.intersectObjects(meshes, false);
         
         if (intersects.length > 0) {
             const impact = intersects[0];

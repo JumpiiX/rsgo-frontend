@@ -14,7 +14,8 @@ export class PlayerManager {
         console.log('Adding new player:', player.id, player.name, 'at position', player.x, player.y, player.z);
         
         // Create a simple colored cube for other players
-        const geometry = new THREE.CapsuleGeometry(1, 4, 4, 8);
+        // Increased size: radius 1.5 -> 2, height 4 -> 5 for better hitbox
+        const geometry = new THREE.CapsuleGeometry(2, 5, 4, 8);
         const material = new THREE.MeshLambertMaterial({ color: 0xff4444 });
         const playerMesh = new THREE.Mesh(geometry, material);
         
@@ -23,7 +24,7 @@ export class PlayerManager {
         
         // Add a simple name label above the player
         const nameSprite = this.createNameSprite(player.name);
-        nameSprite.position.set(0, 3, 0);
+        nameSprite.position.set(0, 4, 0);  // Adjusted for taller capsule
         playerMesh.add(nameSprite);
         
         this.scene.add(playerMesh);
@@ -109,6 +110,17 @@ export class PlayerManager {
     killPlayer(playerId) {
         const player = this.otherPlayers.get(playerId);
         if (player && !this.respawning.has(playerId)) {
+            // Remove all bullet impact marks from the player's body
+            const impactsToRemove = [];
+            player.mesh.traverse((child) => {
+                if (child.userData && child.userData.isPlayerImpact) {
+                    impactsToRemove.push(child);
+                }
+            });
+            impactsToRemove.forEach(impact => {
+                player.mesh.remove(impact);
+            });
+            
             player.mesh.visible = false;
             this.respawning.set(playerId, true);
             
