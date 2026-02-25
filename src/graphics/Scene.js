@@ -6,7 +6,10 @@ export class Scene {
 
     init() {
         this.scene = new THREE.Scene();
-        this.scene.fog = new THREE.Fog(0x6a6a7a, 600, 1600); // Maximum brightness fog
+        // Set a lighter sky background for better visibility
+        this.scene.background = new THREE.Color(0x4a5a7a);
+        // Add subtle fog for depth, but far away
+        this.scene.fog = new THREE.Fog(0x4a5a7a, 200, 1000);
     }
 
     getScene() {

@@ -12,9 +12,13 @@ export class LightingSystem {
     }
 
     createAmbientLighting() {
-        // Maximum brightness ambient lighting
-        const ambientLight = new THREE.AmbientLight(0xbdcfef, 1.8);
+        // Maximum brightness ambient lighting for visibility
+        const ambientLight = new THREE.AmbientLight(0xffffff, 2.5);
         this.scene.add(ambientLight);
+        
+        // Add hemisphere light for better overall illumination
+        const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x545454, 1.5);
+        this.scene.add(hemiLight);
     }
 
     createMoonlight() {

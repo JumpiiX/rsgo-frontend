@@ -8,6 +8,8 @@ import { NetworkClient } from '../network/NetworkClient.js';
 import { PlayerManager } from '../game/PlayerManager.js';
 import { BulletSystem } from '../game/BulletSystem.js';
 import { CollisionSystem } from '../physics/CollisionSystem.js';
+import { MiniMap } from '../ui/MiniMap.js';
+import { Compass } from '../ui/Compass.js';
 
 export class Game {
     constructor() {
@@ -21,6 +23,8 @@ export class Game {
         this.playerManager = null;
         this.bulletSystem = null;
         this.collisionSystem = null;
+        this.miniMap = null;
+        this.compass = null;
         
         this.gameStarted = false;
         this.playerName = '';
@@ -58,6 +62,22 @@ export class Game {
         this.input.setupControls(this.camera.getCamera());
         this.input.setCollisionSystem(this.collisionSystem);
         this.network.connect();
+        
+        // Initialize UI components
+        this.miniMap = new MiniMap(this.scene.getScene(), this.camera, this.renderer.getRenderer());
+        this.compass = new Compass();
+        
+        // Debug scene contents
+        console.log('Scene children count:', this.scene.getScene().children.length);
+        console.log('Camera position:', this.camera.getPosition());
+        console.log('Camera looking at world center? Adding test cube...');
+        
+        // Add a test cube to see if rendering works
+        const testGeometry = new THREE.BoxGeometry(5, 5, 5);
+        const testMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const testCube = new THREE.Mesh(testGeometry, testMaterial);
+        testCube.position.set(0, 15, -10); // Put it in front of spawn
+        this.scene.getScene().add(testCube);
         
         // Bind network events to player manager
         this.network.onPlayerJoined((player) => this.playerManager.addPlayer(player));
@@ -118,6 +138,12 @@ export class Game {
         const spawnIndex = Math.floor(Math.random() * this.camera.spawnPoints.length);
         const spawnPoint = this.camera.spawnPoints[spawnIndex];
         this.camera.getCamera().position.set(spawnPoint.x, spawnPoint.y, spawnPoint.z);
+        
+        // Reset camera rotation to look forward
+        this.camera.getCamera().rotation.set(0, 0, 0);
+        this.input.yaw = 0;
+        this.input.pitch = 0;
+        
         this.camera.getCamera().updateMatrixWorld();
     }
 
@@ -615,7 +641,36 @@ export class Game {
             }
             
             this.bulletSystem.update(deltaTime);
+            
+            // Update UI components
+            if (this.miniMap) {
+                const playerPos = this.camera.getPosition();
+                // Use InputManager's yaw for continuous rotation tracking
+                const cameraRotation = this.input.yaw;
+                
+                // Debug camera position
+                if (Math.random() < 0.01) { // Log every ~100 frames
+                    console.log('Camera debug:', {
+                        position: { x: playerPos.x.toFixed(1), y: playerPos.y.toFixed(1), z: playerPos.z.toFixed(1) },
+                        yaw: this.input.yaw.toFixed(3),
+                        cameraY: this.camera.getRotation().y.toFixed(3)
+                    });
+                }
+                
+                this.miniMap.update(playerPos, cameraRotation);
+                this.compass.update(cameraRotation);
+            }
+            
+            // Ensure auto clear is enabled for main scene
+            this.renderer.getRenderer().autoClear = true;
+            
+            // Render main scene first
             this.renderer.render(this.scene.getScene(), this.camera.getCamera());
+            
+            // Render minimap on top (it will preserve the main scene)
+            if (this.miniMap) {
+                this.miniMap.render();
+            }
         }
     }
 }
