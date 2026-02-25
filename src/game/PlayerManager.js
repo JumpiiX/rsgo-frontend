@@ -16,7 +16,11 @@ export class PlayerManager {
         // Create a simple colored cube for other players
         // Increased size: radius 1.5 -> 2, height 4 -> 5 for better hitbox
         const geometry = new THREE.CapsuleGeometry(2, 5, 4, 8);
-        const material = new THREE.MeshLambertMaterial({ color: 0xff4444 });
+        const material = new THREE.MeshLambertMaterial({ 
+            color: 0xff4444,  // Red color for enemies
+            emissive: 0x880000,
+            emissiveIntensity: 0.3 
+        });
         const playerMesh = new THREE.Mesh(geometry, material);
         
         playerMesh.position.set(player.x, player.y, player.z);

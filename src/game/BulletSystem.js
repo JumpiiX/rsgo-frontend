@@ -13,9 +13,9 @@ export class BulletSystem {
         
         const geometry = new THREE.SphereGeometry(0.5, 8, 6);
         const material = new THREE.MeshBasicMaterial({ 
-            color: isOwnBullet ? 0x4444ff : 0xff4444,
-            emissive: isOwnBullet ? 0x2222aa : 0xaa2222,
-            emissiveIntensity: 0.3
+            color: isOwnBullet ? 0xffa500 : 0xff4444,  // Your bullets: bright orange, enemy: red
+            emissive: isOwnBullet ? 0xff8c00 : 0xcc2222,
+            emissiveIntensity: 0.5
         });
         const bulletMesh = new THREE.Mesh(geometry, material);
         
@@ -118,8 +118,8 @@ export class BulletSystem {
             // Create impact mark as a sphere/dot
             const geometry = new THREE.SphereGeometry(2, 8, 8);  // Bigger sphere for far visibility
             const material = new THREE.MeshBasicMaterial({
-                color: isOwnBullet ? 0x4444ff : 0xff4444,
-                emissive: isOwnBullet ? 0x4444ff : 0xff4444,
+                color: isOwnBullet ? 0xffa500 : 0xff4444,  // Your impacts: orange, enemy: red
+                emissive: isOwnBullet ? 0xffa500 : 0xff4444,
                 emissiveIntensity: 1,
                 transparent: true,
                 opacity: 1,

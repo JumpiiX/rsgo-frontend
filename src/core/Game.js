@@ -33,6 +33,12 @@ export class Game {
         this.originalCameraPosition = null;
         this.kills = 0;
         this.health = 100;
+        this.shield = 100;
+        this.maxShield = 100;
+        this.shieldRegenDelay = 5000; // 5 seconds delay before regen starts
+        this.shieldRegenRate = 10; // Shield points per second
+        this.lastHitTime = 0;
+        this.shieldRegenInterval = null;
         
         this.setupNameScreen();
     }
@@ -87,6 +93,7 @@ export class Game {
         this.network.onPlayerHit((message) => this.handlePlayerHit(message));
         this.network.onPlayerDied((message) => this.handlePlayerDied(message));
         this.network.onPlayerRespawned((message) => this.handlePlayerRespawned(message));
+        this.network.onShieldUpdate((message) => this.handleShieldUpdate(message));
         
         // Bind input events
         this.input.onShoot(() => this.handleShoot());
@@ -282,20 +289,48 @@ export class Game {
     }
 
     handlePlayerHit(message) {
-        console.log(`Player ${message.player_id} hit! Health: ${message.health}/${100} (damage: ${message.damage})`);
+        console.log(`Player ${message.player_id} hit! Health: ${message.health}/100, Shield: ${message.shield}/100 (damage: ${message.damage})`);
         
         // Check if it's our own player who got hit
         if (message.player_id === this.network.playerId) {
+            // Use server's authoritative health and shield values
             this.health = message.health;
+            this.shield = message.shield || 0; // Shield might not be in old messages
+            
+            // Update last hit time and start shield regen timer (frontend visual only)
+            this.lastHitTime = Date.now();
+            this.startShieldRegen();
+            
             this.updateHealthDisplay();
             this.showHitEffect();
-            console.log('YOU GOT HIT! Health:', this.health);
+            console.log(`YOU GOT HIT! Shield: ${this.shield}, Health: ${this.health}`);
         } else {
             // Another player got hit
             const player = this.playerManager.otherPlayers.get(message.player_id);
             if (player) {
                 // Could add health bar above player here
             }
+        }
+    }
+    
+    startShieldRegen() {
+        // Clear any existing regen interval
+        if (this.shieldRegenInterval) {
+            clearInterval(this.shieldRegenInterval);
+            this.shieldRegenInterval = null;
+        }
+        
+        // Server now handles shield regeneration authoritatively
+        // Frontend just tracks when hit occurred for visual effects
+        console.log('Shield regeneration will be handled by server after 5 seconds');
+    }
+
+    handleShieldUpdate(message) {
+        // Check if it's our own player's shield update
+        if (message.player_id === this.network.playerId) {
+            this.shield = message.shield;
+            this.updateHealthDisplay();
+            console.log(`Shield regenerated to: ${this.shield}`);
         }
     }
 
@@ -331,9 +366,11 @@ export class Game {
         if (message.player.id === this.network.playerId) {
             this.isAlive = true;
             this.health = 100;  // Reset health to 100
+            this.shield = 100;  // Reset shield to 100
+            this.lastHitTime = 0;
             this.deactivateDeathCam();
             this.spawnPlayer(); // Respawn at new location
-            console.log('You have respawned with full health!');
+            console.log('You have respawned with full health and shield!');
             this.hideDeathMessage();
             
             // Show health bar again and update it to 100
@@ -515,24 +552,87 @@ export class Game {
                 bottom: 30px;
                 right: 30px;
                 width: 300px;
-                height: 30px;
+                height: 70px;
                 z-index: 100;
+                display: flex;
+                flex-direction: column;
+                gap: 5px;
             `;
             document.body.appendChild(healthContainer);
             
-            // Create background bar
+            // Create shield container (top bar)
+            const shieldContainer = document.createElement('div');
+            shieldContainer.style.cssText = `
+                position: relative;
+                width: 100%;
+                height: 30px;
+            `;
+            healthContainer.appendChild(shieldContainer);
+            
+            // Shield background
+            const shieldBg = document.createElement('div');
+            shieldBg.style.cssText = `
+                position: absolute;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                border: 2px solid rgba(210, 105, 30, 0.4);
+                border-radius: 4px;
+            `;
+            shieldContainer.appendChild(shieldBg);
+            
+            // Shield bar
+            const shieldBar = document.createElement('div');
+            shieldBar.id = 'shieldBar';
+            shieldBar.style.cssText = `
+                position: absolute;
+                height: 100%;
+                background: linear-gradient(90deg, #d2691e, #ff8c00);
+                border-radius: 2px;
+                transition: width 0.3s ease;
+                box-shadow: 0 0 10px rgba(210, 105, 30, 0.5);
+            `;
+            shieldContainer.appendChild(shieldBar);
+            
+            // Shield text
+            const shieldText = document.createElement('div');
+            shieldText.id = 'shieldText';
+            shieldText.style.cssText = `
+                position: absolute;
+                width: 100%;
+                height: 100%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-size: 16px;
+                font-weight: bold;
+                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            `;
+            shieldContainer.appendChild(shieldText);
+            
+            // Create health container (bottom bar)
+            const healthBarContainer = document.createElement('div');
+            healthBarContainer.style.cssText = `
+                position: relative;
+                width: 100%;
+                height: 30px;
+            `;
+            healthContainer.appendChild(healthBarContainer);
+            
+            // Health background
             const healthBg = document.createElement('div');
             healthBg.style.cssText = `
                 position: absolute;
                 width: 100%;
                 height: 100%;
                 background: rgba(0, 0, 0, 0.5);
-                border: 2px solid rgba(255, 255, 255, 0.3);
+                border: 2px solid rgba(0, 255, 0, 0.3);
                 border-radius: 4px;
             `;
-            healthContainer.appendChild(healthBg);
+            healthBarContainer.appendChild(healthBg);
             
-            // Create health bar
+            // Health bar
             const healthBar = document.createElement('div');
             healthBar.id = 'healthBar';
             healthBar.style.cssText = `
@@ -543,9 +643,9 @@ export class Game {
                 transition: width 0.3s ease;
                 box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
             `;
-            healthContainer.appendChild(healthBar);
+            healthBarContainer.appendChild(healthBar);
             
-            // Create health text
+            // Health text
             const healthText = document.createElement('div');
             healthText.id = 'healthText';
             healthText.style.cssText = `
@@ -556,22 +656,40 @@ export class Game {
                 align-items: center;
                 justify-content: center;
                 color: white;
-                font-size: 18px;
+                font-size: 16px;
                 font-weight: bold;
                 text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
             `;
-            healthContainer.appendChild(healthText);
+            healthBarContainer.appendChild(healthText);
         }
         
-        // Update health bar width and text
+        // Update health bar width
         const healthBar = document.getElementById('healthBar');
+        const shieldBar = document.getElementById('shieldBar');
         const healthText = document.getElementById('healthText');
+        const shieldText = document.getElementById('shieldText');
+        
         const healthPercent = (this.health / 100) * 100;
+        const shieldPercent = (this.shield / this.maxShield) * 100;
         
+        // Update widths
         healthBar.style.width = `${healthPercent}%`;
-        healthText.textContent = `${this.health}`;
+        shieldBar.style.width = `${shieldPercent}%`;
         
-        // Change color based on health
+        // Update text displays
+        healthText.textContent = `${this.health}`;
+        shieldText.textContent = `${Math.round(this.shield)}`;
+        
+        // Change shield bar opacity based on amount
+        const shieldContainer = shieldBar.parentElement;
+        if (this.shield > 0) {
+            shieldContainer.style.opacity = '1';
+            shieldBar.style.background = 'linear-gradient(90deg, #d2691e, #ff8c00)';
+        } else {
+            shieldContainer.style.opacity = '0.5';
+        }
+        
+        // Change health bar color based on health
         if (this.health <= 25) {
             healthBar.style.background = 'linear-gradient(90deg, #ff0000, #dd0000)';
             healthBar.style.boxShadow = '0 0 10px rgba(255, 0, 0, 0.5)';

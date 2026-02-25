@@ -10,11 +10,12 @@ export class NetworkClient {
         this.onPlayerHitCallback = null;
         this.onPlayerDiedCallback = null;
         this.onPlayerRespawnedCallback = null;
+        this.onShieldUpdateCallback = null;
     }
 
     connect() {
         const wsUrl = window.location.hostname === 'localhost'
-            ? 'ws://localhost:8080' 
+            ? 'ws://localhost:6969' 
             : `ws://${window.location.hostname}/ws`;
         this.ws = new WebSocket(wsUrl);
         
@@ -82,6 +83,12 @@ export class NetworkClient {
             case 'player_respawned':
                 if (this.onPlayerRespawnedCallback) {
                     this.onPlayerRespawnedCallback(message);
+                }
+                break;
+                
+            case 'shield_update':
+                if (this.onShieldUpdateCallback) {
+                    this.onShieldUpdateCallback(message);
                 }
                 break;
         }
@@ -178,5 +185,9 @@ export class NetworkClient {
     
     onPlayerRespawned(callback) {
         this.onPlayerRespawnedCallback = callback;
+    }
+    
+    onShieldUpdate(callback) {
+        this.onShieldUpdateCallback = callback;
     }
 }
