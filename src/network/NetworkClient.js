@@ -15,82 +15,82 @@ export class NetworkClient {
 
     connect() {
         const wsUrl = window.location.hostname === 'localhost'
-            ? 'ws://localhost:6969' 
+            ? 'ws://localhost:6969'
             : `ws://${window.location.hostname}/ws`;
         this.ws = new WebSocket(wsUrl);
-        
+
         this.ws.onopen = () => {
             this.connected = true;
         };
-        
+
         this.ws.onmessage = (event) => {
             const message = JSON.parse(event.data);
             this.handleMessage(message);
         };
-        
+
         this.ws.onclose = () => {
             this.connected = false;
             setTimeout(() => this.connect(), 3000);
         };
-        
+
         this.ws.onerror = (error) => {
         };
     }
 
     handleMessage(message) {
         switch (message.type) {
-            case 'welcome':
-                this.playerId = message.player_id;
-                break;
-                
-            case 'player_joined':
-                if (this.onPlayerJoinedCallback && message.player.id !== this.playerId) {
-                    this.onPlayerJoinedCallback(message.player);
-                }
-                break;
-                
-            case 'player_left':
-                if (this.onPlayerLeftCallback) {
-                    this.onPlayerLeftCallback(message.player_id);
-                }
-                break;
-                
-            case 'player_moved':
-                if (this.onPlayerMovedCallback && message.player_id !== this.playerId) {
-                    console.log('Received player movement:', message.player_id, 'at', message.x.toFixed(1), message.y.toFixed(1), message.z.toFixed(1));
-                    this.onPlayerMovedCallback(message);
-                }
-                break;
-                
-            case 'player_shot':
-                if (this.onPlayerShotCallback) {
-                    this.onPlayerShotCallback(message);
-                }
-                break;
-                
-            case 'player_hit':
-                if (this.onPlayerHitCallback) {
-                    this.onPlayerHitCallback(message);
-                }
-                break;
-                
-            case 'player_died':
-                if (this.onPlayerDiedCallback) {
-                    this.onPlayerDiedCallback(message);
-                }
-                break;
-                
-            case 'player_respawned':
-                if (this.onPlayerRespawnedCallback) {
-                    this.onPlayerRespawnedCallback(message);
-                }
-                break;
-                
-            case 'shield_update':
-                if (this.onShieldUpdateCallback) {
-                    this.onShieldUpdateCallback(message);
-                }
-                break;
+        case 'welcome':
+            this.playerId = message.player_id;
+            break;
+
+        case 'player_joined':
+            if (this.onPlayerJoinedCallback && message.player.id !== this.playerId) {
+                this.onPlayerJoinedCallback(message.player);
+            }
+            break;
+
+        case 'player_left':
+            if (this.onPlayerLeftCallback) {
+                this.onPlayerLeftCallback(message.player_id);
+            }
+            break;
+
+        case 'player_moved':
+            if (this.onPlayerMovedCallback && message.player_id !== this.playerId) {
+                console.log('Received player movement:', message.player_id, 'at', message.x.toFixed(1), message.y.toFixed(1), message.z.toFixed(1));
+                this.onPlayerMovedCallback(message);
+            }
+            break;
+
+        case 'player_shot':
+            if (this.onPlayerShotCallback) {
+                this.onPlayerShotCallback(message);
+            }
+            break;
+
+        case 'player_hit':
+            if (this.onPlayerHitCallback) {
+                this.onPlayerHitCallback(message);
+            }
+            break;
+
+        case 'player_died':
+            if (this.onPlayerDiedCallback) {
+                this.onPlayerDiedCallback(message);
+            }
+            break;
+
+        case 'player_respawned':
+            if (this.onPlayerRespawnedCallback) {
+                this.onPlayerRespawnedCallback(message);
+            }
+            break;
+
+        case 'shield_update':
+            if (this.onShieldUpdateCallback) {
+                this.onShieldUpdateCallback(message);
+            }
+            break;
         }
     }
 
@@ -140,7 +140,7 @@ export class NetworkClient {
             });
         }
     }
-    
+
     sendRespawn() {
         if (this.isConnected()) {
             this.send({
@@ -174,19 +174,19 @@ export class NetworkClient {
     onPlayerShot(callback) {
         this.onPlayerShotCallback = callback;
     }
-    
+
     onPlayerHit(callback) {
         this.onPlayerHitCallback = callback;
     }
-    
+
     onPlayerDied(callback) {
         this.onPlayerDiedCallback = callback;
     }
-    
+
     onPlayerRespawned(callback) {
         this.onPlayerRespawnedCallback = callback;
     }
-    
+
     onShieldUpdate(callback) {
         this.onShieldUpdateCallback = callback;
     }

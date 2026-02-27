@@ -10,35 +10,35 @@ export class PlayerManager {
         if (this.otherPlayers.has(player.id)) {
             return;
         }
-        
+
         console.log('Adding new player:', player.id, player.name, 'at position', player.x, player.y, player.z);
-        
+
         // Create a simple colored cube for other players
         // Increased size: radius 1.5 -> 2, height 4 -> 5 for better hitbox
         const geometry = new THREE.CapsuleGeometry(2, 5, 4, 8);
-        const material = new THREE.MeshLambertMaterial({ 
+        const material = new THREE.MeshLambertMaterial({
             color: 0xff4444,  // Red color for enemies
             emissive: 0x880000,
-            emissiveIntensity: 0.3 
+            emissiveIntensity: 0.3
         });
         const playerMesh = new THREE.Mesh(geometry, material);
-        
+
         playerMesh.position.set(player.x, player.y, player.z);
         playerMesh.castShadow = true;
-        
+
         // Add a simple name label above the player
         const nameSprite = this.createNameSprite(player.name);
         nameSprite.position.set(0, 4, 0);  // Adjusted for taller capsule
         playerMesh.add(nameSprite);
-        
+
         this.scene.add(playerMesh);
         this.otherPlayers.set(player.id, {
             mesh: playerMesh,
             data: player
         });
-        
+
         this.playerHealth.set(player.id, 5);
-        
+
         this.updatePlayerCount();
     }
 
@@ -69,20 +69,20 @@ export class PlayerManager {
         const context = canvas.getContext('2d');
         canvas.width = 256;
         canvas.height = 64;
-        
+
         context.fillStyle = 'rgba(0, 0, 0, 0.8)';
         context.fillRect(0, 0, canvas.width, canvas.height);
-        
+
         context.fillStyle = 'white';
         context.font = '24px Arial';
         context.textAlign = 'center';
         context.fillText(name, canvas.width / 2, canvas.height / 2 + 8);
-        
+
         const texture = new THREE.CanvasTexture(canvas);
         const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
         const sprite = new THREE.Sprite(spriteMaterial);
         sprite.scale.set(4, 1, 1);
-        
+
         return sprite;
     }
 
@@ -102,7 +102,7 @@ export class PlayerManager {
             const currentHealth = this.playerHealth.get(playerId);
             const newHealth = currentHealth - 1;
             this.playerHealth.set(playerId, newHealth);
-            
+
             if (newHealth <= 0) {
                 this.killPlayer(playerId);
                 return true;
@@ -124,10 +124,10 @@ export class PlayerManager {
             impactsToRemove.forEach(impact => {
                 player.mesh.remove(impact);
             });
-            
+
             player.mesh.visible = false;
             this.respawning.set(playerId, true);
-            
+
             // Don't auto-respawn after 5 seconds - player stays invisible until manual respawn
             // setTimeout removed - wait for PlayerRespawned message from server
         }

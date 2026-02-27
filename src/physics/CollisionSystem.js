@@ -18,7 +18,7 @@ export class CollisionSystem {
         };
         this.boxColliders.push(bounds);
     }
-    
+
     addCylinderCollider(position, radius, height, type = 'default') {
         const cylinder = {
             x: position.x,
@@ -48,20 +48,20 @@ export class CollisionSystem {
                 return true;
             }
         }
-        
+
         // Check cylinder colliders
         for (const cylinder of this.cylinderColliders) {
             const dx = position.x - cylinder.x;
             const dz = position.z - cylinder.z;
             const distance = Math.sqrt(dx * dx + dz * dz);
-            
+
             if (distance < cylinder.radius + radius &&
                 position.y >= cylinder.y &&
                 position.y <= cylinder.y + cylinder.height) {
                 return true;
             }
         }
-        
+
         return false;
     }
 
@@ -73,22 +73,22 @@ export class CollisionSystem {
 
         // Try to slide along walls
         const validPos = currentPos.clone();
-        
+
         // Try X movement only
         const xOnly = new THREE.Vector3(newPos.x, currentPos.y, currentPos.z);
         if (!this.checkCollision(xOnly, radius)) {
             validPos.x = newPos.x;
         }
-        
+
         // Try Z movement only
         const zOnly = new THREE.Vector3(currentPos.x, currentPos.y, newPos.z);
         if (!this.checkCollision(zOnly, radius)) {
             validPos.z = newPos.z;
         }
-        
+
         // Always allow Y movement (for jumping/gravity later)
         validPos.y = newPos.y;
-        
+
         return validPos;
     }
 

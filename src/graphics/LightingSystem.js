@@ -15,7 +15,7 @@ export class LightingSystem {
         // Maximum brightness ambient lighting for visibility
         const ambientLight = new THREE.AmbientLight(0xffffff, 2.5);
         this.scene.add(ambientLight);
-        
+
         // Add hemisphere light for better overall illumination
         const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x545454, 1.5);
         this.scene.add(hemiLight);
@@ -38,7 +38,7 @@ export class LightingSystem {
 
         // Add visible moon in the sky
         const moonGeometry = new THREE.SphereGeometry(15, 16, 16);
-        const moonMaterial = new THREE.MeshBasicMaterial({ 
+        const moonMaterial = new THREE.MeshBasicMaterial({
             color: 0xffffee,
             transparent: true,
             opacity: 1.0
@@ -105,7 +105,7 @@ export class LightingSystem {
     createStreetLights() {
         // Street lamps with warm orange glow
         const streetLightPositions = [
-            [-60, 25, -80], [60, 25, 80], [-100, 25, 40], 
+            [-60, 25, -80], [60, 25, 80], [-100, 25, 40],
             [100, 25, -40], [0, 25, 120], [0, 25, -120]
         ];
 

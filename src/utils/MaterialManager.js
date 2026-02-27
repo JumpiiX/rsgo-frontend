@@ -10,10 +10,10 @@ export class MaterialManager {
             building: new THREE.MeshLambertMaterial({ color: 0x2f2f2f }),
             darkBuilding: new THREE.MeshLambertMaterial({ color: 0x1a1a1a }),
             crate: new THREE.MeshLambertMaterial({ color: 0x4a4a4a }),
-            window: new THREE.MeshLambertMaterial({ 
-                color: 0x1a3366, 
-                transparent: true, 
-                opacity: 0.8 
+            window: new THREE.MeshLambertMaterial({
+                color: 0x1a3366,
+                transparent: true,
+                opacity: 0.8
             }),
             street: new THREE.MeshLambertMaterial({ color: 0x1f1f1f })
         };

@@ -9,32 +9,32 @@ export class RevolverWeapon {
         this.weapon = null;
         this.weaponGroup = new THREE.Group();
         this.muzzleOffset = new THREE.Vector3(0, 0, -0.15); // Offset to barrel tip
-        
+
         // FPS viewmodel position - more visible position
         this.initialPositionOffset = new THREE.Vector3(0.15, -0.1, -0.25);
         // Rotate 180 degrees to point forward
         this.initialRotationOffset = new THREE.Euler(0, Math.PI, 0.1); // 180 degrees Y rotation + slight Z tilt
-        
+
         this.loadRevolver();
     }
-    
+
     loadRevolver() {
         const mtlLoader = new MTLLoader();
         const objLoader = new OBJLoader();
-        
+
         // First load materials
         mtlLoader.load(
             '/models/Revolver_02.mtl',
             (materials) => {
                 materials.preload();
                 objLoader.setMaterials(materials);
-                
+
                 // Then load the OBJ with materials
                 objLoader.load(
                     '/models/Revolver_02.obj',
                     (obj) => {
                         this.weapon = obj;
-                        
+
                         // Try auto-scaling based on model size
                         const box = new THREE.Box3().setFromObject(this.weapon);
                         const size = box.getSize(new THREE.Vector3());
@@ -42,9 +42,9 @@ export class RevolverWeapon {
                         const maxDim = Math.max(size.x, size.y, size.z);
                         const targetSize = 0.3;
                         const scale = targetSize / maxDim;
-                        
+
                         this.weapon.scale.set(scale, scale, scale);
-                        
+
                         // Keep original materials, just adjust properties
                         let meshCount = 0;
                         this.weapon.traverse((child) => {
@@ -57,13 +57,13 @@ export class RevolverWeapon {
                                 }
                                 child.frustumCulled = false;
                                 child.renderOrder = 999;
-                                
+
                                 // Mesh configured
                             }
                         });
                         this.weaponGroup.add(this.weapon);
                         this.scene.add(this.weaponGroup);
-                        
+
                         this.updateWeaponPosition();
                         // Revolver loaded
                     },
@@ -85,18 +85,18 @@ export class RevolverWeapon {
             }
         );
     }
-    
+
     loadWithoutMaterials() {
         const objLoader = new OBJLoader();
-        
+
         objLoader.load(
             '/models/Revolver_02.obj',
             (obj) => {
                 this.weapon = obj;
-                
+
                 // Scale down the model
                 this.weapon.scale.set(0.001, 0.001, 0.001);
-                
+
                 // Create default material if no materials loaded
                 this.weapon.traverse((child) => {
                     if (child.isMesh) {
@@ -109,10 +109,10 @@ export class RevolverWeapon {
                         child.renderOrder = 999;
                     }
                 });
-                
+
                 this.weaponGroup.add(this.weapon);
                 this.scene.add(this.weaponGroup);
-                
+
                 this.updateWeaponPosition();
                 console.log('Revolver loaded without materials');
             },
@@ -124,86 +124,86 @@ export class RevolverWeapon {
             }
         );
     }
-    
+
     updateWeaponPosition() {
         if (!this.weaponGroup) return;
-        
+
         const weaponPos = new THREE.Vector3();
         weaponPos.copy(this.camera.position);
-        
+
         const offset = this.initialPositionOffset.clone();
         offset.applyQuaternion(this.camera.quaternion);
         weaponPos.add(offset);
-        
+
         this.weaponGroup.position.copy(weaponPos);
-        
+
         // Apply rotations
         this.weaponGroup.quaternion.copy(this.camera.quaternion);
         this.weaponGroup.rotateY(this.initialRotationOffset.y);
         this.weaponGroup.rotateX(this.initialRotationOffset.x);
         this.weaponGroup.rotateZ(this.initialRotationOffset.z);
     }
-    
+
     update(deltaTime) {
         this.updateWeaponPosition();
-        
+
         // Add idle sway
         if (this.weaponGroup && this.weapon) {
             const time = Date.now() * 0.001;
             const swayX = Math.sin(time * 1.5) * 0.002;
             const swayY = Math.sin(time * 2) * 0.001;
-            
+
             const offset = this.initialPositionOffset.clone();
             offset.x += swayX;
             offset.y += swayY;
-            
+
             const weaponPos = new THREE.Vector3();
             weaponPos.copy(this.camera.position);
             weaponPos.add(offset.applyQuaternion(this.camera.quaternion));
             this.weaponGroup.position.copy(weaponPos);
         }
     }
-    
+
     animateShoot() {
         if (!this.weaponGroup) return;
-        
+
         // Recoil animation
         const originalZ = this.weaponGroup.position.z;
         const originalRotX = this.weaponGroup.rotation.x;
-        
+
         this.weaponGroup.position.z = originalZ + 0.05;
         this.weaponGroup.rotation.x = originalRotX - 0.2;
-        
+
         setTimeout(() => {
             this.weaponGroup.position.z = originalZ;
             this.weaponGroup.rotation.x = originalRotX;
         }, 100);
     }
-    
+
     show() {
         if (this.weaponGroup) {
             this.weaponGroup.visible = true;
         }
     }
-    
+
     hide() {
         if (this.weaponGroup) {
             this.weaponGroup.visible = false;
         }
     }
-    
+
     getMuzzlePosition() {
         // Get the world position of the revolver's barrel tip
         const muzzlePos = this.weaponGroup.position.clone();
-        
+
         // Apply the muzzle offset in the weapon's local space
         const offset = this.muzzleOffset.clone();
         offset.applyQuaternion(this.weaponGroup.quaternion);
         muzzlePos.add(offset);
-        
+
         return muzzlePos;
     }
-    
+
     dispose() {
         if (this.weaponGroup) {
             this.scene.remove(this.weaponGroup);
