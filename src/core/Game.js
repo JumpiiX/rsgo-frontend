@@ -77,9 +77,7 @@ export class Game {
         this.compass = new Compass();
         
         // Debug scene contents
-        console.log('Scene children count:', this.scene.getScene().children.length);
-        console.log('Camera position:', this.camera.getPosition());
-        console.log('Camera looking at world center? Adding test cube...');
+        // Scene initialized
         
         // Add a test cube to see if rendering works
         const testGeometry = new THREE.BoxGeometry(5, 5, 5);
@@ -158,7 +156,7 @@ export class Game {
     }
 
     handleMove(position, rotation) {
-        console.log('handleMove called with position:', position.x.toFixed(1), position.y.toFixed(1), position.z.toFixed(1));
+        // Position update
         if (this.network && this.gameStarted && this.isAlive) {
             this.network.sendMove(position, rotation);
         } else {
@@ -206,11 +204,7 @@ export class Game {
         // Set camera for sprite intersection
         raycaster.camera = this.camera.getCamera();
         
-        console.log('=== CHECKING HIT (RAYCASTING) ===');
-        console.log('Player position:', playerPosition.x.toFixed(1), playerPosition.y.toFixed(1), playerPosition.z.toFixed(1));
-        console.log('Shoot direction:', shootDirection.x.toFixed(3), shootDirection.y.toFixed(3), shootDirection.z.toFixed(3));
-        console.log('Other players count:', this.playerManager.otherPlayers.size);
-        console.log('Max range: 1000 units');
+        // Checking hit detection
         
         // Check raycast against all player meshes
         let closestHit = null;
@@ -219,21 +213,21 @@ export class Game {
         this.playerManager.otherPlayers.forEach((player, playerId) => {
             const playerPos = player.mesh.position;
             const distanceToPlayer = playerPosition.distanceTo(playerPos);
-            console.log(`Checking player ${playerId} at distance ${distanceToPlayer.toFixed(1)} units`);
+            // Checking player
             
             // Only intersect with the capsule mesh, not children (sprites)
             const intersects = raycaster.intersectObject(player.mesh, false);
             
             if (intersects.length > 0) {
                 const distance = intersects[0].distance;
-                console.log(`  ✓ RAYCAST HIT at distance ${distance.toFixed(1)} units!`);
+                // Hit detected
                 
                 if (distance < closestDistance) {
                     closestDistance = distance;
                     closestHit = { playerId, player, distance };
                 }
             } else {
-                console.log(`  ✗ Raycast missed player`);
+                // Raycast missed
                 
                 // Fallback to proximity check for very close range only
                 if (distanceToPlayer <= 3) { // Reduced from 5 to 3 for tighter hit detection
@@ -241,7 +235,7 @@ export class Game {
                     const dot = shootDirection.dot(directionToPlayer);
                     
                     if (dot > 0.9) { // More strict: 0.9 instead of 0.85
-                        console.log(`  ✓ Close range hit at ${distanceToPlayer.toFixed(1)} units (dot: ${dot.toFixed(2)})`);
+                        // Close range hit
                         if (distanceToPlayer < closestDistance) {
                             closestDistance = distanceToPlayer;
                             closestHit = { playerId, player, distance: distanceToPlayer };
@@ -253,21 +247,21 @@ export class Game {
         
         // Hit the closest player if any
         if (closestHit) {
-            console.log(`*** HIT DETECTED on player ${closestHit.playerId} at distance ${closestHit.distance.toFixed(1)} ***`);
+            // Hit confirmed
             
             // Add bullet impact on player
             this.addPlayerImpact(closestHit.player.mesh, playerPosition, shootDirection);
             
             const killed = this.playerManager.hitPlayer(closestHit.playerId);
             if (this.network) {
-                console.log('Sending hit to server, killed:', killed);
+                // Sending hit to server
                 this.network.sendHit(closestHit.playerId, killed);
             }
         } else {
-            console.log('No hit detected');
+            // No hit
         }
         
-        console.log('=== END HIT CHECK ===');
+        // Hit check complete
     }
     
     addPlayerImpact(playerMesh, shooterPos, shootDirection) {
@@ -794,14 +788,7 @@ export class Game {
                 // Use InputManager's yaw for continuous rotation tracking
                 const cameraRotation = this.input.yaw;
                 
-                // Debug camera position
-                if (Math.random() < 0.01) { // Log every ~100 frames
-                    console.log('Camera debug:', {
-                        position: { x: playerPos.x.toFixed(1), y: playerPos.y.toFixed(1), z: playerPos.z.toFixed(1) },
-                        yaw: this.input.yaw.toFixed(3),
-                        cameraY: this.camera.getRotation().y.toFixed(3)
-                    });
-                }
+                // Camera position tracking disabled
                 
                 this.miniMap.update(playerPos, cameraRotation);
                 this.compass.update(cameraRotation);

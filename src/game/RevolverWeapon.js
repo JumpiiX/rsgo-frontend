@@ -38,15 +38,12 @@ export class RevolverWeapon {
                         // Try auto-scaling based on model size
                         const box = new THREE.Box3().setFromObject(this.weapon);
                         const size = box.getSize(new THREE.Vector3());
-                        console.log('Original model size:', size);
-                        
                         // Scale to fit (target size ~0.3 units)
                         const maxDim = Math.max(size.x, size.y, size.z);
                         const targetSize = 0.3;
                         const scale = targetSize / maxDim;
                         
                         this.weapon.scale.set(scale, scale, scale);
-                        console.log('Applied scale:', scale);
                         
                         // Keep original materials, just adjust properties
                         let meshCount = 0;
@@ -61,22 +58,17 @@ export class RevolverWeapon {
                                 child.frustumCulled = false;
                                 child.renderOrder = 999;
                                 
-                                // Log mesh info
-                                const box = new THREE.Box3().setFromObject(child);
-                                const size = box.getSize(new THREE.Vector3());
-                                console.log(`Mesh ${meshCount} size:`, size);
+                                // Mesh configured
                             }
                         });
-                        console.log(`Total meshes found: ${meshCount}`);
-                        
                         this.weaponGroup.add(this.weapon);
                         this.scene.add(this.weaponGroup);
                         
                         this.updateWeaponPosition();
-                        console.log('Revolver loaded successfully');
+                        // Revolver loaded
                     },
                     (progress) => {
-                        console.log('Loading revolver: ' + (progress.loaded / progress.total * 100) + '%');
+                        // Loading progress
                     },
                     (error) => {
                         console.error('Error loading revolver OBJ:', error);
@@ -84,7 +76,7 @@ export class RevolverWeapon {
                 );
             },
             (progress) => {
-                console.log('Loading materials...');
+                // Loading materials
             },
             (error) => {
                 console.error('Error loading MTL:', error);

@@ -4,6 +4,7 @@ FROM nginx:alpine
 COPY index.html /usr/share/nginx/html/
 COPY src /usr/share/nginx/html/src/
 COPY game.js /usr/share/nginx/html/
+COPY models /usr/share/nginx/html/models/
 
 # Copy custom nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
