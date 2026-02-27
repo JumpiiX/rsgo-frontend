@@ -29,6 +29,9 @@ export class Camera {
     init() {
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         this.camera.position.set(0, 10, 0);
+        
+        // Enable rendering of layer 1 for weapon overlay
+        this.camera.layers.enable(1);
 
         // Handle window resize
         window.addEventListener('resize', () => {

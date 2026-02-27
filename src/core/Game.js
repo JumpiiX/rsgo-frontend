@@ -7,6 +7,7 @@ import { InputManager } from './InputManager.js';
 import { NetworkClient } from '../network/NetworkClient.js';
 import { PlayerManager } from '../game/PlayerManager.js';
 import { BulletSystem } from '../game/BulletSystem.js';
+import { RevolverWeapon } from '../game/RevolverWeapon.js';
 import { CollisionSystem } from '../physics/CollisionSystem.js';
 import { MiniMap } from '../ui/MiniMap.js';
 import { Compass } from '../ui/Compass.js';
@@ -22,6 +23,7 @@ export class Game {
         this.network = null;
         this.playerManager = null;
         this.bulletSystem = null;
+        this.weaponSystem = null;
         this.collisionSystem = null;
         this.miniMap = null;
         this.compass = null;
@@ -54,6 +56,7 @@ export class Game {
         this.network = new NetworkClient();
         this.playerManager = new PlayerManager(this.scene.getScene());
         this.bulletSystem = new BulletSystem(this.scene.getScene());
+        this.weaponSystem = new RevolverWeapon(this.camera.getCamera(), this.scene.getScene());
 
         // Add renderer canvas to DOM
         document.getElementById('gameContainer').appendChild(this.renderer.getRenderer().domElement);
@@ -167,10 +170,19 @@ export class Game {
         if (this.network && this.gameStarted && this.isAlive) {
             const forward = new THREE.Vector3();
             this.camera.getCamera().getWorldDirection(forward);
+            
+            // Start bullet slightly in front of camera to avoid self-collision
             const startPos = this.camera.getPosition().clone();
+            startPos.add(forward.clone().multiplyScalar(1)); // Start 1 unit forward from camera
+            
             const target = startPos.clone().add(forward.multiplyScalar(1000));  // Increased from 100 to 1000 for long range
             
             this.bulletSystem.createBullet(startPos, target, true);
+            
+            // Animate weapon recoil
+            if (this.weaponSystem) {
+                this.weaponSystem.animateShoot();
+            }
             
             this.checkHit(target);
             this.network.sendShoot(startPos, target);  // Send both start and target
@@ -224,11 +236,11 @@ export class Game {
                 console.log(`  ✗ Raycast missed player`);
                 
                 // Fallback to proximity check for very close range only
-                if (distanceToPlayer <= 5) { // Very close range
+                if (distanceToPlayer <= 3) { // Reduced from 5 to 3 for tighter hit detection
                     const directionToPlayer = new THREE.Vector3().subVectors(playerPos, playerPosition).normalize();
                     const dot = shootDirection.dot(directionToPlayer);
                     
-                    if (dot > 0.85) { // Slightly more forgiving at close range
+                    if (dot > 0.9) { // More strict: 0.9 instead of 0.85
                         console.log(`  ✓ Close range hit at ${distanceToPlayer.toFixed(1)} units (dot: ${dot.toFixed(2)})`);
                         if (distanceToPlayer < closestDistance) {
                             closestDistance = distanceToPlayer;
@@ -260,7 +272,7 @@ export class Game {
     
     addPlayerImpact(playerMesh, shooterPos, shootDirection) {
         // Create bullet hole on player body
-        const geometry = new THREE.SphereGeometry(0.3, 6, 6);
+        const geometry = new THREE.SphereGeometry(0.15, 6, 6);  // Smaller impact: 0.15 instead of 0.3
         const material = new THREE.MeshBasicMaterial({
             color: 0x800000,  // Dark red for blood
             emissive: 0x400000,
@@ -341,6 +353,11 @@ export class Game {
             this.health = 0;
             this.activateDeathCam();
             
+            // Hide weapon when dead
+            if (this.weaponSystem) {
+                this.weaponSystem.hide();
+            }
+            
             // Get killer name instead of ID
             const killerName = this.getPlayerName(message.killer_id) || message.killer_id;
             
@@ -369,6 +386,12 @@ export class Game {
             this.shield = 100;  // Reset shield to 100
             this.lastHitTime = 0;
             this.deactivateDeathCam();
+            
+            // Show weapon when respawned
+            if (this.weaponSystem) {
+                this.weaponSystem.show();
+            }
+            
             this.spawnPlayer(); // Respawn at new location
             console.log('You have respawned with full health and shield!');
             this.hideDeathMessage();
@@ -759,6 +782,11 @@ export class Game {
             }
             
             this.bulletSystem.update(deltaTime);
+            
+            // Update weapon idle animation
+            if (this.weaponSystem) {
+                this.weaponSystem.update(deltaTime);
+            }
             
             // Update UI components
             if (this.miniMap) {
