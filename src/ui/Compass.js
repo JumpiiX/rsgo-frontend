@@ -6,7 +6,7 @@ export class Compass {
     }
 
     createCompassUI() {
-        // Create compass container
+        
         const compassContainer = document.createElement('div');
         compassContainer.id = 'compass-container';
         compassContainer.style.cssText = `
@@ -28,7 +28,7 @@ export class Compass {
         `;
         document.body.appendChild(compassContainer);
 
-        // Create compass strip that will slide horizontally
+        
         this.compassStrip = document.createElement('div');
         this.compassStrip.id = 'compass-strip';
         this.compassStrip.style.cssText = `
@@ -40,7 +40,7 @@ export class Compass {
         `;
         compassContainer.appendChild(this.compassStrip);
 
-        // Create a clean minimalistic compass tape
+        
         const createCompassTape = () => {
             const tape = document.createElement('div');
             tape.style.cssText = `
@@ -51,7 +51,7 @@ export class Compass {
                 font-family: 'Arial', sans-serif;
             `;
 
-            // Create markers - only cardinal directions and subtle ticks
+            
             for (let deg = 0; deg < 1080; deg += 5) {
                 const actualDeg = deg % 360;
                 let label = '';
@@ -60,7 +60,7 @@ export class Compass {
                 let fontWeight = 'normal';
                 const width = '30px';
 
-                // Major cardinal directions only
+                
                 if (actualDeg === 0) {
                     label = 'N';
                     fontSize = '18px';
@@ -82,13 +82,13 @@ export class Compass {
                     color = '#cd853f';
                     fontWeight = 'bold';
                 }
-                // Subtle tick marks every 15 degrees
+                
                 else if (actualDeg % 15 === 0) {
                     label = '|';
                     fontSize = '8px';
                     color = 'rgba(210, 105, 30, 0.2)';
                 }
-                // Very subtle tick marks every 5 degrees
+                
                 else if (actualDeg % 5 === 0) {
                     label = '·';
                     fontSize = '6px';
@@ -118,7 +118,7 @@ export class Compass {
 
         this.compassStrip.appendChild(createCompassTape());
 
-        // Add subtle gradient overlays for fade effect at edges
+        
         const leftFade = document.createElement('div');
         leftFade.style.cssText = `
             position: fixed;
@@ -145,7 +145,7 @@ export class Compass {
         `;
         document.body.appendChild(rightFade);
 
-        // Add center indicator (vertical line) - rust themed
+        
         const centerLine = document.createElement('div');
         centerLine.style.cssText = `
             position: fixed;
@@ -161,7 +161,7 @@ export class Compass {
         `;
         document.body.appendChild(centerLine);
 
-        // Add degree display below compass - minimalistic
+        
         this.degreeDisplay = document.createElement('div');
         this.degreeDisplay.style.cssText = `
             position: fixed;
@@ -180,28 +180,28 @@ export class Compass {
     }
 
     update(yawRadians) {
-        // yaw is continuously accumulated in InputManager
-        // Convert to degrees for compass display
+        
+        
         let degrees = (-yawRadians * 180 / Math.PI);
 
-        // Normalize to 0-360 range
+        
         degrees = degrees % 360;
         if (degrees < 0) degrees += 360;
 
-        // The compass strip should move opposite to the rotation
-        // We position the middle rotation (360-720) as the active one
+        
+        
         const pixelsPerDegree = 1;
-        const middleOffset = 360; // Offset to the middle rotation
+        const middleOffset = 360; 
         const offset = degrees + middleOffset;
 
-        // Center the strip and apply offset
-        const centerOffset = 150; // Half of container width
+        
+        const centerOffset = 150; 
         const stripPosition = centerOffset - offset;
 
-        // Apply transform to move the strip
+        
         this.compassStrip.style.transform = `translateX(${stripPosition}px)`;
 
-        // Update degree display
+        
         this.degreeDisplay.textContent = `${Math.round(degrees)}°`;
     }
 }

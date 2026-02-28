@@ -12,9 +12,9 @@ export class InputManager {
         this.camera = null;
         this.collisionSystem = null;
 
-        // FPS camera rotation values
-        this.yaw = 0; // left/right rotation
-        this.pitch = 0; // up/down rotation
+        
+        this.yaw = 0; 
+        this.pitch = 0; 
 
         this.onShootCallback = null;
         this.onMoveCallback = null;
@@ -76,18 +76,18 @@ export class InputManager {
                 const movementX = event.movementX || 0;
                 const movementY = event.movementY || 0;
 
-                // Update yaw (left/right) and pitch (up/down)
+                
                 this.yaw -= movementX * this.lookSpeed;
                 this.pitch -= movementY * this.lookSpeed;
 
-                // Clamp pitch to prevent flipping
+                
                 this.pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, this.pitch));
 
-                // Apply rotation using quaternions to prevent gimbal lock
+                
                 const yawQuaternion = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
                 const pitchQuaternion = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), this.pitch);
 
-                // Combine rotations: yaw first, then pitch
+                
                 this.camera.quaternion.copy(yawQuaternion).multiply(pitchQuaternion);
             }
         });
@@ -133,20 +133,20 @@ export class InputManager {
             return;
         }
 
-        // Simplified movement - direct control
+        
         const moveVector = new THREE.Vector3();
 
-        // Get camera direction vectors
+        
         const forward = new THREE.Vector3();
         camera.getCamera().getWorldDirection(forward);
-        forward.y = 0; // Keep movement on ground plane
+        forward.y = 0; 
         forward.normalize();
 
         const right = new THREE.Vector3();
         right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
         right.normalize();
 
-        // Apply WASD movement
+        
         let isMoving = false;
         if (this.controls.forward) {
             moveVector.addScaledVector(forward, this.moveSpeed * deltaTime);
@@ -165,22 +165,22 @@ export class InputManager {
             isMoving = true;
         }
 
-        // Check collision and get valid position
-        const currentPos = camera.getPosition().clone(); // CLONE the current position!
+        
+        const currentPos = camera.getPosition().clone(); 
         const desiredPos = currentPos.clone().add(moveVector);
 
-        // Apply collision detection if system is available
+        
         const finalPos = this.collisionSystem ?
             this.collisionSystem.getValidPosition(currentPos, desiredPos, 1.5) :
             desiredPos;
 
-        // Calculate movement BEFORE updating camera
+        
         const actualMovement = finalPos.clone().sub(currentPos);
 
-        // Apply the movement
+        
         camera.getCamera().position.copy(finalPos);
 
-        // Only send position update if we actually moved
+        
         if (actualMovement.length() > 0.01) {
             if (this.onMoveCallback) {
                 this.onMoveCallback(

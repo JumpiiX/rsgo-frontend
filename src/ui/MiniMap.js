@@ -2,51 +2,51 @@ export class MiniMap {
     constructor(scene, playerCamera, renderer) {
         console.log('MiniMap: Initializing...', scene, playerCamera, renderer);
         this.scene = scene;
-        this.playerCamera = playerCamera; // Store reference but don't modify it
+        this.playerCamera = playerCamera; 
         this.renderer = renderer;
 
-        // Create orthographic camera for top-down view
-        const mapSize = 200; // Size of the mini-map viewport
-        const viewSize = 600; // Show good portion of map
+        
+        const mapSize = 200; 
+        const viewSize = 600; 
         this.mapCamera = new THREE.OrthographicCamera(
             -viewSize / 2, viewSize / 2,
             viewSize / 2, -viewSize / 2,
             0.1, 1000
         );
 
-        // Position camera above the world looking down
+        
         this.mapCamera.position.set(0, 400, 0);
         this.mapCamera.lookAt(0, 0, 0);
 
-        // Set up special rendering for minimap
+        
         this.setupMinimapMaterials();
 
-        // Create player indicator arrow overlay (HTML)
+        
         this.createPlayerArrow();
 
-        // Create border for minimap
+        
         this.createMapBorder();
 
         this.mapSize = mapSize;
     }
 
     setupMinimapMaterials() {
-        // Store original materials and set minimap-specific ones for better visibility
+        
         this.originalMaterials = new Map();
 
-        // Create materials for minimap
+        
         this.minimapMaterials = {
-            wall: new THREE.MeshBasicMaterial({ color: 0x445566 }), // Dark blue-gray for walls
-            ground: new THREE.MeshBasicMaterial({ color: 0x1a1a2e }), // Dark background
-            building: new THREE.MeshBasicMaterial({ color: 0x334455 }), // Buildings
-            obstacle: new THREE.MeshBasicMaterial({ color: 0x556677 }), // Obstacles
-            player: new THREE.MeshBasicMaterial({ color: 0x00ff00 }), // Players bright green
-            tree: new THREE.MeshBasicMaterial({ color: 0x2d4a2b }), // Trees dark green
+            wall: new THREE.MeshBasicMaterial({ color: 0x445566 }), 
+            ground: new THREE.MeshBasicMaterial({ color: 0x1a1a2e }), 
+            building: new THREE.MeshBasicMaterial({ color: 0x334455 }), 
+            obstacle: new THREE.MeshBasicMaterial({ color: 0x556677 }), 
+            player: new THREE.MeshBasicMaterial({ color: 0x00ff00 }), 
+            tree: new THREE.MeshBasicMaterial({ color: 0x2d4a2b }), 
         };
     }
 
     createPlayerArrow() {
-        // Create clean, narrow arrow in rust/orange theme
+        
         const arrow = document.createElement('div');
         arrow.id = 'minimap-player-arrow';
         arrow.style.cssText = `
@@ -67,7 +67,7 @@ export class MiniMap {
     }
 
     createMapBorder() {
-        // This will be rendered as HTML overlay
+        
         const mapContainer = document.createElement('div');
         mapContainer.id = 'minimap-container';
         mapContainer.style.cssText = `
@@ -87,42 +87,42 @@ export class MiniMap {
     }
 
     update(playerPosition, playerRotation) {
-        // Update map camera to follow player
+        
         this.mapCamera.position.x = playerPosition.x;
         this.mapCamera.position.z = playerPosition.z;
-        this.mapCamera.position.y = 400; // Keep height constant
+        this.mapCamera.position.y = 400; 
 
-        // First look straight down
+        
         this.mapCamera.lookAt(playerPosition.x, 0, playerPosition.z);
 
-        // Apply rotation - positive rotation to make view direction appear at top
-        // When player looks in a direction, that direction should be UP on the minimap
+        
+        
         this.mapCamera.rotation.z = playerRotation;
 
-        // Arrow doesn't need transform since map rotates
+        
     }
 
     render() {
-        // Store the current renderer state
+        
         const autoClear = this.renderer.autoClear;
         const clearAlpha = this.renderer.getClearAlpha();
         const clearColor = new THREE.Color();
         this.renderer.getClearColor(clearColor);
 
-        // Get canvas dimensions (use clientWidth/Height for actual pixel size)
+        
         const canvas = this.renderer.domElement;
         const pixelRatio = window.devicePixelRatio || 1;
         const width = canvas.clientWidth * pixelRatio;
         const height = canvas.clientHeight * pixelRatio;
 
-        // Set minimap viewport (top-right corner)
+        
         const mapWidth = this.mapSize * pixelRatio;
         const mapHeight = this.mapSize * pixelRatio;
 
-        // Disable auto-clear to preserve main scene render
+        
         this.renderer.autoClear = false;
 
-        // Set scissor test to only affect minimap area
+        
         this.renderer.setScissorTest(true);
         this.renderer.setScissor(
             width - mapWidth - (10 * pixelRatio),
@@ -138,21 +138,21 @@ export class MiniMap {
             mapHeight
         );
 
-        // Set beige/sand background for minimap
+        
         this.renderer.setClearColor(0x2d2416, 1);
         this.renderer.setClearAlpha(1);
         this.renderer.clear(true, true, false);
 
-        // Apply minimap-specific materials
+        
         this.applyMinimapColors();
 
-        // Render minimap
+        
         this.renderer.render(this.scene, this.mapCamera);
 
-        // Restore original materials
+        
         this.restoreOriginalColors();
 
-        // Restore renderer state
+        
         this.renderer.setScissorTest(false);
         this.renderer.setViewport(0, 0, width, height);
         this.renderer.autoClear = autoClear;
@@ -161,50 +161,50 @@ export class MiniMap {
     }
 
     applyMinimapColors() {
-        // Store original materials and visibility
+        
         this.originalStates = [];
 
-        // Custom materials for minimap
-        const wallMaterial = new THREE.MeshBasicMaterial({ color: 0x8B5A2B }); // Saddle brown for walls
-        const buildingMaterial = new THREE.MeshBasicMaterial({ color: 0x654321 }); // Dark brown for buildings
-        const groundMaterial = new THREE.MeshBasicMaterial({ color: 0x2d2416 }); // Dark sand for ground
-        const obstacleMaterial = new THREE.MeshBasicMaterial({ color: 0xA0522D }); // Sienna for obstacles
+        
+        const wallMaterial = new THREE.MeshBasicMaterial({ color: 0x8B5A2B }); 
+        const buildingMaterial = new THREE.MeshBasicMaterial({ color: 0x654321 }); 
+        const groundMaterial = new THREE.MeshBasicMaterial({ color: 0x2d2416 }); 
+        const obstacleMaterial = new THREE.MeshBasicMaterial({ color: 0xA0522D }); 
 
         this.scene.traverse((object) => {
             if (object.isMesh) {
-                // Store original state
+                
                 this.originalStates.push({
                     object: object,
                     material: object.material,
                     visible: object.visible
                 });
 
-                // Hide stars and sky objects (high Y position)
+                
                 if (object.position.y > 100) {
                     object.visible = false;
                 }
-                // Apply colors based on object type/position
+                
                 else if (object.geometry && object.geometry.type === 'PlaneGeometry') {
-                    // Ground plane
+                    
                     object.material = groundMaterial;
                 }
                 else if (object.geometry && object.geometry.type === 'BoxGeometry') {
-                    // Buildings and walls
+                    
                     const size = object.geometry.parameters;
                     if (size && (size.width > 50 || size.height > 30 || size.depth > 50)) {
-                        // Large objects are buildings
+                        
                         object.material = buildingMaterial;
                     } else {
-                        // Smaller boxes are walls/obstacles
+                        
                         object.material = wallMaterial;
                     }
                 }
                 else {
-                    // Other obstacles
+                    
                     object.material = obstacleMaterial;
                 }
             }
-            // Hide point lights and sprites
+            
             else if (object.isPoints || object.isSprite || object.isLight) {
                 this.originalStates.push({
                     object: object,
@@ -216,7 +216,7 @@ export class MiniMap {
     }
 
     restoreOriginalColors() {
-        // Restore all original materials and visibility
+        
         if (this.originalStates) {
             this.originalStates.forEach(state => {
                 if (state.material) {

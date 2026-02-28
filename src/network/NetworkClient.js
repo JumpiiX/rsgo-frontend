@@ -16,7 +16,7 @@ export class NetworkClient {
     connect() {
         const wsUrl = window.location.hostname === 'localhost'
             ? 'ws://localhost:6969'
-            : `ws://${window.location.hostname}/ws`;
+            : `ws://${window.location.hostname}:6969`;
         this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {

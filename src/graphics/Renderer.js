@@ -7,12 +7,12 @@ export class Renderer {
     init() {
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.setClearColor(0x3a3a4a); // Maximum brightness background
+        this.renderer.setClearColor(0x3a3a4a); 
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        // Don't append here - let Game class handle it
+        
 
-        // Handle window resize
+        
         window.addEventListener('resize', () => {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
         });

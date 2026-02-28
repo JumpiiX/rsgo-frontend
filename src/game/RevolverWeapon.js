@@ -8,12 +8,12 @@ export class RevolverWeapon {
         this.scene = scene;
         this.weapon = null;
         this.weaponGroup = new THREE.Group();
-        this.muzzleOffset = new THREE.Vector3(0, 0, -0.15); // Offset to barrel tip
+        this.muzzleOffset = new THREE.Vector3(0, 0, -0.15); 
 
-        // FPS viewmodel position - more visible position
+        
         this.initialPositionOffset = new THREE.Vector3(0.15, -0.1, -0.25);
-        // Rotate 180 degrees to point forward
-        this.initialRotationOffset = new THREE.Euler(0, Math.PI, 0.1); // 180 degrees Y rotation + slight Z tilt
+        
+        this.initialRotationOffset = new THREE.Euler(0, Math.PI, 0.1); 
 
         this.loadRevolver();
     }
@@ -22,35 +22,35 @@ export class RevolverWeapon {
         const mtlLoader = new MTLLoader();
         const objLoader = new OBJLoader();
 
-        // First load materials
+        
         mtlLoader.load(
             '/models/Revolver_02.mtl',
             (materials) => {
                 materials.preload();
                 objLoader.setMaterials(materials);
 
-                // Then load the OBJ with materials
+                
                 objLoader.load(
                     '/models/Revolver_02.obj',
                     (obj) => {
                         this.weapon = obj;
 
-                        // Try auto-scaling based on model size
+                        
                         const box = new THREE.Box3().setFromObject(this.weapon);
                         const size = box.getSize(new THREE.Vector3());
-                        // Scale to fit (target size ~0.3 units)
+                        
                         const maxDim = Math.max(size.x, size.y, size.z);
                         const targetSize = 0.3;
                         const scale = targetSize / maxDim;
 
                         this.weapon.scale.set(scale, scale, scale);
 
-                        // Keep original materials, just adjust properties
+                        
                         let meshCount = 0;
                         this.weapon.traverse((child) => {
                             if (child.isMesh) {
                                 meshCount++;
-                                // Keep existing material but ensure it's visible
+                                
                                 if (child.material) {
                                     child.material.fog = false;
                                     child.material.side = THREE.DoubleSide;
@@ -58,17 +58,17 @@ export class RevolverWeapon {
                                 child.frustumCulled = false;
                                 child.renderOrder = 999;
 
-                                // Mesh configured
+                                
                             }
                         });
                         this.weaponGroup.add(this.weapon);
                         this.scene.add(this.weaponGroup);
 
                         this.updateWeaponPosition();
-                        // Revolver loaded
+                        
                     },
                     (progress) => {
-                        // Loading progress
+                        
                     },
                     (error) => {
                         console.error('Error loading revolver OBJ:', error);
@@ -76,11 +76,11 @@ export class RevolverWeapon {
                 );
             },
             (progress) => {
-                // Loading materials
+                
             },
             (error) => {
                 console.error('Error loading MTL:', error);
-                // Try loading OBJ without materials
+                
                 this.loadWithoutMaterials();
             }
         );
@@ -94,15 +94,15 @@ export class RevolverWeapon {
             (obj) => {
                 this.weapon = obj;
 
-                // Scale down the model
+                
                 this.weapon.scale.set(0.001, 0.001, 0.001);
 
-                // Create default material if no materials loaded
+                
                 this.weapon.traverse((child) => {
                     if (child.isMesh) {
-                        // Use a metallic gray for revolver if no materials
+                        
                         child.material = new THREE.MeshBasicMaterial({
-                            color: 0x444444,  // Dark gray metal
+                            color: 0x444444,  
                             fog: false
                         });
                         child.frustumCulled = false;
@@ -137,7 +137,7 @@ export class RevolverWeapon {
 
         this.weaponGroup.position.copy(weaponPos);
 
-        // Apply rotations
+        
         this.weaponGroup.quaternion.copy(this.camera.quaternion);
         this.weaponGroup.rotateY(this.initialRotationOffset.y);
         this.weaponGroup.rotateX(this.initialRotationOffset.x);
@@ -147,7 +147,7 @@ export class RevolverWeapon {
     update(deltaTime) {
         this.updateWeaponPosition();
 
-        // Add idle sway
+        
         if (this.weaponGroup && this.weapon) {
             const time = Date.now() * 0.001;
             const swayX = Math.sin(time * 1.5) * 0.002;
@@ -167,7 +167,7 @@ export class RevolverWeapon {
     animateShoot() {
         if (!this.weaponGroup) return;
 
-        // Recoil animation
+        
         const originalZ = this.weaponGroup.position.z;
         const originalRotX = this.weaponGroup.rotation.x;
 
@@ -193,10 +193,10 @@ export class RevolverWeapon {
     }
 
     getMuzzlePosition() {
-        // Get the world position of the revolver's barrel tip
+        
         const muzzlePos = this.weaponGroup.position.clone();
 
-        // Apply the muzzle offset in the weapon's local space
+        
         const offset = this.muzzleOffset.clone();
         offset.applyQuaternion(this.weaponGroup.quaternion);
         muzzlePos.add(offset);

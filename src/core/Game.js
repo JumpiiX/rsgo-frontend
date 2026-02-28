@@ -37,8 +37,8 @@ export class Game {
         this.health = 100;
         this.shield = 100;
         this.maxShield = 100;
-        this.shieldRegenDelay = 5000; // 5 seconds delay before regen starts
-        this.shieldRegenRate = 10; // Shield points per second
+        this.shieldRegenDelay = 5000; 
+        this.shieldRegenRate = 10; 
         this.lastHitTime = 0;
         this.shieldRegenInterval = null;
 
@@ -58,7 +58,7 @@ export class Game {
         this.bulletSystem = new BulletSystem(this.scene.getScene());
         this.weaponSystem = new RevolverWeapon(this.camera.getCamera(), this.scene.getScene());
 
-        // Add renderer canvas to DOM
+        
         document.getElementById('gameContainer').appendChild(this.renderer.getRenderer().domElement);
 
         this.setupSystems();
@@ -72,21 +72,21 @@ export class Game {
         this.input.setCollisionSystem(this.collisionSystem);
         this.network.connect();
 
-        // Initialize UI components
+        
         this.miniMap = new MiniMap(this.scene.getScene(), this.camera, this.renderer.getRenderer());
         this.compass = new Compass();
 
-        // Debug scene contents
-        // Scene initialized
+        
+        
 
-        // Add a test cube to see if rendering works
+        
         const testGeometry = new THREE.BoxGeometry(5, 5, 5);
         const testMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
         const testCube = new THREE.Mesh(testGeometry, testMaterial);
-        testCube.position.set(0, 15, -10); // Put it in front of spawn
+        testCube.position.set(0, 15, -10); 
         this.scene.getScene().add(testCube);
 
-        // Bind network events to player manager
+        
         this.network.onPlayerJoined((player) => this.playerManager.addPlayer(player));
         this.network.onPlayerLeft((playerId) => this.playerManager.removePlayer(playerId));
         this.network.onPlayerMoved((message) => this.playerManager.updatePlayer(message));
@@ -96,7 +96,7 @@ export class Game {
         this.network.onPlayerRespawned((message) => this.handlePlayerRespawned(message));
         this.network.onShieldUpdate((message) => this.handleShieldUpdate(message));
 
-        // Bind input events
+        
         this.input.onShoot(() => this.handleShoot());
         this.input.onMove((position, rotation) => this.handleMove(position, rotation));
     }
@@ -128,11 +128,11 @@ export class Game {
             this.gameStarted = true;
             this.initialize();
 
-            // Initialize UI elements
+            
             this.updateHealthDisplay();
             this.updateKillCounter();
 
-            // Wait for network connection, then join and spawn
+            
             setTimeout(() => {
                 if (this.network.isConnected()) {
                     this.network.joinGame(this.playerName);
@@ -147,7 +147,7 @@ export class Game {
         const spawnPoint = this.camera.spawnPoints[spawnIndex];
         this.camera.getCamera().position.set(spawnPoint.x, spawnPoint.y, spawnPoint.z);
 
-        // Reset camera rotation to look forward
+        
         this.camera.getCamera().rotation.set(0, 0, 0);
         this.input.yaw = 0;
         this.input.pitch = 0;
@@ -156,7 +156,7 @@ export class Game {
     }
 
     handleMove(position, rotation) {
-        // Position update
+        
         if (this.network && this.gameStarted && this.isAlive) {
             this.network.sendMove(position, rotation);
         } else {
@@ -169,21 +169,21 @@ export class Game {
             const forward = new THREE.Vector3();
             this.camera.getCamera().getWorldDirection(forward);
 
-            // Start bullet slightly in front of camera to avoid self-collision
+            
             const startPos = this.camera.getPosition().clone();
-            startPos.add(forward.clone().multiplyScalar(1)); // Start 1 unit forward from camera
+            startPos.add(forward.clone().multiplyScalar(1)); 
 
-            const target = startPos.clone().add(forward.multiplyScalar(1000));  // Increased from 100 to 1000 for long range
+            const target = startPos.clone().add(forward.multiplyScalar(1000));  
 
             this.bulletSystem.createBullet(startPos, target, true);
 
-            // Animate weapon recoil
+            
             if (this.weaponSystem) {
                 this.weaponSystem.animateShoot();
             }
 
             this.checkHit(target);
-            this.network.sendShoot(startPos, target);  // Send both start and target
+            this.network.sendShoot(startPos, target);  
         }
     }
 
@@ -197,45 +197,45 @@ export class Game {
         const playerPosition = this.camera.getPosition();
         const shootDirection = new THREE.Vector3().subVectors(target, playerPosition).normalize();
 
-        // Create raycaster for accurate hit detection
+        
         const raycaster = new THREE.Raycaster();
         raycaster.set(playerPosition, shootDirection);
-        raycaster.far = 1000; // Check up to 1000 units away
-        // Set camera for sprite intersection
+        raycaster.far = 1000; 
+        
         raycaster.camera = this.camera.getCamera();
 
-        // Checking hit detection
+        
 
-        // Check raycast against all player meshes
+        
         let closestHit = null;
         let closestDistance = Infinity;
 
         this.playerManager.otherPlayers.forEach((player, playerId) => {
             const playerPos = player.mesh.position;
             const distanceToPlayer = playerPosition.distanceTo(playerPos);
-            // Checking player
+            
 
-            // Only intersect with the capsule mesh, not children (sprites)
+            
             const intersects = raycaster.intersectObject(player.mesh, false);
 
             if (intersects.length > 0) {
                 const distance = intersects[0].distance;
-                // Hit detected
+                
 
                 if (distance < closestDistance) {
                     closestDistance = distance;
                     closestHit = { playerId, player, distance };
                 }
             } else {
-                // Raycast missed
+                
 
-                // Fallback to proximity check for very close range only
-                if (distanceToPlayer <= 3) { // Reduced from 5 to 3 for tighter hit detection
+                
+                if (distanceToPlayer <= 3) { 
                     const directionToPlayer = new THREE.Vector3().subVectors(playerPos, playerPosition).normalize();
                     const dot = shootDirection.dot(directionToPlayer);
 
-                    if (dot > 0.9) { // More strict: 0.9 instead of 0.85
-                        // Close range hit
+                    if (dot > 0.9) { 
+                        
                         if (distanceToPlayer < closestDistance) {
                             closestDistance = distanceToPlayer;
                             closestHit = { playerId, player, distance: distanceToPlayer };
@@ -245,48 +245,48 @@ export class Game {
             }
         });
 
-        // Hit the closest player if any
+        
         if (closestHit) {
-            // Hit confirmed
+            
 
-            // Add bullet impact on player
+            
             this.addPlayerImpact(closestHit.player.mesh, playerPosition, shootDirection);
 
             const killed = this.playerManager.hitPlayer(closestHit.playerId);
             if (this.network) {
-                // Sending hit to server
+                
                 this.network.sendHit(closestHit.playerId, killed);
             }
         } else {
-            // No hit
+            
         }
 
-        // Hit check complete
+        
     }
 
     addPlayerImpact(playerMesh, shooterPos, shootDirection) {
-        // Create bullet hole on player body
-        const geometry = new THREE.SphereGeometry(0.15, 6, 6);  // Smaller impact: 0.15 instead of 0.3
+        
+        const geometry = new THREE.SphereGeometry(0.15, 6, 6);  
         const material = new THREE.MeshBasicMaterial({
-            color: 0x800000,  // Dark red for blood
+            color: 0x800000,  
             emissive: 0x400000,
             emissiveIntensity: 0.5
         });
         const impactMark = new THREE.Mesh(geometry, material);
 
-        // Mark it as a player impact so we can clean it up
+        
         impactMark.userData.isPlayerImpact = true;
 
-        // Calculate impact position on player surface
+        
         const toPlayer = new THREE.Vector3().subVectors(playerMesh.position, shooterPos).normalize();
-        const impactOffset = toPlayer.multiplyScalar(2.2); // Slightly outside the capsule radius
+        const impactOffset = toPlayer.multiplyScalar(2.2); 
         impactMark.position.copy(playerMesh.position).sub(impactOffset);
-        impactMark.position.y += 1; // Adjust height to body center
+        impactMark.position.y += 1; 
 
-        // Attach to player so it moves with them
+        
         playerMesh.add(impactMark);
 
-        // Remove after 5 seconds
+        
         setTimeout(() => {
             if (impactMark.parent) {
                 impactMark.parent.remove(impactMark);
@@ -297,13 +297,13 @@ export class Game {
     handlePlayerHit(message) {
         console.log(`Player ${message.player_id} hit! Health: ${message.health}/100, Shield: ${message.shield}/100 (damage: ${message.damage})`);
 
-        // Check if it's our own player who got hit
+        
         if (message.player_id === this.network.playerId) {
-            // Use server's authoritative health and shield values
+            
             this.health = message.health;
-            this.shield = message.shield || 0; // Shield might not be in old messages
+            this.shield = message.shield || 0; 
 
-            // Update last hit time and start shield regen timer (frontend visual only)
+            
             this.lastHitTime = Date.now();
             this.startShieldRegen();
 
@@ -311,28 +311,28 @@ export class Game {
             this.showHitEffect();
             console.log(`YOU GOT HIT! Shield: ${this.shield}, Health: ${this.health}`);
         } else {
-            // Another player got hit
+            
             const player = this.playerManager.otherPlayers.get(message.player_id);
             if (player) {
-                // Could add health bar above player here
+                
             }
         }
     }
 
     startShieldRegen() {
-        // Clear any existing regen interval
+        
         if (this.shieldRegenInterval) {
             clearInterval(this.shieldRegenInterval);
             this.shieldRegenInterval = null;
         }
 
-        // Server now handles shield regeneration authoritatively
-        // Frontend just tracks when hit occurred for visual effects
+        
+        
         console.log('Shield regeneration will be handled by server after 5 seconds');
     }
 
     handleShieldUpdate(message) {
-        // Check if it's our own player's shield update
+        
         if (message.player_id === this.network.playerId) {
             this.shield = message.shield;
             this.updateHealthDisplay();
@@ -341,28 +341,28 @@ export class Game {
     }
 
     handlePlayerDied(message) {
-        // Check if it's our own player who died
+        
         if (message.player_id === this.network.playerId) {
             this.isAlive = false;
             this.health = 0;
             this.activateDeathCam();
 
-            // Hide weapon when dead
+            
             if (this.weaponSystem) {
                 this.weaponSystem.hide();
             }
 
-            // Get killer name instead of ID
+            
             const killerName = this.getPlayerName(message.killer_id) || message.killer_id;
 
-            // Show death message with countdown
+            
             console.log(`You were killed by ${killerName}`);
             this.showDeathMessage(`Killed by ${killerName}`, 5);
         } else {
-            // Another player died
+            
             this.playerManager.killPlayer(message.player_id);
 
-            // If we killed them, add to our kill count
+            
             if (message.killer_id === this.network.playerId) {
                 this.kills++;
                 this.updateKillCounter();
@@ -373,40 +373,40 @@ export class Game {
     }
 
     handlePlayerRespawned(message) {
-        // Check if it's our own player respawning
+        
         if (message.player.id === this.network.playerId) {
             this.isAlive = true;
-            this.health = 100;  // Reset health to 100
-            this.shield = 100;  // Reset shield to 100
+            this.health = 100;  
+            this.shield = 100;  
             this.lastHitTime = 0;
             this.deactivateDeathCam();
 
-            // Show weapon when respawned
+            
             if (this.weaponSystem) {
                 this.weaponSystem.show();
             }
 
-            this.spawnPlayer(); // Respawn at new location
+            this.spawnPlayer(); 
             console.log('You have respawned with full health and shield!');
             this.hideDeathMessage();
 
-            // Show health bar again and update it to 100
+            
             const healthContainer = document.getElementById('healthContainer');
             if (healthContainer) {
                 healthContainer.style.display = 'block';
             }
-            this.updateHealthDisplay(); // Update to show 100 health
+            this.updateHealthDisplay(); 
         } else {
-            // Another player respawned - make them visible again at new position
+            
             const existingPlayer = this.playerManager.otherPlayers.get(message.player.id);
             if (existingPlayer) {
-                // Update position and make visible
+                
                 existingPlayer.mesh.position.set(message.player.x, message.player.y, message.player.z);
                 existingPlayer.mesh.visible = true;
                 this.playerManager.respawnPlayer(message.player.id);
                 console.log(`Player ${message.player.name} respawned`);
             } else {
-                // Player doesn't exist, add them
+                
                 this.playerManager.addPlayer(message.player);
             }
         }
@@ -423,18 +423,18 @@ export class Game {
 
     activateDeathCam() {
         this.deathCamActive = true;
-        // Store original position
+        
         this.originalCameraPosition = this.camera.getPosition().clone();
 
-        // Move camera high up in the sky for death cam view - make it higher and live
+        
         this.camera.getCamera().position.set(0, 300, 0);
-        this.camera.getCamera().lookAt(0, 0, 0); // Look down at the map
+        this.camera.getCamera().lookAt(0, 0, 0); 
 
-        // Disable controls during death
+        
         this.input.isPointerLocked = false;
         document.exitPointerLock();
 
-        // Hide health bar during death
+        
         const healthContainer = document.getElementById('healthContainer');
         if (healthContainer) {
             healthContainer.style.display = 'none';
@@ -443,11 +443,11 @@ export class Game {
 
     deactivateDeathCam() {
         this.deathCamActive = false;
-        // Camera position will be set by spawnPlayer()
+        
     }
 
     showDeathMessage(message, countdown = 5) {
-        // Create or update death message UI
+        
         let deathMsg = document.getElementById('deathMessage');
         if (!deathMsg) {
             deathMsg = document.createElement('div');
@@ -484,7 +484,7 @@ export class Game {
                 timeLeft--;
                 setTimeout(updateMessage, 1000);
             } else {
-                // Show respawn button after countdown
+                
                 this.showRespawnButton();
             }
         };
@@ -513,7 +513,7 @@ export class Game {
                 </button>
             `;
 
-            // Add click handler for respawn button
+            
             const respawnBtn = document.getElementById('respawnButton');
             respawnBtn.addEventListener('click', () => {
                 this.requestRespawn();
@@ -522,7 +522,7 @@ export class Game {
     }
 
     requestRespawn() {
-        // Send respawn request to server
+        
         if (this.network && this.network.isConnected()) {
             console.log('Requesting respawn...');
             this.network.sendRespawn();
@@ -537,7 +537,7 @@ export class Game {
     }
 
     updateKillCounter() {
-        // Update kill counter in UI
+        
         let killCounter = document.getElementById('killCounter');
         if (!killCounter) {
             killCounter = document.createElement('div');
@@ -559,7 +559,7 @@ export class Game {
     }
 
     updateHealthDisplay() {
-        // Create health bar container if it doesn't exist
+        
         let healthContainer = document.getElementById('healthContainer');
         if (!healthContainer) {
             healthContainer = document.createElement('div');
@@ -577,7 +577,7 @@ export class Game {
             `;
             document.body.appendChild(healthContainer);
 
-            // Create shield container (top bar)
+            
             const shieldContainer = document.createElement('div');
             shieldContainer.style.cssText = `
                 position: relative;
@@ -586,7 +586,7 @@ export class Game {
             `;
             healthContainer.appendChild(shieldContainer);
 
-            // Shield background
+            
             const shieldBg = document.createElement('div');
             shieldBg.style.cssText = `
                 position: absolute;
@@ -598,7 +598,7 @@ export class Game {
             `;
             shieldContainer.appendChild(shieldBg);
 
-            // Shield bar
+            
             const shieldBar = document.createElement('div');
             shieldBar.id = 'shieldBar';
             shieldBar.style.cssText = `
@@ -611,7 +611,7 @@ export class Game {
             `;
             shieldContainer.appendChild(shieldBar);
 
-            // Shield text
+            
             const shieldText = document.createElement('div');
             shieldText.id = 'shieldText';
             shieldText.style.cssText = `
@@ -628,7 +628,7 @@ export class Game {
             `;
             shieldContainer.appendChild(shieldText);
 
-            // Create health container (bottom bar)
+            
             const healthBarContainer = document.createElement('div');
             healthBarContainer.style.cssText = `
                 position: relative;
@@ -637,7 +637,7 @@ export class Game {
             `;
             healthContainer.appendChild(healthBarContainer);
 
-            // Health background
+            
             const healthBg = document.createElement('div');
             healthBg.style.cssText = `
                 position: absolute;
@@ -649,7 +649,7 @@ export class Game {
             `;
             healthBarContainer.appendChild(healthBg);
 
-            // Health bar
+            
             const healthBar = document.createElement('div');
             healthBar.id = 'healthBar';
             healthBar.style.cssText = `
@@ -662,7 +662,7 @@ export class Game {
             `;
             healthBarContainer.appendChild(healthBar);
 
-            // Health text
+            
             const healthText = document.createElement('div');
             healthText.id = 'healthText';
             healthText.style.cssText = `
@@ -680,7 +680,7 @@ export class Game {
             healthBarContainer.appendChild(healthText);
         }
 
-        // Update health bar width
+        
         const healthBar = document.getElementById('healthBar');
         const shieldBar = document.getElementById('shieldBar');
         const healthText = document.getElementById('healthText');
@@ -689,15 +689,15 @@ export class Game {
         const healthPercent = (this.health / 100) * 100;
         const shieldPercent = (this.shield / this.maxShield) * 100;
 
-        // Update widths
+        
         healthBar.style.width = `${healthPercent}%`;
         shieldBar.style.width = `${shieldPercent}%`;
 
-        // Update text displays
+        
         healthText.textContent = `${this.health}`;
         shieldText.textContent = `${Math.round(this.shield)}`;
 
-        // Change shield bar opacity based on amount
+        
         const shieldContainer = shieldBar.parentElement;
         if (this.shield > 0) {
             shieldContainer.style.opacity = '1';
@@ -706,7 +706,7 @@ export class Game {
             shieldContainer.style.opacity = '0.5';
         }
 
-        // Change health bar color based on health
+        
         if (this.health <= 25) {
             healthBar.style.background = 'linear-gradient(90deg, #ff0000, #dd0000)';
             healthBar.style.boxShadow = '0 0 10px rgba(255, 0, 0, 0.5)';
@@ -720,7 +720,7 @@ export class Game {
     }
 
     showHitEffect() {
-        // Create red flash overlay
+        
         let hitOverlay = document.getElementById('hitOverlay');
         if (!hitOverlay) {
             hitOverlay = document.createElement('div');
@@ -739,22 +739,22 @@ export class Game {
             document.body.appendChild(hitOverlay);
         }
 
-        // Create vignette effect (darker at edges)
+        
         hitOverlay.style.background = `radial-gradient(circle at center, 
             rgba(255, 0, 0, 0) 0%, 
             rgba(255, 0, 0, 0.2) 50%, 
             rgba(255, 0, 0, 0.6) 100%)`;
         hitOverlay.style.opacity = '1';
 
-        // Also flash the screen borders red
+        
         hitOverlay.style.boxShadow = 'inset 0 0 100px rgba(255, 0, 0, 0.8)';
 
-        // Fade out the red effect
+        
         setTimeout(() => {
             hitOverlay.style.opacity = '0';
         }, 100);
 
-        // Pulse effect for dramatic impact
+        
         setTimeout(() => {
             hitOverlay.style.opacity = '0.3';
         }, 200);
@@ -768,39 +768,39 @@ export class Game {
         requestAnimationFrame(() => this.animate());
 
         if (this.gameStarted) {
-            const deltaTime = 0.016; // ~60fps
+            const deltaTime = 0.016; 
 
-            // Only update movement if alive
+            
             if (this.isAlive && !this.deathCamActive) {
                 this.input.updateMovement(deltaTime, this.camera);
             }
 
             this.bulletSystem.update(deltaTime);
 
-            // Update weapon idle animation
+            
             if (this.weaponSystem) {
                 this.weaponSystem.update(deltaTime);
             }
 
-            // Update UI components
+            
             if (this.miniMap) {
                 const playerPos = this.camera.getPosition();
-                // Use InputManager's yaw for continuous rotation tracking
+                
                 const cameraRotation = this.input.yaw;
 
-                // Camera position tracking disabled
+                
 
                 this.miniMap.update(playerPos, cameraRotation);
                 this.compass.update(cameraRotation);
             }
 
-            // Ensure auto clear is enabled for main scene
+            
             this.renderer.getRenderer().autoClear = true;
 
-            // Render main scene first
+            
             this.renderer.render(this.scene.getScene(), this.camera.getCamera());
 
-            // Render minimap on top (it will preserve the main scene)
+            
             if (this.miniMap) {
                 this.miniMap.render();
             }

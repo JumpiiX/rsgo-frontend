@@ -8,7 +8,7 @@ export class WeaponModel {
         this.weapon = null;
         this.weaponGroup = new THREE.Group();
 
-        // FPS viewmodel position
+        
         this.initialPositionOffset = new THREE.Vector3(0.2, -0.15, -0.3);
         this.initialRotationOffset = new THREE.Euler(0, -0.3, 0);
 
@@ -18,21 +18,21 @@ export class WeaponModel {
     loadWeapon() {
         const loader = new GLTFLoader();
 
-        // Load the revolver model - PUT YOUR MODEL IN /models/ folder
+        
         loader.load(
-            '/models/revolver.glb',  // <-- Place your model file here
+            '/models/revolver.glb',  
             (gltf) => {
                 this.weapon = gltf.scene;
 
-                // Scale the model if needed
-                this.weapon.scale.set(0.1, 0.1, 0.1);  // Adjust scale as needed
+                
+                this.weapon.scale.set(0.1, 0.1, 0.1);  
 
-                // Apply orange material for RSGO theme (optional)
+                
                 this.weapon.traverse((child) => {
                     if (child.isMesh) {
-                        // Keep original textures or apply orange tint
+                        
                         child.material = new THREE.MeshBasicMaterial({
-                            color: 0xff6600,  // Orange RSGO color
+                            color: 0xff6600,  
                             fog: false
                         });
                         child.frustumCulled = false;

@@ -12,17 +12,17 @@ export class LightingSystem {
     }
 
     createAmbientLighting() {
-        // Maximum brightness ambient lighting for visibility
+        
         const ambientLight = new THREE.AmbientLight(0xffffff, 2.5);
         this.scene.add(ambientLight);
 
-        // Add hemisphere light for better overall illumination
+        
         const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x545454, 1.5);
         this.scene.add(hemiLight);
     }
 
     createMoonlight() {
-        // Maximum brightness moonlight from above
+        
         const moonLight = new THREE.DirectionalLight(0xffffff, 3.0);
         moonLight.position.set(-100, 300, 50);
         moonLight.castShadow = true;
@@ -36,7 +36,7 @@ export class LightingSystem {
         moonLight.shadow.camera.far = 600;
         this.scene.add(moonLight);
 
-        // Add visible moon in the sky
+        
         const moonGeometry = new THREE.SphereGeometry(15, 16, 16);
         const moonMaterial = new THREE.MeshBasicMaterial({
             color: 0xffffee,
@@ -47,33 +47,33 @@ export class LightingSystem {
         moon.position.set(-150, 250, 80);
         this.scene.add(moon);
 
-        // Maximum brightness moon glow
+        
         const moonGlow = new THREE.PointLight(0xffffdd, 2.5, 500);
         moonGlow.position.set(-150, 250, 80);
         this.scene.add(moonGlow);
 
-        // Additional fill lighting from opposite side
+        
         const fillLight = new THREE.DirectionalLight(0xbbc5dd, 1.5);
         fillLight.position.set(100, 200, -50);
         this.scene.add(fillLight);
 
-        // Extra overhead lighting for maximum visibility
+        
         const overheadLight = new THREE.DirectionalLight(0xddddff, 1.0);
         overheadLight.position.set(0, 400, 0);
         this.scene.add(overheadLight);
     }
 
     createStarfield() {
-        // Create starfield in the sky
+        
         const starGeometry = new THREE.BufferGeometry();
         const starCount = 1000;
         const positions = new Float32Array(starCount * 3);
 
         for (let i = 0; i < starCount * 3; i += 3) {
-            // Random positions in the sky (high Y values)
-            positions[i] = (Math.random() - 0.5) * 2000; // X
-            positions[i + 1] = Math.random() * 200 + 150; // Y (sky level)
-            positions[i + 2] = (Math.random() - 0.5) * 2000; // Z
+            
+            positions[i] = (Math.random() - 0.5) * 2000; 
+            positions[i + 1] = Math.random() * 200 + 150; 
+            positions[i + 2] = (Math.random() - 0.5) * 2000; 
         }
 
         starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -88,7 +88,7 @@ export class LightingSystem {
         const stars = new THREE.Points(starGeometry, starMaterial);
         this.scene.add(stars);
 
-        // Add much brighter "star" lights
+        
         const brightStars = [
             [-200, 180, -200], [200, 200, 200], [-150, 190, 150],
             [180, 170, -180], [-180, 185, -150], [150, 195, 180],
@@ -103,7 +103,7 @@ export class LightingSystem {
     }
 
     createStreetLights() {
-        // Street lamps with warm orange glow
+        
         const streetLightPositions = [
             [-60, 25, -80], [60, 25, 80], [-100, 25, 40],
             [100, 25, -40], [0, 25, 120], [0, 25, -120]
@@ -115,7 +115,7 @@ export class LightingSystem {
             streetLight.castShadow = true;
             this.scene.add(streetLight);
 
-            // Light pole
+            
             const poleGeometry = new THREE.CylinderGeometry(0.5, 0.5, 25);
             const poleMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
             const pole = new THREE.Mesh(poleGeometry, poleMaterial);
@@ -126,7 +126,7 @@ export class LightingSystem {
     }
 
     createWindowLights() {
-        // Building window lights (blue/white glow)
+        
         const windowLights = [
             [0, 15, 0], [-80, 12, -60], [80, 12, 60],
             [-150, 12, -150], [150, 12, 150]

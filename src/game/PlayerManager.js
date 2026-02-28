@@ -13,11 +13,11 @@ export class PlayerManager {
 
         console.log('Adding new player:', player.id, player.name, 'at position', player.x, player.y, player.z);
 
-        // Create a simple colored cube for other players
-        // Increased size: radius 1.5 -> 2, height 4 -> 5 for better hitbox
+        
+        
         const geometry = new THREE.CapsuleGeometry(2, 5, 4, 8);
         const material = new THREE.MeshLambertMaterial({
-            color: 0xff4444,  // Red color for enemies
+            color: 0xff4444,  
             emissive: 0x880000,
             emissiveIntensity: 0.3
         });
@@ -26,9 +26,9 @@ export class PlayerManager {
         playerMesh.position.set(player.x, player.y, player.z);
         playerMesh.castShadow = true;
 
-        // Add a simple name label above the player
+        
         const nameSprite = this.createNameSprite(player.name);
-        nameSprite.position.set(0, 4, 0);  // Adjusted for taller capsule
+        nameSprite.position.set(0, 4, 0);  
         playerMesh.add(nameSprite);
 
         this.scene.add(playerMesh);
@@ -114,7 +114,7 @@ export class PlayerManager {
     killPlayer(playerId) {
         const player = this.otherPlayers.get(playerId);
         if (player && !this.respawning.has(playerId)) {
-            // Remove all bullet impact marks from the player's body
+            
             const impactsToRemove = [];
             player.mesh.traverse((child) => {
                 if (child.userData && child.userData.isPlayerImpact) {
@@ -128,8 +128,8 @@ export class PlayerManager {
             player.mesh.visible = false;
             this.respawning.set(playerId, true);
 
-            // Don't auto-respawn after 5 seconds - player stays invisible until manual respawn
-            // setTimeout removed - wait for PlayerRespawned message from server
+            
+            
         }
     }
 
