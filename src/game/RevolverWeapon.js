@@ -11,9 +11,21 @@ export class RevolverWeapon {
         this.muzzleOffset = new THREE.Vector3(0, 0, -0.15); 
 
         
-        this.initialPositionOffset = new THREE.Vector3(0.15, -0.1, -0.25);
+        const aspect = window.innerWidth / window.innerHeight;
+        let xOffset = 0.15;
+        let yOffset = -0.1;
+        let zOffset = -0.25;
+        
+        if (aspect < 1.0) {
+            xOffset = 0.1;
+            yOffset = -0.15;
+            zOffset = -0.3;
+        }
+        
+        this.initialPositionOffset = new THREE.Vector3(xOffset, yOffset, zOffset);
         
         this.initialRotationOffset = new THREE.Euler(0, Math.PI, 0.1); 
+        
 
         this.loadRevolver();
     }

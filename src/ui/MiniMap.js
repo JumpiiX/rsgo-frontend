@@ -110,14 +110,12 @@ export class MiniMap {
         this.renderer.getClearColor(clearColor);
 
         
-        const canvas = this.renderer.domElement;
-        const pixelRatio = window.devicePixelRatio || 1;
-        const width = canvas.clientWidth * pixelRatio;
-        const height = canvas.clientHeight * pixelRatio;
+        const width = window.innerWidth;
+        const height = window.innerHeight;
 
         
-        const mapWidth = this.mapSize * pixelRatio;
-        const mapHeight = this.mapSize * pixelRatio;
+        const mapWidth = this.mapSize;
+        const mapHeight = this.mapSize;
 
         
         this.renderer.autoClear = false;
@@ -125,15 +123,15 @@ export class MiniMap {
         
         this.renderer.setScissorTest(true);
         this.renderer.setScissor(
-            width - mapWidth - (10 * pixelRatio),
-            height - mapHeight - (10 * pixelRatio),
+            width - mapWidth - 10,
+            height - mapHeight - 10,
             mapWidth,
             mapHeight
         );
 
         this.renderer.setViewport(
-            width - mapWidth - (10 * pixelRatio),
-            height - mapHeight - (10 * pixelRatio),
+            width - mapWidth - 10,
+            height - mapHeight - 10,
             mapWidth,
             mapHeight
         );
@@ -154,7 +152,7 @@ export class MiniMap {
 
         
         this.renderer.setScissorTest(false);
-        this.renderer.setViewport(0, 0, width, height);
+        this.renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
         this.renderer.autoClear = autoClear;
         this.renderer.setClearAlpha(clearAlpha);
         this.renderer.setClearColor(clearColor, clearAlpha);
