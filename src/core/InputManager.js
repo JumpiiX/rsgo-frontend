@@ -18,6 +18,8 @@ export class InputManager {
 
         this.onShootCallback = null;
         this.onMoveCallback = null;
+        this.onScoreboardCallback = null;
+        this.onReloadCallback = null;
     }
 
     setCollisionSystem(collisionSystem) {
@@ -49,6 +51,17 @@ export class InputManager {
             case 'Escape':
                 document.exitPointerLock();
                 break;
+            case 'Tab':
+                event.preventDefault();
+                if (this.onScoreboardCallback) {
+                    this.onScoreboardCallback(true);
+                }
+                break;
+            case 'KeyR':
+                if (this.onReloadCallback) {
+                    this.onReloadCallback();
+                }
+                break;
             }
         });
 
@@ -65,6 +78,12 @@ export class InputManager {
                 break;
             case 'KeyD':
                 this.controls.right = false;
+                break;
+            case 'Tab':
+                event.preventDefault();
+                if (this.onScoreboardCallback) {
+                    this.onScoreboardCallback(false);
+                }
                 break;
             }
         });
@@ -197,5 +216,13 @@ export class InputManager {
 
     onMove(callback) {
         this.onMoveCallback = callback;
+    }
+
+    onScoreboard(callback) {
+        this.onScoreboardCallback = callback;
+    }
+
+    onReload(callback) {
+        this.onReloadCallback = callback;
     }
 }

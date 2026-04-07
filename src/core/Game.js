@@ -11,6 +11,9 @@ import { RevolverWeapon } from '../game/RevolverWeapon.js';
 import { CollisionSystem } from '../physics/CollisionSystem.js';
 import { MiniMap } from '../ui/MiniMap.js';
 import { Compass } from '../ui/Compass.js';
+import { Scoreboard } from '../ui/Scoreboard.js';
+import { KillFeed } from '../ui/KillFeed.js';
+import { AmmoDisplay } from '../ui/AmmoDisplay.js';
 
 export class Game {
     constructor() {
@@ -27,6 +30,9 @@ export class Game {
         this.collisionSystem = null;
         this.miniMap = null;
         this.compass = null;
+        this.scoreboard = null;
+        this.killFeed = null;
+        this.ammoDisplay = null;
 
         this.gameStarted = false;
         this.playerName = '';
@@ -41,6 +47,10 @@ export class Game {
         this.shieldRegenRate = 10; 
         this.lastHitTime = 0;
         this.shieldRegenInterval = null;
+        
+        // Camera recoil
+        this.cameraRecoil = { x: 0, y: 0 };
+        this.recoilRecovery = 0.05;
 
         this.setupNameScreen();
     }
@@ -75,6 +85,9 @@ export class Game {
         
         this.miniMap = new MiniMap(this.scene.getScene(), this.camera, this.renderer.getRenderer());
         this.compass = new Compass();
+        this.scoreboard = new Scoreboard();
+        this.killFeed = new KillFeed();
+        this.ammoDisplay = new AmmoDisplay();
 
         
         
@@ -95,10 +108,13 @@ export class Game {
         this.network.onPlayerDied((message) => this.handlePlayerDied(message));
         this.network.onPlayerRespawned((message) => this.handlePlayerRespawned(message));
         this.network.onShieldUpdate((message) => this.handleShieldUpdate(message));
+        this.network.onScoreboardUpdate((data) => this.handleScoreboardUpdate(data));
 
         
         this.input.onShoot(() => this.handleShoot());
         this.input.onMove((position, rotation) => this.handleMove(position, rotation));
+        this.input.onScoreboard((show) => this.handleScoreboard(show));
+        this.input.onReload(() => this.handleReload());
     }
 
     setupNameScreen() {
@@ -166,24 +182,53 @@ export class Game {
 
     handleShoot() {
         if (this.network && this.gameStarted && this.isAlive) {
-            const forward = new THREE.Vector3();
-            this.camera.getCamera().getWorldDirection(forward);
-
-            
-            const startPos = this.camera.getPosition().clone();
-            startPos.add(forward.clone().multiplyScalar(1)); 
-
-            const target = startPos.clone().add(forward.multiplyScalar(1000));  
-
-            this.bulletSystem.createBullet(startPos, target, true);
-
-            
-            if (this.weaponSystem) {
-                this.weaponSystem.animateShoot();
+            // Check if weapon can shoot
+            if (!this.weaponSystem || !this.weaponSystem.canShoot()) {
+                // Show low ammo warning if empty
+                if (this.weaponSystem && this.weaponSystem.currentAmmo === 0) {
+                    this.ammoDisplay.showLowAmmoWarning();
+                }
+                return;
             }
 
-            this.checkHit(target);
-            this.network.sendShoot(startPos, target);  
+            // Shoot the weapon (consumes ammo, adds recoil)
+            if (this.weaponSystem.shoot()) {
+                const forward = new THREE.Vector3();
+                this.camera.getCamera().getWorldDirection(forward);
+
+                
+                const startPos = this.camera.getPosition().clone();
+                startPos.add(forward.clone().multiplyScalar(1)); 
+
+                const target = startPos.clone().add(forward.multiplyScalar(1000));  
+
+                this.bulletSystem.createBullet(startPos, target, true);
+
+                this.checkHit(target);
+                this.network.sendShoot(startPos, target);
+                
+                // Add camera recoil
+                this.addCameraRecoil();
+                
+                // Update ammo display
+                this.updateAmmoDisplay();
+            }
+        }
+    }
+    
+    handleReload() {
+        if (this.weaponSystem && this.gameStarted && this.isAlive) {
+            if (this.weaponSystem.startReload()) {
+                this.updateAmmoDisplay();
+            }
+        }
+    }
+    
+    updateAmmoDisplay() {
+        if (this.weaponSystem && this.ammoDisplay) {
+            const ammoStatus = this.weaponSystem.getAmmoStatus();
+            this.ammoDisplay.updateAmmo(ammoStatus.current, ammoStatus.max);
+            this.ammoDisplay.updateReload(ammoStatus.isReloading, ammoStatus.reloadProgress);
         }
     }
 
@@ -341,6 +386,15 @@ export class Game {
     }
 
     handlePlayerDied(message) {
+        // Use names from message if available, otherwise look them up
+        const killerName = message.killer_name || this.getPlayerName(message.killer_id) || 'Unknown';
+        const victimName = message.victim_name || this.getPlayerName(message.player_id) || 'Unknown';
+        
+        // Add to kill feed
+        const isYouKiller = message.killer_id === this.network.playerId;
+        const isYouVictim = message.player_id === this.network.playerId;
+        this.killFeed.addKill(killerName, victimName, isYouKiller, isYouVictim);
+        
         
         if (message.player_id === this.network.playerId) {
             this.isAlive = false;
@@ -353,9 +407,6 @@ export class Game {
             }
 
             
-            const killerName = this.getPlayerName(message.killer_id) || message.killer_id;
-
-            
             console.log(`You were killed by ${killerName}`);
             this.showDeathMessage(`Killed by ${killerName}`, 5);
         } else {
@@ -366,7 +417,6 @@ export class Game {
             if (message.killer_id === this.network.playerId) {
                 this.kills++;
                 this.updateKillCounter();
-                const victimName = this.getPlayerName(message.player_id) || message.player_id;
                 console.log(`You killed ${victimName}! Kills: ${this.kills}`);
             }
         }
@@ -544,18 +594,23 @@ export class Game {
             killCounter.id = 'killCounter';
             killCounter.style.cssText = `
                 position: fixed;
-                top: 10px;
+                top: 220px;
                 right: 10px;
                 background: rgba(0, 0, 0, 0.7);
+                border: 2px solid rgba(255, 255, 255, 0.3);
+                border-radius: 8px;
                 color: white;
-                padding: 10px;
+                padding: 12px;
                 font-size: 18px;
-                border-radius: 5px;
+                font-weight: bold;
+                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
                 z-index: 100;
+                min-width: 100px;
+                text-align: center;
             `;
             document.body.appendChild(killCounter);
         }
-        killCounter.textContent = `Kills: ${this.kills}`;
+        killCounter.innerHTML = `Kills: <span style="color: #ff6666; font-size: 20px;">${this.kills}</span>`;
     }
 
     updateHealthDisplay() {
@@ -773,6 +828,7 @@ export class Game {
             
             if (this.isAlive && !this.deathCamActive) {
                 this.input.updateMovement(deltaTime, this.camera);
+                this.updateCameraRecoil(deltaTime);
             }
 
             this.bulletSystem.update(deltaTime);
@@ -780,6 +836,8 @@ export class Game {
             
             if (this.weaponSystem) {
                 this.weaponSystem.update(deltaTime);
+                // Update ammo display during reload or when ammo changes
+                this.updateAmmoDisplay();
             }
 
             
@@ -805,5 +863,45 @@ export class Game {
                 this.miniMap.render();
             }
         }
+    }
+
+    handleScoreboard(show) {
+        if (show) {
+            this.scoreboard.show();
+        } else {
+            this.scoreboard.hide();
+        }
+    }
+
+    handleScoreboardUpdate(data) {
+        const playersData = data.players.map(player => ({
+            name: player.name,
+            kills: player.kills,
+            isCurrentPlayer: player.id === this.network.playerId
+        }));
+        
+        this.scoreboard.updatePlayers(playersData);
+    }
+    
+    addCameraRecoil() {
+        // Add upward and random horizontal recoil
+        this.cameraRecoil.x += (Math.random() - 0.5) * 0.01; // Random horizontal
+        this.cameraRecoil.y += 0.015; // Upward recoil
+        
+        // Apply recoil to input manager's pitch/yaw
+        if (this.input) {
+            this.input.pitch = Math.max(-Math.PI/2 + 0.1, this.input.pitch + this.cameraRecoil.y);
+            this.input.yaw += this.cameraRecoil.x;
+        }
+    }
+    
+    updateCameraRecoil(deltaTime) {
+        // Gradually reduce recoil
+        this.cameraRecoil.x *= (1 - this.recoilRecovery);
+        this.cameraRecoil.y *= (1 - this.recoilRecovery);
+        
+        // Stop very small recoil
+        if (Math.abs(this.cameraRecoil.x) < 0.001) this.cameraRecoil.x = 0;
+        if (Math.abs(this.cameraRecoil.y) < 0.001) this.cameraRecoil.y = 0;
     }
 }

@@ -8,7 +8,20 @@ export class RevolverWeapon {
         this.scene = scene;
         this.weapon = null;
         this.weaponGroup = new THREE.Group();
-        this.muzzleOffset = new THREE.Vector3(0, 0, -0.15); 
+        this.muzzleOffset = new THREE.Vector3(0, 0, -0.15);
+        
+        // Ammo system
+        this.maxAmmo = 10;
+        this.currentAmmo = 10;
+        this.isReloading = false;
+        this.reloadTime = 3000; // 3 seconds
+        this.reloadStartTime = 0;
+        this.autoReloadEnabled = true;
+        
+        // Recoil system
+        this.recoilAmount = 0;
+        this.recoilRecovery = 0.1;
+        this.maxRecoil = 0.05; 
 
         
         const aspect = window.innerWidth / window.innerHeight;
@@ -157,6 +170,19 @@ export class RevolverWeapon {
     }
 
     update(deltaTime) {
+        // Update reload status
+        if (this.isReloading) {
+            const elapsed = Date.now() - this.reloadStartTime;
+            if (elapsed >= this.reloadTime) {
+                this.finishReload();
+            }
+        }
+        
+        // Update recoil recovery
+        if (this.recoilAmount > 0) {
+            this.recoilAmount = Math.max(0, this.recoilAmount - this.recoilRecovery * deltaTime);
+        }
+        
         this.updateWeaponPosition();
 
         
@@ -167,13 +193,52 @@ export class RevolverWeapon {
 
             const offset = this.initialPositionOffset.clone();
             offset.x += swayX;
-            offset.y += swayY;
+            offset.y += swayY + this.recoilAmount; // Add recoil offset
 
             const weaponPos = new THREE.Vector3();
             weaponPos.copy(this.camera.position);
             weaponPos.add(offset.applyQuaternion(this.camera.quaternion));
             this.weaponGroup.position.copy(weaponPos);
+            
+            // Apply weapon rotation properly
+            this.weaponGroup.quaternion.copy(this.camera.quaternion);
+            
+            // Apply initial rotation offsets
+            const rotationY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.initialRotationOffset.y);
+            const rotationX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), this.initialRotationOffset.x - this.recoilAmount * 0.5);
+            const rotationZ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), this.initialRotationOffset.z);
+            
+            this.weaponGroup.quaternion.multiply(rotationY);
+            this.weaponGroup.quaternion.multiply(rotationX);
+            this.weaponGroup.quaternion.multiply(rotationZ);
         }
+    }
+
+    canShoot() {
+        return this.currentAmmo > 0 && !this.isReloading;
+    }
+    
+    shoot() {
+        if (!this.canShoot()) return false;
+        
+        this.currentAmmo--;
+        this.addRecoil();
+        this.animateShoot();
+        
+        // Auto reload when empty
+        if (this.currentAmmo === 0 && this.autoReloadEnabled) {
+            setTimeout(() => {
+                if (this.currentAmmo === 0 && !this.isReloading) {
+                    this.startReload();
+                }
+            }, 500); // Small delay before auto reload
+        }
+        
+        return true;
+    }
+    
+    addRecoil() {
+        this.recoilAmount = Math.min(this.maxRecoil, this.recoilAmount + 0.02);
     }
 
     animateShoot() {
@@ -190,6 +255,30 @@ export class RevolverWeapon {
             this.weaponGroup.position.z = originalZ;
             this.weaponGroup.rotation.x = originalRotX;
         }, 100);
+    }
+    
+    startReload() {
+        if (this.isReloading || this.currentAmmo === this.maxAmmo) return false;
+        
+        this.isReloading = true;
+        this.reloadStartTime = Date.now();
+        return true;
+    }
+    
+    finishReload() {
+        this.currentAmmo = this.maxAmmo;
+        this.isReloading = false;
+        this.reloadStartTime = 0;
+    }
+    
+    getAmmoStatus() {
+        return {
+            current: this.currentAmmo,
+            max: this.maxAmmo,
+            isReloading: this.isReloading,
+            reloadProgress: this.isReloading ? 
+                Math.min(1, (Date.now() - this.reloadStartTime) / this.reloadTime) : 0
+        };
     }
 
     show() {

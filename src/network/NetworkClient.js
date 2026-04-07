@@ -11,6 +11,7 @@ export class NetworkClient {
         this.onPlayerDiedCallback = null;
         this.onPlayerRespawnedCallback = null;
         this.onShieldUpdateCallback = null;
+        this.onScoreboardUpdateCallback = null;
     }
 
     connect() {
@@ -89,6 +90,12 @@ export class NetworkClient {
         case 'shield_update':
             if (this.onShieldUpdateCallback) {
                 this.onShieldUpdateCallback(message);
+            }
+            break;
+
+        case 'scoreboard_update':
+            if (this.onScoreboardUpdateCallback) {
+                this.onScoreboardUpdateCallback(message);
             }
             break;
         }
@@ -189,5 +196,9 @@ export class NetworkClient {
 
     onShieldUpdate(callback) {
         this.onShieldUpdateCallback = callback;
+    }
+
+    onScoreboardUpdate(callback) {
+        this.onScoreboardUpdateCallback = callback;
     }
 }

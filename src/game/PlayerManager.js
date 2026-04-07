@@ -28,7 +28,7 @@ export class PlayerManager {
 
         
         const nameSprite = this.createNameSprite(player.name);
-        nameSprite.position.set(0, 4, 0);  
+        nameSprite.position.set(0, 6, 0); // Moved higher above player  
         playerMesh.add(nameSprite);
 
         this.scene.add(playerMesh);
@@ -70,18 +70,23 @@ export class PlayerManager {
         canvas.width = 256;
         canvas.height = 64;
 
-        context.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        // Semi-transparent dark background
+        context.fillStyle = 'rgba(0, 0, 0, 0.6)';
         context.fillRect(0, 0, canvas.width, canvas.height);
 
+        // White text with thick shadow
         context.fillStyle = 'white';
-        context.font = '24px Arial';
+        context.font = 'bold 36px Arial';
         context.textAlign = 'center';
-        context.fillText(name, canvas.width / 2, canvas.height / 2 + 8);
+        context.strokeStyle = 'black';
+        context.lineWidth = 6;
+        context.strokeText(name, canvas.width / 2, canvas.height / 2 + 12);
+        context.fillText(name, canvas.width / 2, canvas.height / 2 + 12);
 
         const texture = new THREE.CanvasTexture(canvas);
         const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
         const sprite = new THREE.Sprite(spriteMaterial);
-        sprite.scale.set(4, 1, 1);
+        sprite.scale.set(6, 1.5, 1);
 
         return sprite;
     }
