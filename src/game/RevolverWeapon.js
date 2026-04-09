@@ -280,6 +280,14 @@ export class RevolverWeapon {
                 Math.min(1, (Date.now() - this.reloadStartTime) / this.reloadTime) : 0
         };
     }
+    
+    resetWeapon() {
+        // Reset weapon to full ammo and stop any reload
+        this.currentAmmo = this.maxAmmo;
+        this.isReloading = false;
+        this.reloadStartTime = 0;
+        this.recoilAmount = 0;
+    }
 
     show() {
         if (this.weaponGroup) {

@@ -292,4 +292,12 @@ export class AmmoDisplay {
             }, 3000);
         }
     }
+    
+    hide() {
+        this.ammoContainer.style.display = 'none';
+    }
+    
+    show() {
+        this.ammoContainer.style.display = 'flex';
+    }
 }

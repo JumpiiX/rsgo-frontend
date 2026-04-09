@@ -434,6 +434,7 @@ export class Game {
             
             if (this.weaponSystem) {
                 this.weaponSystem.show();
+                this.weaponSystem.resetWeapon(); // Reset to full ammo
             }
 
             this.spawnPlayer(); 
@@ -445,7 +446,14 @@ export class Game {
             if (healthContainer) {
                 healthContainer.style.display = 'block';
             }
-            this.updateHealthDisplay(); 
+            
+            // Show ammo display when respawning
+            if (this.ammoDisplay) {
+                this.ammoDisplay.show();
+            }
+            
+            this.updateHealthDisplay();
+            this.updateAmmoDisplay(); // Update ammo display 
         } else {
             
             const existingPlayer = this.playerManager.otherPlayers.get(message.player.id);
@@ -488,6 +496,11 @@ export class Game {
         const healthContainer = document.getElementById('healthContainer');
         if (healthContainer) {
             healthContainer.style.display = 'none';
+        }
+        
+        // Hide ammo display during death cam
+        if (this.ammoDisplay) {
+            this.ammoDisplay.hide();
         }
     }
 
