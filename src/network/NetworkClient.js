@@ -94,6 +94,7 @@ export class NetworkClient {
             break;
 
         case 'scoreboard_update':
+            console.log('Scoreboard update received:', message);
             if (this.onScoreboardUpdateCallback) {
                 this.onScoreboardUpdateCallback(message);
             }

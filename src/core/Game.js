@@ -887,11 +887,14 @@ export class Game {
     }
 
     handleScoreboardUpdate(data) {
+        console.log('handleScoreboardUpdate called with data:', data);
+        console.log('Current player ID:', this.network.playerId);
         const playersData = data.players.map(player => ({
             name: player.name,
             kills: player.kills,
             isCurrentPlayer: player.id === this.network.playerId
         }));
+        console.log('Processed players data:', playersData);
         
         this.scoreboard.updatePlayers(playersData);
     }
