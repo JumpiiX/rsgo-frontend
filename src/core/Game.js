@@ -456,17 +456,9 @@ export class Game {
             this.updateAmmoDisplay(); // Update ammo display 
         } else {
             
-            const existingPlayer = this.playerManager.otherPlayers.get(message.player.id);
-            if (existingPlayer) {
-                
-                existingPlayer.mesh.position.set(message.player.x, message.player.y, message.player.z);
-                existingPlayer.mesh.visible = true;
-                this.playerManager.respawnPlayer(message.player.id);
-                console.log(`Player ${message.player.name} respawned`);
-            } else {
-                
-                this.playerManager.addPlayer(message.player);
-            }
+            // Since players are now completely removed on death, we need to re-add them
+            this.playerManager.respawnPlayer(message.player);
+            console.log(`Player ${message.player.name} respawned`);
         }
     }
 

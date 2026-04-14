@@ -130,20 +130,18 @@ export class PlayerManager {
                 player.mesh.remove(impact);
             });
 
-            player.mesh.visible = false;
+            // Remove player completely from scene instead of just hiding
+            this.scene.remove(player.mesh);
+            this.otherPlayers.delete(playerId);
+            this.playerHealth.delete(playerId);
             this.respawning.set(playerId, true);
-
-            
-            
+            this.updatePlayerCount();
         }
     }
 
-    respawnPlayer(playerId) {
-        const player = this.otherPlayers.get(playerId);
-        if (player) {
-            player.mesh.visible = true;
-            this.playerHealth.set(playerId, 5);
-            this.respawning.delete(playerId);
-        }
+    respawnPlayer(player) {
+        // Re-add the player to the scene since they were completely removed on death
+        this.addPlayer(player);
+        this.respawning.delete(player.id);
     }
 }
