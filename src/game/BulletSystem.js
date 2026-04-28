@@ -104,6 +104,13 @@ export class BulletSystem {
             return; 
         }
 
+        // Skip decals for destructible walls - they handle their own decals
+        if (impactInfo.object && impactInfo.object.userData && 
+            (impactInfo.object.userData.isDestructible || impactInfo.object.userData.wallType === 'destructible')) {
+            // Destructible walls handle their own decals after 2 holes
+            return;
+        }
+
         const impactPos = impactInfo.point;
 
         

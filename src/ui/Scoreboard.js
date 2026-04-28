@@ -14,32 +14,33 @@ export class Scoreboard {
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 500px;
-            max-height: 600px;
-            background: rgba(0, 0, 0, 0.85);
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 10px;
-            padding: 20px;
+            width: 450px;
+            max-height: 500px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 24px;
             z-index: 1000;
             display: none;
-            font-family: Arial, sans-serif;
-            backdrop-filter: blur(5px);
-            box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
         `;
 
         // Header
         const header = document.createElement('div');
         header.style.cssText = `
             text-align: center;
-            color: #ffffff;
-            font-size: 28px;
-            font-weight: bold;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 14px;
+            font-weight: 500;
             margin-bottom: 20px;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
-            border-bottom: 2px solid rgba(255, 255, 255, 0.3);
-            padding-bottom: 10px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 12px;
         `;
-        header.textContent = 'LEADERBOARD';
+        header.textContent = 'Scoreboard';
         this.scoreboardElement.appendChild(header);
 
         // Players container
@@ -56,12 +57,13 @@ export class Scoreboard {
         const footer = document.createElement('div');
         footer.style.cssText = `
             text-align: center;
-            color: #cccccc;
-            font-size: 14px;
-            margin-top: 10px;
-            opacity: 0.7;
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 11px;
+            margin-top: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         `;
-        footer.textContent = 'Hold TAB to view scoreboard';
+        footer.textContent = 'Tab to close';
         this.scoreboardElement.appendChild(footer);
 
         document.body.appendChild(this.scoreboardElement);
@@ -111,48 +113,45 @@ export class Scoreboard {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                padding: 12px 15px;
-                margin: 5px 0;
-                background: ${index === 0 ? 'rgba(255, 215, 0, 0.2)' : 'rgba(255, 255, 255, 0.1)'};
-                border: 1px solid ${index === 0 ? 'rgba(255, 215, 0, 0.5)' : 'rgba(255, 255, 255, 0.2)'};
-                border-radius: 5px;
-                transition: background 0.3s ease;
+                padding: 10px 12px;
+                margin: 2px 0;
+                background: ${index === 0 ? 'rgba(76, 175, 80, 0.1)' : 'transparent'};
+                border-left: 2px solid ${index === 0 ? '#4CAF50' : 'transparent'};
+                transition: all 0.2s ease;
             `;
 
             // Rank
             const rank = document.createElement('div');
             rank.style.cssText = `
-                font-size: 18px;
-                font-weight: bold;
-                color: ${index === 0 ? '#FFD700' : index === 1 ? '#C0C0C0' : index === 2 ? '#CD7F32' : '#ffffff'};
-                min-width: 40px;
-                text-align: center;
+                font-size: 13px;
+                font-weight: 500;
+                color: ${index === 0 ? '#4CAF50' : 'rgba(255, 255, 255, 0.5)'};
+                min-width: 30px;
+                text-align: left;
             `;
-            rank.textContent = `#${index + 1}`;
+            rank.textContent = `${index + 1}`;
 
             // Player name
             const name = document.createElement('div');
             name.style.cssText = `
                 flex: 1;
-                font-size: 16px;
-                color: ${player.isCurrentPlayer ? '#00ff00' : '#ffffff'};
-                font-weight: ${player.isCurrentPlayer ? 'bold' : 'normal'};
-                margin: 0 15px;
-                text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+                font-size: 13px;
+                color: ${player.isCurrentPlayer ? 'rgba(255, 255, 255, 1)' : 'rgba(255, 255, 255, 0.8)'};
+                font-weight: ${player.isCurrentPlayer ? '500' : '400'};
+                margin: 0 20px;
             `;
-            name.textContent = player.isCurrentPlayer ? `${player.name} (You)` : player.name;
+            name.textContent = player.name;
 
             // Kills
             const kills = document.createElement('div');
             kills.style.cssText = `
-                font-size: 16px;
-                color: #ff6666;
-                font-weight: bold;
-                min-width: 60px;
-                text-align: center;
-                text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+                font-size: 14px;
+                color: rgba(255, 255, 255, 0.9);
+                font-weight: 300;
+                min-width: 30px;
+                text-align: right;
             `;
-            kills.textContent = `${player.kills} kills`;
+            kills.textContent = `${player.kills}`;
 
             playerRow.appendChild(rank);
             playerRow.appendChild(name);
@@ -160,11 +159,11 @@ export class Scoreboard {
 
             // Hover effect
             playerRow.addEventListener('mouseenter', () => {
-                playerRow.style.background = 'rgba(255, 255, 255, 0.2)';
+                if (index !== 0) playerRow.style.background = 'rgba(255, 255, 255, 0.03)';
             });
 
             playerRow.addEventListener('mouseleave', () => {
-                playerRow.style.background = index === 0 ? 'rgba(255, 215, 0, 0.2)' : 'rgba(255, 255, 255, 0.1)';
+                if (index !== 0) playerRow.style.background = 'transparent';
             });
 
             this.playersContainer.appendChild(playerRow);
@@ -174,13 +173,15 @@ export class Scoreboard {
         const totalPlayers = document.createElement('div');
         totalPlayers.style.cssText = `
             text-align: center;
-            color: #cccccc;
-            font-size: 14px;
-            margin-top: 15px;
-            padding-top: 10px;
-            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 11px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            text-transform: uppercase;
+            letter-spacing: 1px;
         `;
-        totalPlayers.textContent = `Total Players: ${this.players.length}`;
+        totalPlayers.textContent = `${this.players.length} Players`;
         this.playersContainer.appendChild(totalPlayers);
     }
 }

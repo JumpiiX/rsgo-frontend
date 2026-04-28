@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RSGO - Multiplayer FPS</title>
+    
+    <script>
+        function checkMapBuilderMode() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const mapBuilder = urlParams.get('mapbuilder');
+            const hash = window.location.hash;
+            
+            return mapBuilder === 'orange' || hash === '#mapbuilder' || window.location.pathname.includes('mapbuilder');
+        }
+
+        window.isMapBuilderMode = checkMapBuilderMode();
+        
+        if (window.isMapBuilderMode) {
+            console.log('🗺️ Map Builder Mode Detected - Hiding UI!');
+        }
+    </script>
+    
+    <style>
+        body { 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden; 
+            background: #000; 
+            font-family: Arial, sans-serif;
+        }
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            display: none; /* Hide the player count UI */
+        }
+        .ui-panel {
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            color: white;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            min-width: 120px;
+        }
+        .ui-value {
+            color: #00ff88;
+            font-size: 16px;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 4px;
+            height: 4px;
+            background: white;
+            border-radius: 2px;
+            z-index: 100;
+        }
+        
+        #deathmatchButton:hover {
+            background: #3a6b42 !important;
+            border-color: #5db96a !important;
+            transform: translateY(-2px);
+        }
+        
+        #teamVsTeamButton:hover {
+            background: #ff7b45 !important;
+            border-color: #ff8c32 !important;
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <div id="nameScreen" style="position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); align-items: center; justify-content: center; z-index: 1000;">
+        <script>
+            if (window.isMapBuilderMode) {
+                document.currentScript.parentElement.style.display = 'none';
+            } else {
+                document.currentScript.parentElement.style.display = 'flex';
+            }
+        </script>
+        <div style="background: #333; padding: 40px; border-radius: 10px; text-align: center;">
+            <h2 style="color: white; margin-bottom: 20px;">Enter Your Name</h2>
+            <input type="text" id="playerName" placeholder="Your name..." style="padding: 10px; font-size: 16px; margin-bottom: 20px; width: 200px;">
+            <br>
+            <button id="joinGame" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">Continue</button>
+        </div>
+    </div>
+
+    <div id="mapSelectionScreen" style="position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); align-items: center; justify-content: center; z-index: 1000;">
+        <script>
+            document.currentScript.parentElement.style.display = window.isMapBuilderMode ? 'none' : 'none';
+        </script>
+        <div style="background: #333; padding: 40px; border-radius: 10px; text-align: center; max-width: 600px;">
+            <h2 style="color: white; margin-bottom: 30px; font-size: 28px;">Select Game Mode</h2>
+            <div style="display: flex; gap: 30px; justify-content: center;">
+                <div id="deathmatchButton" style="background: #2c5530; border: 2px solid #4a8c57; border-radius: 10px; padding: 30px 20px; cursor: pointer; transition: all 0.3s; min-width: 200px;">
+                    <h3 style="color: white; margin: 0 0 10px 0; font-size: 22px;">Deathmatch</h3>
+                    <p style="color: #ccc; margin: 0; font-size: 14px;">Free-for-all combat arena</p>
+                    <p style="color: #888; margin: 5px 0 0 0; font-size: 12px;">Current map available</p>
+                </div>
+                <div id="teamVsTeamButton" style="background: #ff6b35; border: 2px solid #f7931e; border-radius: 10px; padding: 30px 20px; cursor: pointer; transition: all 0.3s; min-width: 200px;">
+                    <h3 style="color: white; margin: 0 0 10px 0; font-size: 22px;">Team vs Team</h3>
+                    <p style="color: #ccc; margin: 0; font-size: 14px;">5v5 Orange vs Red</p>
+                    <p style="color: #888; margin: 5px 0 0 0; font-size: 12px;">Orange Planet Map</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Team Selection Screen -->
+    <div id="teamSelectionScreen" style="position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: linear-gradient(135deg, #1a0a0a 0%, #2d1b1b 50%, #0a0a1a 100%); align-items: center; justify-content: center; z-index: 1000; font-family: Arial, sans-serif;">
+        <script>
+            document.currentScript.parentElement.style.display = window.isMapBuilderMode ? 'none' : 'none';
+        </script>
+        <div style="background: rgba(0,0,0,0.8); padding: 40px; border-radius: 15px; border: 2px solid #ff6b35; max-width: 800px; width: 90%;">
+            <h2 style="color: #ff6b35; margin-bottom: 30px; font-size: 32px; text-align: center; text-shadow: 0 0 20px rgba(255, 107, 53, 0.5);">Orange Planet - Team Selection</h2>
+            
+            <div style="display: flex; gap: 40px; justify-content: center; margin-bottom: 30px;">
+                <!-- Orange Team -->
+                <div style="background: linear-gradient(145deg, rgba(255, 107, 53, 0.2), rgba(247, 147, 30, 0.1)); border: 2px solid #ff6b35; border-radius: 12px; padding: 25px; min-width: 300px; text-align: center;">
+                    <h3 style="color: #ff6b35; margin: 0 0 20px 0; font-size: 24px; text-shadow: 0 0 10px rgba(255, 107, 53, 0.7);">ORANGE TEAM</h3>
+                    <div id="orangeTeamSlots" style="display: flex; flex-direction: column; gap: 8px;">
+                        <div class="team-slot orange-slot" data-team="orange" data-slot="0" style="background: rgba(255, 107, 53, 0.1); border: 1px solid rgba(255, 107, 53, 0.3); border-radius: 6px; padding: 8px; cursor: pointer; transition: all 0.3s; color: #ccc;">Player 1 - Empty</div>
+                        <div class="team-slot orange-slot" data-team="orange" data-slot="1" style="background: rgba(255, 107, 53, 0.1); border: 1px solid rgba(255, 107, 53, 0.3); border-radius: 6px; padding: 8px; cursor: pointer; transition: all 0.3s; color: #ccc;">Player 2 - Empty</div>
+                        <div class="team-slot orange-slot" data-team="orange" data-slot="2" style="background: rgba(255, 107, 53, 0.1); border: 1px solid rgba(255, 107, 53, 0.3); border-radius: 6px; padding: 8px; cursor: pointer; transition: all 0.3s; color: #ccc;">Player 3 - Empty</div>
+                        <div class="team-slot orange-slot" data-team="orange" data-slot="3" style="background: rgba(255, 107, 53, 0.1); border: 1px solid rgba(255, 107, 53, 0.3); border-radius: 6px; padding: 8px; cursor: pointer; transition: all 0.3s; color: #ccc;">Player 4 - Empty</div>
+                        <div class="team-slot orange-slot" data-team="orange" data-slot="4" style="background: rgba(255, 107, 53, 0.1); border: 1px solid rgba(255, 107, 53, 0.3); border-radius: 6px; padding: 8px; cursor: pointer; transition: all 0.3s; color: #ccc;">Player 5 - Empty</div>
+                    </div>
+                    <button id="joinOrangeTeam" style="margin-top: 15px; padding: 10px 25px; background: #ff6b35; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.3s;">Join Orange</button>
+                </div>
+                
+                <!-- VS -->
+                <div style="display: flex; align-items: center; justify-content: center; color: white; font-size: 48px; font-weight: bold; text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);">VS</div>
+                
+                <!-- Red Team -->
+                <div style="background: linear-gradient(145deg, rgba(220, 53, 69, 0.2), rgba(139, 22, 0, 0.1)); border: 2px solid #dc3545; border-radius: 12px; padding: 25px; min-width: 300px; text-align: center;">
+                    <h3 style="color: #dc3545; margin: 0 0 20px 0; font-size: 24px; text-shadow: 0 0 10px rgba(220, 53, 69, 0.7);">RED TEAM</h3>
+                    <div id="redTeamSlots" style="display: flex; flex-direction: column; gap: 8px;">
+                        <div class="team-slot red-slot" data-team="red" data-slot="0" style="background: rgba(220, 53, 69, 0.1); border: 1px solid rgba(220, 53, 69, 0.3); border-radius: 6px; padding: 8px; cursor: pointer; transition: all 0.3s; color: #ccc;">Player 1 - Empty</div>
+                        <div class="team-slot red-slot" data-team="red" data-slot="1" style="background: rgba(220, 53, 69, 0.1); border: 1px solid rgba(220, 53, 69, 0.3); border-radius: 6px; padding: 8px; cursor: pointer; transition: all 0.3s; color: #ccc;">Player 2 - Empty</div>
+                        <div class="team-slot red-slot" data-team="red" data-slot="2" style="background: rgba(220, 53, 69, 0.1); border: 1px solid rgba(220, 53, 69, 0.3); border-radius: 6px; padding: 8px; cursor: pointer; transition: all 0.3s; color: #ccc;">Player 3 - Empty</div>
+                        <div class="team-slot red-slot" data-team="red" data-slot="3" style="background: rgba(220, 53, 69, 0.1); border: 1px solid rgba(220, 53, 69, 0.3); border-radius: 6px; padding: 8px; cursor: pointer; transition: all 0.3s; color: #ccc;">Player 4 - Empty</div>
+                        <div class="team-slot red-slot" data-team="red" data-slot="4" style="background: rgba(220, 53, 69, 0.1); border: 1px solid rgba(220, 53, 69, 0.3); border-radius: 6px; padding: 8px; cursor: pointer; transition: all 0.3s; color: #ccc;">Player 5 - Empty</div>
+                    </div>
+                    <button id="joinRedTeam" style="margin-top: 15px; padding: 10px 25px; background: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.3s;">Join Red</button>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin-bottom: 20px;">
+                <div id="teamStatus" style="color: #ccc; margin-bottom: 15px;">Select a team to join</div>
+                <button id="startTeamGame" style="padding: 15px 40px; background: #28a745; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 18px; transition: all 0.3s; opacity: 0.5;" disabled>Start Game</button>
+            </div>
+            
+            <div style="text-align: center;">
+                <button id="backToMapSelection" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.3s;">← Back to Map Selection</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="gameContainer">
+        <script>
+            document.currentScript.parentElement.style.display = window.isMapBuilderMode ? 'block' : 'none';
+        </script>
+        <div id="ui">
+            <div class="ui-panel">
+                Players: <span id="playerCount" class="ui-value">0</span>
+            </div>
+            <div class="ui-panel">
+                You: <span id="yourName" class="ui-value">Player</span>
+            </div>
+        </div>
+        <div id="crosshair"></div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+        }
+    }
+    </script>
+    
+    <!-- Make THREE global for compatibility -->
+    <script type="module">
+        import * as THREE from 'three';
+        window.THREE = THREE;
+    </script>
+    
+    <script type="module" src="src/main.js"></script>
+</body>
+</html>

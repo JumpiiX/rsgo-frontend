@@ -103,7 +103,7 @@ export class LightingSystem {
     }
 
     createStreetLights() {
-        
+        // No street light poles for clean map - keeping just the lighting
         const streetLightPositions = [
             [-60, 25, -80], [60, 25, 80], [-100, 25, 40],
             [100, 25, -40], [0, 25, 120], [0, 25, -120]
@@ -115,13 +115,13 @@ export class LightingSystem {
             streetLight.castShadow = true;
             this.scene.add(streetLight);
 
-            
-            const poleGeometry = new THREE.CylinderGeometry(0.5, 0.5, 25);
-            const poleMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
-            const pole = new THREE.Mesh(poleGeometry, poleMaterial);
-            pole.position.set(pos[0], 12.5, pos[2]);
-            pole.castShadow = true;
-            this.scene.add(pole);
+            // DISABLED: No more black poles!
+            // const poleGeometry = new THREE.CylinderGeometry(0.5, 0.5, 25);
+            // const poleMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+            // const pole = new THREE.Mesh(poleGeometry, poleMaterial);
+            // pole.position.set(pos[0], 12.5, pos[2]);
+            // pole.castShadow = true;
+            // this.scene.add(pole);
         });
     }
 

@@ -22,9 +22,11 @@ export class Compass {
             align-items: center;
             justify-content: center;
             overflow: hidden;
-            background: rgba(20, 12, 8, 0.4);
-            border: 1px solid rgba(210, 105, 30, 0.3);
-            border-radius: 2px;
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         `;
         document.body.appendChild(compassContainer);
 
@@ -43,6 +45,7 @@ export class Compass {
         
         const createCompassTape = () => {
             const tape = document.createElement('div');
+            tape.id = 'compass-tape';
             tape.style.cssText = `
                 position: absolute;
                 display: flex;
@@ -56,7 +59,7 @@ export class Compass {
                 const actualDeg = deg % 360;
                 let label = '';
                 let fontSize = '12px';
-                let color = 'rgba(210, 105, 30, 0.3)';
+                let color = 'rgba(255, 255, 255, 0.3)';
                 let fontWeight = 'normal';
                 const width = '30px';
 
@@ -64,35 +67,35 @@ export class Compass {
                 if (actualDeg === 0) {
                     label = 'N';
                     fontSize = '18px';
-                    color = '#d2691e';
-                    fontWeight = 'bold';
+                    color = 'rgba(255, 255, 255, 0.9)';
+                    fontWeight = '600';
                 } else if (actualDeg === 90) {
                     label = 'E';
                     fontSize = '18px';
-                    color = '#cd853f';
-                    fontWeight = 'bold';
+                    color = 'rgba(255, 255, 255, 0.8)';
+                    fontWeight = '600';
                 } else if (actualDeg === 180) {
                     label = 'S';
                     fontSize = '18px';
-                    color = '#cd853f';
-                    fontWeight = 'bold';
+                    color = 'rgba(255, 255, 255, 0.8)';
+                    fontWeight = '600';
                 } else if (actualDeg === 270) {
                     label = 'W';
                     fontSize = '18px';
-                    color = '#cd853f';
-                    fontWeight = 'bold';
+                    color = 'rgba(255, 255, 255, 0.8)';
+                    fontWeight = '600';
                 }
                 
                 else if (actualDeg % 15 === 0) {
                     label = '|';
                     fontSize = '8px';
-                    color = 'rgba(210, 105, 30, 0.2)';
+                    color = 'rgba(255, 255, 255, 0.2)';
                 }
                 
                 else if (actualDeg % 5 === 0) {
                     label = '·';
                     fontSize = '6px';
-                    color = 'rgba(210, 105, 30, 0.15)';
+                    color = 'rgba(255, 255, 255, 0.15)';
                 }
 
                 if (label) {
@@ -120,6 +123,7 @@ export class Compass {
 
         
         const leftFade = document.createElement('div');
+        leftFade.id = 'compass-left-fade';
         leftFade.style.cssText = `
             position: fixed;
             top: 20px;
@@ -133,6 +137,7 @@ export class Compass {
         document.body.appendChild(leftFade);
 
         const rightFade = document.createElement('div');
+        rightFade.id = 'compass-right-fade';
         rightFade.style.cssText = `
             position: fixed;
             top: 20px;
@@ -147,6 +152,7 @@ export class Compass {
 
         
         const centerLine = document.createElement('div');
+        centerLine.id = 'compass-center-line';
         centerLine.style.cssText = `
             position: fixed;
             top: 22px;
@@ -163,6 +169,7 @@ export class Compass {
 
         
         this.degreeDisplay = document.createElement('div');
+        this.degreeDisplay.id = 'compass-degree-display';
         this.degreeDisplay.style.cssText = `
             position: fixed;
             top: 62px;

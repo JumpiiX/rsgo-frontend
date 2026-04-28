@@ -12,16 +12,21 @@ export class AmmoDisplay {
         this.ammoContainer.id = 'ammoContainer';
         this.ammoContainer.style.cssText = `
             position: fixed;
-            bottom: 30px;
+            bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            width: 300px;
-            height: 120px;
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: rgba(255, 255, 255, 0.9);
+            padding: 14px 24px;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            backdrop-filter: blur(10px);
             z-index: 100;
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
             align-items: center;
-            gap: 10px;
+            gap: 16px;
         `;
 
         // Bullet display
@@ -39,28 +44,29 @@ export class AmmoDisplay {
         this.ammoText = document.createElement('div');
         this.ammoText.id = 'ammoText';
         this.ammoText.style.cssText = `
-            color: white;
-            font-size: 24px;
-            font-weight: bold;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 20px;
+            font-weight: 600;
             text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
         `;
 
         // Reload hint (shows when ammo < max)
         this.reloadHint = document.createElement('div');
         this.reloadHint.id = 'reloadHint';
         this.reloadHint.style.cssText = `
-            color: #ffaa00;
-            font-size: 16px;
-            font-weight: bold;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            color: rgba(255, 170, 0, 0.9);
+            font-size: 12px;
+            font-weight: 500;
             text-align: center;
             display: none;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 5px 10px;
-            border-radius: 5px;
-            border: 1px solid #ffaa00;
-            animation: pulse 2s infinite;
+            background: rgba(255, 170, 0, 0.1);
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 170, 0, 0.3);
         `;
 
         // Reload progress bar
@@ -100,7 +106,7 @@ export class AmmoDisplay {
 
         this.reloadContainer.appendChild(this.reloadBar);
         
-        this.ammoContainer.appendChild(this.bulletsContainer);
+        // Remove bullets container - we don't need visual bullets anymore
         this.ammoContainer.appendChild(this.ammoText);
         this.ammoContainer.appendChild(this.reloadHint);
         this.ammoContainer.appendChild(this.reloadContainer);
@@ -164,22 +170,23 @@ export class AmmoDisplay {
     }
 
     updateDisplay() {
-        // Update bullets visual
-        this.createBullets();
-
-        // Update ammo text
-        this.ammoText.textContent = `${this.currentAmmo} / ${this.maxAmmo}`;
+        // Update ammo text with label
+        this.ammoText.innerHTML = `
+            <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.6; margin-bottom: 2px;">Ammo</div>
+            <div style="font-size: 20px; font-weight: 600; line-height: 1;">${this.currentAmmo} / ${this.maxAmmo}</div>
+        `;
         
         // Color based on ammo level
+        const ammoValue = this.ammoText.querySelector('div:last-child');
         if (this.currentAmmo === 0) {
-            this.ammoText.style.color = '#ff4444';
-            this.ammoText.style.animation = 'pulse 1s infinite';
+            ammoValue.style.color = '#ff4444';
+            ammoValue.style.animation = 'pulse 1s infinite';
         } else if (this.currentAmmo <= 3) {
-            this.ammoText.style.color = '#ffaa44';
-            this.ammoText.style.animation = 'none';
+            ammoValue.style.color = '#ffaa44';
+            ammoValue.style.animation = 'none';
         } else {
-            this.ammoText.style.color = '#ffffff';
-            this.ammoText.style.animation = 'none';
+            ammoValue.style.color = '#ffffff';
+            ammoValue.style.animation = 'none';
         }
 
         // Update reload hint (show when ammo < max and not reloading)

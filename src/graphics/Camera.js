@@ -2,26 +2,19 @@ export class Camera {
     constructor() {
         this.camera = null;
         this.spawnPoints = [
-            
-            { x: -30, y: 10, z: 320 },      
-            { x: -50, y: 10, z: 330 },      
-            { x: 50, y: 10, z: 330 },       
-            { x: -100, y: 10, z: 300 },     
-            { x: 100, y: 10, z: 300 },      
+            // Orange team (left side) - INSIDE new map boundaries
+            { x: -300, y: 10, z: 0 },      
+            { x: -280, y: 10, z: 50 },      
+            { x: -280, y: 10, z: -50 },       
+            { x: -300, y: 10, z: 100 },     
+            { x: -300, y: 10, z: -100 },      
 
-            
-            
-            { x: -50, y: 10, z: -330 },     
-            { x: 50, y: 10, z: -330 },      
-            { x: -100, y: 10, z: -300 },    
-            { x: 100, y: 10, z: -300 },     
-
-            
-            { x: -200, y: 10, z: 100 },     
-            { x: 200, y: 10, z: -100 },     
-            { x: -50, y: 10, z: 150 },      
-            { x: -100, y: 10, z: -100 },    
-            { x: 100, y: 10, z: 100 },      
+            // Red team (right side) - INSIDE new map boundaries
+            { x: 300, y: 10, z: 0 },     
+            { x: 280, y: 10, z: 50 },      
+            { x: 280, y: 10, z: -50 },    
+            { x: 300, y: 10, z: 100 },     
+            { x: 300, y: 10, z: -100 },      
         ];
         this.init();
     }

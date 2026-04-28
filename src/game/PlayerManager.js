@@ -4,6 +4,7 @@ export class PlayerManager {
         this.otherPlayers = new Map();
         this.playerHealth = new Map();
         this.respawning = new Map();
+        this.gameMode = null;
     }
 
     addPlayer(player) {
@@ -16,9 +17,23 @@ export class PlayerManager {
         
         
         const geometry = new THREE.CapsuleGeometry(2, 5, 4, 8);
+        
+        let playerColor = 0xff4444;
+        let emissiveColor = 0x880000;
+        
+        if (this.gameMode === 'team' && player.team) {
+            if (player.team === 'orange') {
+                playerColor = 0xff6b35;
+                emissiveColor = 0x994020;
+            } else if (player.team === 'red') {
+                playerColor = 0xdc3545;
+                emissiveColor = 0x8b2030;
+            }
+        }
+        
         const material = new THREE.MeshLambertMaterial({
-            color: 0xff4444,  
-            emissive: 0x880000,
+            color: playerColor,  
+            emissive: emissiveColor,
             emissiveIntensity: 0.3
         });
         const playerMesh = new THREE.Mesh(geometry, material);
@@ -40,6 +55,10 @@ export class PlayerManager {
         this.playerHealth.set(player.id, 5);
 
         this.updatePlayerCount();
+    }
+
+    setGameMode(gameMode) {
+        this.gameMode = gameMode;
     }
 
     removePlayer(playerId) {
