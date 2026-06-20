@@ -24,15 +24,21 @@ export class NetworkClient {
         const wsUrl = window.location.hostname === 'localhost'
             ? 'ws://localhost:6969'
             : `ws://${window.location.hostname}:6969`;
+        console.log('[WS] connecting to', wsUrl);
         this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
             this.connected = true;
+            const n = (this._pendingSends && this._pendingSends.length) || 0;
+            console.log('[WS] OPEN — flushing', n, 'queued message(s)');
             // Flush any messages queued while the socket was still connecting.
             if (this._pendingSends && this._pendingSends.length) {
                 const queued = this._pendingSends;
                 this._pendingSends = [];
-                queued.forEach((m) => this.ws.send(JSON.stringify(m)));
+                queued.forEach((m) => {
+                    console.log('[WS] flush →', m.type);
+                    this.ws.send(JSON.stringify(m));
+                });
             }
         };
 
@@ -41,12 +47,14 @@ export class NetworkClient {
             this.handleMessage(message);
         };
 
-        this.ws.onclose = () => {
+        this.ws.onclose = (ev) => {
             this.connected = false;
+            console.warn('[WS] CLOSED code=', ev.code, 'reason=', ev.reason, 'wasClean=', ev.wasClean);
             setTimeout(() => this.connect(), 3000);
         };
 
         this.ws.onerror = (error) => {
+            console.error('[WS] ERROR', error);
         };
     }
 
@@ -403,7 +411,8 @@ export class NetworkClient {
     send(data) {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             // Per-message send logging floods the console during movement (one
-            // 'move' per frame) and causes stutter; keep it off.
+            // 'move' per frame) and causes stutter; only log the lobby/team msgs.
+            if (data.type !== 'move') console.log('[WS] send →', data.type, 'readyState=OPEN');
             this.ws.send(JSON.stringify(data));
         } else {
             // Socket not open yet (still CONNECTING). Queue the message and flush
@@ -412,6 +421,8 @@ export class NetworkClient {
             // window failed to register and looked solo).
             if (!this._pendingSends) this._pendingSends = [];
             this._pendingSends.push(data);
+            console.log('[WS] QUEUED (socket not open) →', data.type,
+                'readyState=', this.ws ? this.ws.readyState : 'no-ws');
         }
     }
 
