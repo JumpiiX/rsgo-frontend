@@ -2,9 +2,12 @@ FROM nginx:alpine
 
 # Copy the frontend files to nginx html directory
 COPY index.html /usr/share/nginx/html/
+COPY game.html /usr/share/nginx/html/
 COPY src /usr/share/nginx/html/src/
 COPY game.js /usr/share/nginx/html/
 COPY models /usr/share/nginx/html/models/
+COPY robots.txt /usr/share/nginx/html/
+COPY sitemap.xml /usr/share/nginx/html/
 
 # Copy custom nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf

@@ -1,0 +1,32 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0}</style></head><body>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.158.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+const r=new THREE.WebGLRenderer({antialias:true,logarithmicDepthBuffer:true});r.setSize(800,440);document.body.appendChild(r.domElement);
+const s=new THREE.Scene();s.background=new THREE.Color(0x1d294e);
+s.add(new THREE.AmbientLight(0xffffff,1.5));const dl=new THREE.DirectionalLight(0xffffff,1.4);dl.position.set(3,5,4);s.add(dl);
+const W=20,H=25,D=4;
+function tc(t){return t==='red'?{main:0x1a2447,accent:0xef4e23,emissive:0x0d1326}:{main:0xef4e23,accent:0x1a2447,emissive:0x331100};}
+function makeTex(main,accent){
+  const S=256,canvas=document.createElement('canvas');canvas.width=canvas.height=S;const ctx=canvas.getContext('2d');
+  const hex=n=>'#'+n.toString(16).padStart(6,'0');
+  ctx.fillStyle=hex(main);ctx.fillRect(0,0,S,S);
+  ctx.strokeStyle=hex(accent);ctx.lineWidth=S*0.06;ctx.lineCap='square';
+  const inset=ctx.lineWidth/2;ctx.strokeRect(inset,inset,S-2*inset,S-2*inset);
+  ctx.beginPath();ctx.moveTo(inset,inset);ctx.lineTo(S-inset,S-inset);ctx.moveTo(S-inset,inset);ctx.lineTo(inset,S-inset);ctx.stroke();
+  const tex=new THREE.CanvasTexture(canvas);tex.anisotropy=4;return tex;
+}
+function wall(team,px){
+  const c=tc(team);const g=new THREE.BoxGeometry(W,H,D);const tex=makeTex(c.main,c.accent);
+  const m=new THREE.MeshPhongMaterial({map:tex,color:0xffffff,emissiveMap:tex,emissive:0xffffff,emissiveIntensity:1});
+  const w=new THREE.Mesh(g,m);w.position.x=px;s.add(w);
+}
+wall('orange',-14);wall('red',14);
+const cam=new THREE.PerspectiveCamera(45,800/440,0.01,1000);cam.position.set(0,3,58);cam.lookAt(0,0,0);
+r.render(s,cam);
+// sample center pixels of each wall to verify exact colors
+const gl=r.getContext();const px=new Uint8Array(4);
+function samp(xx,yy){gl.readPixels(xx,440-yy,1,1,gl.RGB?gl.RGBA:gl.RGBA,gl.UNSIGNED_BYTE,px);return [px[0],px[1],px[2]];}
+window.__colors={orangeFill:samp(200,100),navyFill:samp(600,100)};
+window.__ready=true;
+</script></body></html>

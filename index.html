@@ -3,91 +3,1291 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RSGO - Multiplayer FPS</title>
+    <title>RSGO · the shooter you build yourself · early access</title>
+    <meta name="description" content="RSGO is a new kind of competitive shooter, now in early access. Players build the map themselves every round instead of buying weapons, so nobody can memorise it. Skill over study. Built in Rust.">
+    <link rel="canonical" href="https://rsgo.io/">
+    <meta name="theme-color" content="#11182f">
+    <link rel="icon" type="image/png" href="models/logo.png">
+    <link rel="apple-touch-icon" href="models/logo.png">
+
+    <!-- Open Graph (Discord, Facebook, WhatsApp, LinkedIn, Slack…) -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="RSGO">
+    <meta property="og:url" content="https://rsgo.io/">
+    <meta property="og:title" content="RSGO — the shooter you build yourself">
+    <meta property="og:description" content="No fixed map. Nothing to memorise. Each round the players build the battlefield. Now in early access, built in Rust.">
+    <meta property="og:image" content="https://rsgo.io/models/og-banner.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="RSGO — the shooter you build yourself">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="RSGO — the shooter you build yourself">
+    <meta name="twitter:description" content="No fixed map. Nothing to memorise. The players build the battlefield every round. Early access, built in Rust.">
+    <meta name="twitter:image" content="https://rsgo.io/models/og-banner.png">
+
+    <!-- Structured data for Google (rich results) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "VideoGame",
+      "name": "RSGO",
+      "url": "https://rsgo.io/",
+      "image": "https://rsgo.io/models/og-banner.png",
+      "description": "A competitive shooter where players build the map themselves every round instead of buying weapons, so it can never be memorised. In early access, built in Rust.",
+      "genre": ["Shooter", "Competitive", "FPS"],
+      "gamePlatform": ["Web Browser"],
+      "applicationCategory": "Game",
+      "operatingSystem": "Web",
+      "inLanguage": "en",
+      "author": { "@type": "Person", "name": "JumpiiX", "url": "https://github.com/JumpiiX" }
+    }
+    </script>
     <style>
-        body { 
-            margin: 0; 
-            padding: 0; 
-            overflow: hidden; 
-            background: #000; 
-            font-family: Arial, sans-serif;
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@300;400;500&display=swap');
+        @import url('https://api.fontshare.com/v2/css?f[]=tanker@400&display=swap');
+
+        :root {
+            /* RSGO · Swatch x AP "Orenji Hachi": navy ground, orange ink. */
+            --navy:        #1a2447;   /* base background */
+            --navy-deep:   #11182f;   /* deeper navy */
+            --orange:      #ef4e23;   /* the only ink */
+            --orange-rgb:  239, 78, 35;
         }
-        #gameContainer {
-            position: relative;
-            width: 100vw;
-            height: 100vh;
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html { background: var(--navy); scroll-behavior: smooth; }
+        body {
+            background: var(--navy);
+            color: var(--orange);
+            font-family: 'Inter', sans-serif;
+            font-weight: 300;
+            overflow-x: hidden;
+            /* logo cursor (32x32 png), hotspot centred at 16,16 */
+            cursor: url("models/rsgo-cursor.png") 16 16, crosshair;
+            -webkit-font-smoothing: antialiased;
         }
-        #ui {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            z-index: 100;
+        a, button, [role="button"] {
+            color: var(--orange);
+            cursor: url("models/rsgo-cursor.png") 16 16, pointer;
         }
-        .ui-panel {
-            background: rgba(0, 0, 0, 0.7);
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 10px;
-            color: white;
-            font-weight: bold;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
-            min-width: 120px;
+        ::selection { background: var(--orange); color: var(--navy); }
+
+        /* Everything orange, even rules and borders */
+        .line { border-color: rgba(var(--orange-rgb), 0.22); }
+
+        /* Scroll progress bar */
+        .progress {
+            position: fixed;
+            top: 0; left: 0;
+            height: 2px;
+            width: 100%;
+            background: var(--orange);
+            transform: scaleX(0);
+            transform-origin: left;
+            z-index: 9000;
+            opacity: 0.85;
         }
-        .ui-value {
-            color: #00ff88;
-            font-size: 16px;
+
+        /* Interactive shooter canvas: sits above the navy bg, below the content,
+           clicks pass through to the page */
+        .fx {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
         }
-        #crosshair {
-            position: absolute;
-            top: 50%;
+        /* Make section backgrounds transparent so the fx canvas shows behind text */
+        .fx-hint {
+            position: fixed;
+            bottom: 22px;
             left: 50%;
-            transform: translate(-50%, -50%);
-            width: 4px;
-            height: 4px;
-            background: white;
-            border-radius: 2px;
+            transform: translateX(-50%);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            letter-spacing: 0.28em;
+            text-transform: uppercase;
+            color: var(--orange);
+            opacity: 0;
+            z-index: 80;
+            pointer-events: none;
+            transition: opacity 0.6s ease;
+        }
+        .fx-hint.show { opacity: 0.5; }
+
+        /* ---------- Intro overlay (terminal typewriter) ---------- */
+        .intro {
+            position: fixed;
+            inset: 0;
+            z-index: 10000;
+            background: var(--navy-deep);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .term {
+            font-family: 'JetBrains Mono', ui-monospace, monospace;
+            font-size: clamp(0.85rem, 1.9vw, 1.2rem);
+            line-height: 1.85;
+            color: var(--orange);
+            width: min(640px, 86vw);
+            white-space: pre-wrap;
+            position: relative;
+        }
+        .term .ln { display: block; }
+        .term .ln.dim { opacity: 0.5; }
+        .term .ln.bright { opacity: 1; }
+        /* blinking caret that rides at the end of the typed text */
+        .term-cursor {
+            position: absolute;
+            width: 0.6em;
+            height: 1.05em;
+            background: var(--orange);
+            opacity: 0;
+            pointer-events: none;
+            box-shadow: 0 0 14px rgba(var(--orange-rgb), 0.6);
+        }
+        .term-cursor.on { animation: caret 1s steps(2) infinite; }
+        @keyframes caret { 0%,50% { opacity: 1; } 51%,100% { opacity: 0; } }
+
+        /* ---------- Layout ---------- */
+        .wrap { max-width: 1160px; margin: 0 auto; padding: 0 48px; }
+        section, .footer { position: relative; z-index: 1; }  /* sit above the fx canvas */
+
+        .eyebrow {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 0.4em;
+            text-transform: uppercase;
+            opacity: 0.65;
+            display: block;
+        }
+
+        /* ---------- Header ---------- */
+        .header {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%;
             z-index: 100;
+            padding: 26px 0;
+            opacity: 0;
+        }
+        .header-inner {
+            max-width: 1160px;
+            margin: 0 auto;
+            padding: 0 48px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 13px;
+            text-decoration: none;
+        }
+        .brand-mark {
+            width: 34px;
+            height: 34px;
+            flex-shrink: 0;
+            display: block;
+            border-radius: 8px;          /* soften the square navy edges */
+            transition: transform 0.6s cubic-bezier(0.23,1,0.32,1);
+        }
+        .brand:hover .brand-mark { transform: rotate(90deg); }
+        .logo {
+            font-family: 'Tanker', monospace;
+            font-size: 1.5rem;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            color: var(--orange);
+        }
+        .nav { display: flex; gap: 36px; align-items: center; }
+        .nav a {
+            text-decoration: none;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.74rem;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            opacity: 0.7;
+            position: relative;
+            transition: opacity 0.3s ease;
+        }
+        .nav a::after {
+            content: '';
+            position: absolute;
+            left: 0; bottom: -5px;
+            width: 0; height: 1px;
+            background: var(--orange);
+            transition: width 0.35s cubic-bezier(0.23,1,0.32,1);
+        }
+        .nav a:hover { opacity: 1; }
+        .nav a:hover::after { width: 100%; }
+
+        /* Modern Play pill */
+        .play-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            text-decoration: none;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.74rem;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            padding: 11px 22px;
+            border: 1px solid rgba(var(--orange-rgb), 0.5);
+            border-radius: 40px;
+            position: relative;
+            overflow: hidden;
+            transition: color 0.4s ease, border-color 0.4s ease;
+        }
+        .play-pill span, .play-pill svg { position: relative; z-index: 1; }
+        .play-pill svg {
+            width: 8px; height: 10px;
+            fill: currentColor;
+            transition: transform 0.4s cubic-bezier(0.23,1,0.32,1);
+        }
+        .play-pill::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: var(--orange);
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.45s cubic-bezier(0.23,1,0.32,1);
+        }
+        .play-pill:hover { color: var(--navy); border-color: var(--orange); }
+        .play-pill:hover::before { transform: scaleX(1); }
+        .play-pill:hover svg { transform: translateX(3px); }
+
+        /* ---------- Hero ---------- */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 140px 0 80px;
+        }
+        .hero h1 {
+            font-family: 'Tanker', monospace;
+            font-size: clamp(4rem, 17vw, 15rem);
+            line-height: 0.86;
+            letter-spacing: -0.01em;
+            text-transform: uppercase;
+            margin: 0;
+            overflow: hidden;          /* clip so chars mask up from below */
+            padding-bottom: 0.08em;    /* room for descenders inside the clip */
+        }
+        .hero h1 .char { display: inline-block; will-change: transform; }
+        .hero-sub {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 40px;
+            margin-top: 48px;
+            flex-wrap: wrap;
+        }
+        .hero-tag {
+            font-size: clamp(1.05rem, 1.8vw, 1.4rem);
+            line-height: 1.55;
+            max-width: 540px;
+            font-weight: 300;
+        }
+        .hero-tag b { font-weight: 500; }
+        .hero-cta {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            text-decoration: none;
+            border: 1px solid rgba(var(--orange-rgb), 0.4);
+            padding: 16px 30px;
+            border-radius: 40px;
+            white-space: nowrap;
+            position: relative;
+            overflow: hidden;
+            transition: color 0.4s ease;
+        }
+        .hero-cta span { position: relative; z-index: 1; }
+        .hero-cta::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: var(--orange);
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.45s cubic-bezier(0.23,1,0.32,1);
+        }
+        .hero-cta:hover { color: var(--navy); }
+        .hero-cta:hover::before { transform: scaleX(1); }
+
+        /* Marquee strip */
+        .marquee {
+            margin-top: 90px;
+            border-top: 1px solid rgba(var(--orange-rgb), 0.2);
+            border-bottom: 1px solid rgba(var(--orange-rgb), 0.2);
+            padding: 18px 0;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+        .marquee-track {
+            display: inline-flex;
+            gap: 60px;
+            font-family: 'Tanker', monospace;
+            font-size: 1.3rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            will-change: transform;
+        }
+        .marquee-track span { opacity: 0.85; }
+        .marquee-track .o { opacity: 0.4; }
+
+        /* ---------- Generic section ---------- */
+        .block { padding: 150px 0; }
+        .head-row { max-width: 760px; margin-bottom: 70px; }
+        .section-title {
+            font-family: 'Tanker', monospace;
+            font-size: clamp(2.4rem, 6vw, 4.4rem);
+            line-height: 1.02;
+            letter-spacing: -0.01em;
+            margin-top: 22px;
+        }
+        .lead {
+            font-size: clamp(1rem, 1.6vw, 1.18rem);
+            line-height: 1.7;
+            max-width: 600px;
+            margin-top: 26px;
+            opacity: 0.82;
+        }
+
+        /* Numbered rows (problem) */
+        .rows { border-top: 1px solid rgba(var(--orange-rgb), 0.2); }
+        .row {
+            display: grid;
+            grid-template-columns: 80px 1fr;
+            gap: 30px;
+            padding: 38px 0;
+            border-bottom: 1px solid rgba(var(--orange-rgb), 0.2);
+            align-items: baseline;
+        }
+        .row .n {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            letter-spacing: 0.1em;
+            opacity: 0.5;
+        }
+        .row h3 {
+            font-family: 'Tanker', monospace;
+            font-weight: 400;
+            font-size: clamp(1.5rem, 3vw, 2.3rem);
+            line-height: 1.08;
+            margin-bottom: 14px;
+        }
+        .row p {
+            font-size: 1rem;
+            line-height: 1.65;
+            max-width: 620px;
+            opacity: 0.72;
+            font-weight: 300;
+        }
+
+        /* ---------- Horizontal pin section ---------- */
+        .hpin { overflow: hidden; }
+        .hpin-track {
+            display: flex;
+            flex-wrap: nowrap;
+            height: 100vh;
+            align-items: center;
+            padding: 0 6vw;
+            gap: 3vw;
+            width: max-content;
+        }
+        .hpanel {
+            flex: 0 0 auto;
+            width: min(440px, 78vw);
+            height: 60vh;
+            border: 1px solid rgba(var(--orange-rgb), 0.25);
+            border-radius: 18px;
+            padding: 44px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            background: linear-gradient(160deg, rgba(var(--orange-rgb), 0.05), transparent 70%);
+        }
+        .hpanel-num {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem; letter-spacing: 0.2em; opacity: 0.5;
+            margin-bottom: auto;
+        }
+        .hpanel h3 {
+            font-family: 'Tanker', monospace;
+            font-weight: 400;
+            font-size: clamp(1.5rem, 3vw, 2.1rem);
+            line-height: 1.08;
+            margin-bottom: 14px;
+        }
+        .hpanel p { font-size: 0.98rem; line-height: 1.6; opacity: 0.72; font-weight: 300; }
+        .hpanel-intro {
+            border: none;
+            background: none;
+            justify-content: center;
+            width: min(520px, 82vw);
+        }
+        .hpanel-title {
+            font-family: 'Tanker', monospace;
+            font-size: clamp(2rem, 5vw, 3.4rem);
+            line-height: 1.04;
+            margin: 18px 0 26px;
+        }
+        .hpanel-hint {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem; letter-spacing: 0.24em; text-transform: uppercase; opacity: 0.6;
+        }
+        /* On small screens / no-JS: fall back to a normal vertical stack */
+        .hpin-track.no-pin {
+            flex-direction: column; height: auto; width: 100%;
+            padding: 100px 24px; gap: 22px; align-items: stretch;
+        }
+        .hpin-track.no-pin .hpanel { width: 100%; height: auto; min-height: 240px; }
+
+        /* ---------- Statement ---------- */
+        .statement {
+            min-height: 64vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 120px 30px;
+        }
+        .statement p {
+            font-family: 'Tanker', monospace;
+            font-size: clamp(2.2rem, 6.5vw, 5.5rem);
+            line-height: 1.08;
+            letter-spacing: -0.01em;
+        }
+        .statement .word { display: inline-block; will-change: transform, opacity; }
+        .statement .faint { opacity: 0.35; }
+
+        /* ---------- Tech split ---------- */
+        .tech-solo { max-width: 760px; }
+        .tech-list { list-style: none; margin-top: 30px; }
+        .tech-list li { padding: 24px 0; border-top: 1px solid rgba(var(--orange-rgb), 0.2); }
+        .tech-list li strong {
+            display: block;
+            font-family: 'Tanker', monospace;
+            font-weight: 400;
+            font-size: 1.2rem;
+            margin-bottom: 8px;
+        }
+        .tech-list li span { font-size: 0.96rem; line-height: 1.6; opacity: 0.7; font-weight: 300; }
+        .code {
+            border: 1px solid rgba(var(--orange-rgb), 0.28);
+            border-radius: 14px;
+            /* faint AP Tapisserie waffle grid */
+            background:
+                linear-gradient(rgba(var(--orange-rgb), 0.04) 1px, transparent 1px) 0 0 / 10px 10px,
+                linear-gradient(90deg, rgba(var(--orange-rgb), 0.04) 1px, transparent 1px) 0 0 / 10px 10px,
+                var(--navy-deep);
+            overflow: hidden;
+        }
+        .code-top {
+            display: flex; align-items: center; gap: 8px;
+            padding: 14px 18px;
+            border-bottom: 1px solid rgba(var(--orange-rgb), 0.2);
+        }
+        .code-top i { width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--orange); display: inline-block; }
+        .code-top i.f { background: var(--orange); }
+        .code-top .nm {
+            margin-left: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem; letter-spacing: 0.08em; opacity: 0.7;
+        }
+        .code pre {
+            padding: 24px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            line-height: 1.9;
+            overflow-x: auto;
+        }
+        .code .dim { opacity: 0.45; }
+
+        /* ---------- Closing (finale) ---------- */
+        .closing-block { position: relative; overflow: hidden; }
+        .closing-glow {
+            position: absolute;
+            left: 50%; top: 60%;
+            width: 900px; height: 900px;
+            transform: translate(-50%, -50%) scale(0.6);
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(var(--orange-rgb), 0.10), transparent 62%);
+            pointer-events: none;
+            opacity: 0;
+        }
+        .closing { text-align: center; padding: 180px 0; position: relative; }
+        .closing-rule {
+            display: block;
+            width: 120px; height: 1px;
+            margin: 0 auto 40px;
+            background: var(--orange);
+            transform: scaleX(0);
+            transform-origin: center;
+            opacity: 0.7;
+        }
+        .closing h2 {
+            font-family: 'Tanker', monospace;
+            font-size: clamp(2.4rem, 7vw, 5rem);
+            line-height: 1.02;
+            margin-bottom: 30px;
+        }
+        .closing h2 .mw { display: inline-block; overflow: hidden; }
+        .closing h2 .mw > span { display: inline-block; }
+        .closing p {
+            max-width: 560px;
+            margin: 0 auto 44px;
+            line-height: 1.7;
+            opacity: 0.85;
+            font-weight: 300;
+        }
+        .closing-cta { display: inline-flex; gap: 18px; flex-wrap: wrap; justify-content: center; }
+        .btn {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem; letter-spacing: 0.18em; text-transform: uppercase;
+            text-decoration: none;
+            padding: 16px 32px;
+            border-radius: 40px;
+            border: 1px solid rgba(var(--orange-rgb), 0.4);
+            position: relative; overflow: hidden;
+            transition: color 0.4s ease;
+        }
+        .btn span { position: relative; z-index: 1; }
+        .btn::before {
+            content: ''; position: absolute; inset: 0;
+            background: var(--orange); transform: scaleX(0); transform-origin: left;
+            transition: transform 0.45s cubic-bezier(0.23,1,0.32,1);
+        }
+        .btn:hover { color: var(--navy); }
+        .btn:hover::before { transform: scaleX(1); }
+        .btn.solid { color: var(--navy); }
+        .btn.solid::before { transform: scaleX(1); }
+        .btn.solid:hover::before { transform: scaleX(0); transform-origin: right; }
+        .btn.solid:hover { color: var(--orange); }
+
+        /* ---------- Footer ---------- */
+        .footer {
+            border-top: 1px solid rgba(var(--orange-rgb), 0.2);
+            padding: 56px 0 40px;
+        }
+        .footer-inner {
+            display: flex; justify-content: space-between; gap: 40px; flex-wrap: wrap;
+        }
+        .footer-brand { font-family: 'Tanker', monospace; font-size: 1.3rem; letter-spacing: 0.2em; text-transform: uppercase; }
+        .footer-brand + p { font-size: 0.85rem; opacity: 0.6; margin-top: 12px; max-width: 280px; line-height: 1.6; }
+        .footer-cols { display: flex; gap: 70px; flex-wrap: wrap; }
+        .footer-col h5 {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem; letter-spacing: 0.2em; text-transform: uppercase;
+            opacity: 0.5; margin-bottom: 16px;
+        }
+        .footer-col a {
+            display: block; text-decoration: none;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+            margin-bottom: 11px; opacity: 0.8;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .footer-col a:hover { opacity: 1; transform: translateX(4px); }
+        .footer-bottom {
+            margin-top: 50px;
+            display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; letter-spacing: 0.1em;
+            opacity: 0.5;
+        }
+
+        @media (max-width: 700px) {
+            .wrap, .header-inner { padding: 0 24px; }
+            .nav { display: none; }
+            .hero-sub { flex-direction: column; align-items: flex-start; }
+            .row { grid-template-columns: 1fr; gap: 10px; }
+            /* native pointer on touch/small screens */
+            body, a, button, [role="button"] { cursor: auto; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            * { animation: none !important; }
         }
     </style>
 </head>
 <body>
-    <div id="nameScreen" style="position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000;">
-        <div style="background: #333; padding: 40px; border-radius: 10px; text-align: center;">
-            <h2 style="color: white; margin-bottom: 20px;">Enter Your Name</h2>
-            <input type="text" id="playerName" placeholder="Your name..." style="padding: 10px; font-size: 16px; margin-bottom: 20px; width: 200px;">
-            <br>
-            <button id="joinGame" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">Join Game</button>
-        </div>
+    <!-- interactive shooter layer: click anywhere to fire orange sparks + impacts -->
+    <canvas class="fx" id="fx"></canvas>
+    <div class="progress" id="progress"></div>
+    <div class="fx-hint" id="fxHint">click to fire</div>
+
+    <!-- Intro overlay (terminal typewriter) -->
+    <div class="intro" id="intro">
+        <div class="term" id="term"></div>
+        <div class="term-cursor" id="termCursor"></div>
     </div>
 
-    <div id="gameContainer" style="display: none;">
-        <div id="ui">
-            <div class="ui-panel">
-                Players: <span id="playerCount" class="ui-value">0</span>
-            </div>
-            <div class="ui-panel">
-                You: <span id="yourName" class="ui-value">Player</span>
+    <!-- Header -->
+    <header class="header" id="header">
+        <div class="header-inner">
+            <a href="#" class="brand" aria-label="RSGO home">
+                <img class="brand-mark" src="models/logo.png" alt="RSGO logo" width="34" height="34">
+                <span class="logo">RSGO</span>
+            </a>
+            <nav class="nav">
+                <a href="#idea">Idea</a>
+                <a href="#game">Game</a>
+                <a href="#tech">Tech</a>
+                <a href="#where">Where</a>
+            </nav>
+            <a href="game.html" class="play-pill"><span>Play</span><svg viewBox="0 0 8 10" aria-hidden="true"><path d="M0 0 L8 5 L0 10 Z"/></svg></a>
+        </div>
+    </header>
+
+    <!-- Hero -->
+    <section class="hero">
+        <div class="wrap">
+            <h1 id="heroTitle" aria-label="RSGO">RSGO</h1>
+            <div class="hero-sub">
+                <p class="hero-tag" id="heroTag">
+                    In every shooter you have ever played, the map was the same one twice.
+                    People stopped playing it and started <b>reciting</b> it, holding the
+                    angles they already knew the answer to. In RSGO there is no fixed map.
+                    Each round the players <b>build it themselves</b>, so there is nothing
+                    to recite. Only what you and they just made.
+                </p>
+                <a href="game.html" class="hero-cta" id="heroCta"><span>Play the early access</span></a>
             </div>
         </div>
-        <div id="crosshair"></div>
-    </div>
+        <div class="marquee" id="marquee">
+            <div class="marquee-track" id="marqueeTrack"></div>
+        </div>
+    </section>
 
-    <script type="importmap">
-    {
-        "imports": {
-            "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
-            "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+    <!-- Problem / Idea -->
+    <section class="block" id="idea">
+        <div class="wrap">
+            <div class="head-row reveal">
+                <span class="eyebrow">// what we kept noticing</span>
+                <h2 class="section-title">Every shooter you love eventually stops surprising you.</h2>
+                <p class="lead">
+                    Give people the same map for long enough and they stop reacting to it.
+                    They memorise it. They know which corner hides a body before they turn it,
+                    which window someone is always watching, which line wins the duel every time.
+                    The fight becomes a recital, and the better memory wins. We did not want to
+                    build a faster recital. We wanted to take the script away.
+                </p>
+            </div>
+            <div class="rows">
+                <div class="row reveal">
+                    <div class="n">01</div>
+                    <div>
+                        <h3>The map gets memorised</h3>
+                        <p>A handful of fixed rooms, learned by heart in a weekend. After that you are not exploring a place, you are remembering one. The corner is answered before you reach it.</p>
+                    </div>
+                </div>
+                <div class="row reveal">
+                    <div class="n">02</div>
+                    <div>
+                        <h3>The angles get pre-aimed</h3>
+                        <p>Players hold the same lines round after round, crosshair already resting where a head will appear. It is not reaction anymore, it is recall. The longer study, not the sharper eye, wins.</p>
+                    </div>
+                </div>
+                <div class="row reveal">
+                    <div class="n">03</div>
+                    <div>
+                        <h3>The game stops asking anything</h3>
+                        <p>Once a map is solved it sets like stone, and a solved thing has nothing left to say to you. The surprise is gone, and quietly, so are you.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Statement -->
+    <section class="statement">
+        <p id="stmt1">You cannot memorise a map that the players <span class="faint">build from scratch.</span></p>
+    </section>
+
+    <!-- Game / features -->
+    <section class="block" id="game">
+        <div class="wrap">
+            <div class="head-row reveal">
+                <span class="eyebrow">// our answer</span>
+                <h2 class="section-title">You don't buy guns. You buy the map.</h2>
+            </div>
+            <div class="rows">
+                <div class="row reveal">
+                    <div class="n">01</div>
+                    <div>
+                        <h3>Spend on the world, not the gun</h3>
+                        <p>Every round opens with a build phase. Instead of buying weapons, you spend your money on walls, cover and structures, and you place them yourself. The economy goes into the map.</p>
+                    </div>
+                </div>
+                <div class="row reveal">
+                    <div class="n">02</div>
+                    <div>
+                        <h3>Both teams build the battlefield</h3>
+                        <p>The angles, the chokepoints, the hiding spots: none of it ships with the game. You and your opponents raise it from nothing, fresh, before every single fight.</p>
+                    </div>
+                </div>
+                <div class="row reveal">
+                    <div class="n">03</div>
+                    <div>
+                        <h3>Nothing to memorise, ever</h3>
+                        <p>A map that is built new each round cannot be learned by heart or pre-aimed. The win goes to whoever reads a brand-new space fastest, not whoever studied the old one longest.</p>
+                    </div>
+                </div>
+                <div class="row reveal">
+                    <div class="n">04</div>
+                    <div>
+                        <h3>The game you know, rebuilt</h3>
+                        <p>Teams, an economy, a buy phase, a bomb on the clock. All the rituals you already love, except the thing you spend on is the battlefield itself.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tech -->
+    <section class="block" id="tech">
+        <div class="wrap">
+            <div class="tech-solo reveal">
+                <span class="eyebrow">// the foundation</span>
+                <h2 class="section-title">Why it had to be Rust.</h2>
+                <ul class="tech-list">
+                    <li><strong>A world rebuilt every round</strong><span>Each round the players raise a new map, and the server holds it as the single source of truth. That demands exact, predictable control over memory, the kind Rust gives without a runtime fighting it.</span></li>
+                    <li><strong>A clock that never falters</strong><span>A hand feels a stutter long before a mind can name it. With no garbage collector to pause the world, the rhythm simply holds.</span></li>
+                    <li><strong>Trust kept where it matters</strong><span>The server is the one thing no one should be able to break. Rust shuts the door on whole families of exploits before the first packet arrives.</span></li>
+                    <li><strong>Small now, room to grow</strong><span>One modest machine carries many worlds at once. What it gives us freely today is simply the space we will grow into.</span></li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- Statement -->
+    <section class="statement">
+        <p id="stmt2">Nobody has built a shooter quite like this.<br>We are still <span class="faint">building it.</span></p>
+    </section>
+
+    <!-- Closing -->
+    <section class="block closing-block" id="where">
+        <div class="closing-glow" id="closingGlow"></div>
+        <div class="wrap closing">
+            <span class="closing-rule" id="closingRule"></span>
+            <span class="eyebrow">// early access</span>
+            <h2 id="closingTitle">It is early. Come<br>in while it is.</h2>
+            <p id="closingText">RSGO is in early access. The idea is new, the build-and-fight loop already works, and the whole thing is rough in the places early things are rough. If a shooter where you build the map instead of memorising it sounds like something you have been waiting for, this is the moment to walk in and help shape it.</p>
+            <div class="closing-cta">
+                <a href="game.html" class="btn solid"><span>Play the early access</span></a>
+                <a href="mailto:unterguggenberger.david@gmail.com?subject=RSGO" class="btn"><span>Say hello</span></a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="wrap">
+            <div class="footer-inner">
+                <div>
+                    <div class="footer-brand">RSGO</div>
+                    <p>A shooter where no two rounds are ever the same. Built in Rust, in early access, and still being shaped.</p>
+                </div>
+                <div class="footer-cols">
+                    <div class="footer-col">
+                        <h5>Game</h5>
+                        <a href="game.html">Step inside</a>
+                        <a href="#game">What it is</a>
+                        <a href="#tech">How it runs</a>
+                    </div>
+                    <div class="footer-col">
+                        <h5>Reach us</h5>
+                        <a href="https://github.com/JumpiiX" target="_blank" rel="noopener">GitHub</a>
+                        <a href="https://x.com/JumpiiX24" target="_blank" rel="noopener">X</a>
+                        <a href="https://www.linkedin.com/in/unterguggenberger/" target="_blank" rel="noopener">LinkedIn</a>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <span>© 2026 RSGO · compiled to never flinch.</span>
+                <span>Rust 🦀 + Three.js</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- GSAP (free) + ScrollTrigger -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.13.0/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.13.0/ScrollTrigger.min.js"></script>
+    <!-- Lenis: buttery smooth momentum scrolling (the 2026 Awwwards standard) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lenis/1.1.13/lenis.min.js"></script>
+    <script>
+        // ---- Split helpers (wrap each char / word in a span) ----
+        function splitChars(el) {
+            const text = el.textContent;
+            el.textContent = '';
+            return [...text].map(ch => {
+                const s = document.createElement('span');
+                s.className = 'char';
+                s.textContent = ch;
+                el.appendChild(s);
+                return s;
+            });
         }
-    }
+        function splitWords(el) {
+            // keep existing <span class="faint"> / <br> markup
+            const nodes = [...el.childNodes];
+            el.textContent = '';
+            const out = [];
+            nodes.forEach(node => {
+                if (node.nodeType === 3) {
+                    node.textContent.split(/(\s+)/).forEach(part => {
+                        if (part.trim() === '') { el.appendChild(document.createTextNode(part)); return; }
+                        const w = document.createElement('span');
+                        w.className = 'word';
+                        w.textContent = part;
+                        el.appendChild(w);
+                        out.push(w);
+                    });
+                } else if (node.nodeName === 'BR') {
+                    el.appendChild(node.cloneNode());
+                } else {
+                    // a <span class="faint"> wrapper, split its words too, keep the class
+                    const cls = node.className;
+                    node.textContent.split(/(\s+)/).forEach(part => {
+                        if (part.trim() === '') { el.appendChild(document.createTextNode(part)); return; }
+                        const w = document.createElement('span');
+                        w.className = 'word ' + cls;
+                        w.textContent = part;
+                        el.appendChild(w);
+                        out.push(w);
+                    });
+                }
+            });
+            return out;
+        }
+
+        // ---- Build marquee content ----
+        (function () {
+            const track = document.getElementById('marqueeTrack');
+            if (!track) return;
+            const words = ['Early access', 'Build the map, not the loadout', 'Nothing to memorise', 'Built in Rust', 'Player-built battlefields', 'Skill over study', 'Now playable'];
+            let html = '';
+            for (let i = 0; i < 3; i++) {
+                words.forEach(w => { html += `<span>${w}</span><span class="o">/</span>`; });
+            }
+            track.innerHTML = html;
+        })();
+
+        // ---- Interactive shooter: click anywhere to fire orange sparks; impacts stay ----
+        (function () {
+            const canvas = document.getElementById('fx');
+            const hint = document.getElementById('fxHint');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            let W = 0, H = 0, dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+            function resize() {
+                W = window.innerWidth; H = window.innerHeight;
+                canvas.width = W * dpr; canvas.height = H * dpr;
+                canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            }
+            resize();
+            window.addEventListener('resize', resize);
+
+            const ORANGE = '239,78,35';
+            const impacts = [];   // permanent bullet holes, stored in DOCUMENT space (pageY)
+            const sparks  = [];   // short-lived particles, in document space
+            let running = false;
+
+            const scrollY = () => window.pageYOffset || document.documentElement.scrollTop || 0;
+
+            function fire(px, py) {
+                const pageY = py + scrollY();
+                // permanent impact mark
+                impacts.push({ x: px, y: pageY, r: 3 + Math.random() * 2, a: 0.9 });
+                if (impacts.length > 240) impacts.shift(); // cap so it never gets heavy
+                // spray of sparks
+                const n = 14 + (Math.random() * 8 | 0);
+                for (let i = 0; i < n; i++) {
+                    const ang = Math.random() * Math.PI * 2;
+                    const sp = 2 + Math.random() * 7;
+                    sparks.push({
+                        x: px, y: pageY,
+                        vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+                        life: 1, decay: 0.012 + Math.random() * 0.03,
+                        size: 1 + Math.random() * 2.4,
+                    });
+                }
+                // muzzle flash ring
+                sparks.push({ x: px, y: pageY, vx: 0, vy: 0, life: 1, decay: 0.08, size: 0, flash: true });
+                if (!running) { running = true; requestAnimationFrame(loop); }
+            }
+
+            function draw() {
+                const sy = scrollY();
+                ctx.clearRect(0, 0, W, H);
+
+                // permanent impacts (only draw the ones currently on screen)
+                ctx.globalCompositeOperation = 'lighter';
+                for (const m of impacts) {
+                    const y = m.y - sy;
+                    if (y < -20 || y > H + 20) continue;
+                    ctx.beginPath();
+                    ctx.fillStyle = `rgba(${ORANGE},${0.28 * m.a})`;
+                    ctx.arc(m.x, y, m.r + 2.5, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.fillStyle = `rgba(${ORANGE},${0.85 * m.a})`;
+                    ctx.arc(m.x, y, m.r, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // live sparks
+                for (const s of sparks) {
+                    const y = s.y - sy;
+                    if (s.flash) {
+                        const rr = (1 - s.life) * 26 + 4;
+                        ctx.beginPath();
+                        ctx.strokeStyle = `rgba(${ORANGE},${s.life * 0.7})`;
+                        ctx.lineWidth = 2;
+                        ctx.arc(s.x, y, rr, 0, Math.PI * 2);
+                        ctx.stroke();
+                    } else {
+                        ctx.beginPath();
+                        ctx.fillStyle = `rgba(${ORANGE},${s.life})`;
+                        ctx.arc(s.x, y, s.size * s.life, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+                ctx.globalCompositeOperation = 'source-over';
+            }
+
+            function loop() {
+                // update sparks
+                for (let i = sparks.length - 1; i >= 0; i--) {
+                    const s = sparks[i];
+                    if (!s.flash) {
+                        s.x += s.vx; s.y += s.vy;
+                        s.vy += 0.18;        // gravity
+                        s.vx *= 0.96; s.vy *= 0.96;
+                    }
+                    s.life -= s.decay;
+                    if (s.life <= 0) sparks.splice(i, 1);
+                }
+                draw();
+                if (sparks.length > 0) {
+                    requestAnimationFrame(loop);
+                } else {
+                    running = false;
+                    draw(); // final draw so impacts stay rendered
+                }
+            }
+
+            // Redraw impacts as the page scrolls (so they stick to the document).
+            let ticking = false;
+            window.addEventListener('scroll', () => {
+                if (!running && !ticking) {
+                    ticking = true;
+                    requestAnimationFrame(() => { draw(); ticking = false; });
+                }
+            }, { passive: true });
+
+            // Fire on click anywhere, but ignore real UI clicks (links/buttons).
+            window.addEventListener('pointerdown', (e) => {
+                if (e.target.closest('a, button')) return;
+                fire(e.clientX, e.clientY);
+                hint && hint.classList.remove('show');
+            });
+
+            // show the hint briefly after the intro, then let it fade on first shot
+            window.addEventListener('load', () => {
+                setTimeout(() => hint && hint.classList.add('show'), 4200);
+                setTimeout(() => hint && hint.classList.remove('show'), 9000);
+            });
+        })();
+
+        window.addEventListener('load', () => {
+            const hasGSAP = window.gsap && window.ScrollTrigger;
+            if (!hasGSAP) {
+                document.getElementById('intro').style.display = 'none';
+                document.getElementById('header').style.opacity = 1;
+                return;
+            }
+            gsap.registerPlugin(ScrollTrigger);
+
+            // ---------- LENIS: smooth momentum scroll, synced to GSAP ----------
+            let lenis = null;
+            if (window.Lenis && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                lenis = new Lenis({
+                    duration: 1.1,
+                    easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+                    smoothWheel: true,
+                });
+                // Drive Lenis from GSAP's ticker so scroll + animations stay in sync.
+                lenis.on('scroll', ScrollTrigger.update);
+                gsap.ticker.add((time) => lenis.raf(time * 1000));
+                gsap.ticker.lagSmoothing(0);
+            }
+            // Make the in-page nav links scroll smoothly through Lenis.
+            document.querySelectorAll('a[href^="#"]').forEach((a) => {
+                a.addEventListener('click', (e) => {
+                    const id = a.getAttribute('href');
+                    if (id.length > 1) {
+                        const t = document.querySelector(id);
+                        if (t) { e.preventDefault(); lenis ? lenis.scrollTo(t, { offset: -10 }) : t.scrollIntoView({ behavior: 'smooth' }); }
+                    }
+                });
+            });
+
+            const heroChars = splitChars(document.getElementById('heroTitle'));
+            const stmt1Words = splitWords(document.getElementById('stmt1'));
+            const stmt2Words = splitWords(document.getElementById('stmt2'));
+
+            // ---------- INTRO (terminal typewriter, cinematic) ----------
+            const intro  = document.getElementById('intro');
+            const term   = document.getElementById('term');
+            const caret  = document.getElementById('termCursor');
+
+            // hero starts hidden; revealed after the terminal clears
+            gsap.set(heroChars, { yPercent: 115 });
+            gsap.set(['#heroTag', '#heroCta', '#marquee'], { opacity: 0, y: 24 });
+
+            // The lines that type out. cls controls dim/bright; pause adds a beat after.
+            const SCRIPT = [
+                { text: '> rsgo --new-round',              cls: 'bright', pause: 0.45 },
+                { text: '  no map loaded',                 cls: 'dim',    pause: 0.4 },
+                { text: '  the players build it',          cls: 'dim',    pause: 0.4 },
+                { text: '  nothing to memorise',           cls: 'dim',    pause: 0.55 },
+                { text: '> early access // build 0.1',     cls: 'bright', pause: 0.5 },
+                { text: '> step in.',                      cls: 'bright', pause: 0.9 },
+            ];
+
+            const CPS = 26;            // characters per second (typing speed)
+            const intro_tl = gsap.timeline();
+
+            // Build each line's typing as a sub-tween that also drives the caret.
+            let lineEls = [];
+            SCRIPT.forEach((line, i) => {
+                const el = document.createElement('span');
+                el.className = 'ln ' + line.cls;
+                term.appendChild(el);
+                lineEls.push(el);
+
+                const state = { n: 0 };
+                const dur = line.text.length / CPS;
+
+                intro_tl.to(state, {
+                    n: line.text.length,
+                    duration: dur,
+                    ease: 'none',
+                    onStart: () => { caret.classList.remove('on'); },
+                    onUpdate: () => {
+                        const cut = Math.round(state.n);
+                        el.textContent = line.text.slice(0, cut);
+                        // park the caret right after the last typed glyph
+                        const r = el.getBoundingClientRect();
+                        gsap.set(caret, { x: r.right + 2, y: r.top + r.height * 0.12, opacity: 1 });
+                    },
+                    onComplete: () => {
+                        el.textContent = line.text;
+                        const r = el.getBoundingClientRect();
+                        gsap.set(caret, { x: r.right + 2, y: r.top + r.height * 0.12 });
+                        caret.classList.add('on');   // blink during the pause
+                    },
+                });
+                if (line.pause) intro_tl.to({}, { duration: line.pause });
+            });
+
+            // After "ready." → fade the terminal out, lift the overlay, reveal page.
+            intro_tl
+              .to(caret, { opacity: 0, duration: 0.2 })
+              .to(term, { opacity: 0, duration: 0.5, ease: 'power2.out' }, '-=0.1')
+              .to(intro, { opacity: 0, duration: 0.7, ease: 'power2.inOut' }, '-=0.2')
+              .set(intro, { display: 'none' })
+              // header in
+              .to('#header', { opacity: 1, duration: 0.6 }, '-=0.4')
+              // hero title masks up char by char
+              .to(heroChars, { yPercent: 0, duration: 1.1, ease: 'expo.out', stagger: 0.045 }, '-=0.45')
+              .to('#heroTag',   { opacity: 1, y: 0, duration: 0.9, ease: 'power3.out' }, '-=0.7')
+              .to('#heroCta',   { opacity: 1, y: 0, duration: 0.7, ease: 'power3.out' }, '-=0.6')
+              .to('#marquee',   { opacity: 1, y: 0, duration: 0.8 }, '-=0.5');
+
+            // let users skip the intro
+            const skipIntro = () => { if (intro_tl.progress() < 0.85) intro_tl.progress(0.85); };
+            intro.addEventListener('click', skipIntro);
+            window.addEventListener('keydown', skipIntro, { once: true });
+
+            // ---------- HERO title parallax on scroll ----------
+            // Drift the WHOLE title (not the chars, which the intro owns) so it
+            // returns cleanly on scroll-up. No fade, no per-char stagger.
+            gsap.fromTo('#heroTitle',
+                { y: 0 },
+                {
+                    y: -90, ease: 'none',
+                    scrollTrigger: { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: 0.6 },
+                });
+
+            // ---------- MARQUEE infinite scroll, scrub-reactive ----------
+            const track = document.getElementById('marqueeTrack');
+            // Slow, calm drift. Higher duration = slower.
+            const loop = gsap.to(track, { xPercent: -33.33, duration: 42, ease: 'none', repeat: -1 });
+            // Gentle speed-up / direction nudge with scroll velocity (capped low).
+            ScrollTrigger.create({
+                onUpdate: (self) => {
+                    const v = self.getVelocity();
+                    gsap.to(loop, { timeScale: 1 + Math.min(Math.abs(v) / 900, 2), duration: 0.4, overwrite: true });
+                    loop.timeScale(v < 0 ? -Math.abs(loop.timeScale()) : Math.abs(loop.timeScale()));
+                },
+            });
+
+            // ---------- Generic reveals (CLIP-PATH wipe instead of plain fade) ----------
+            gsap.utils.toArray('.reveal').forEach((el) => {
+                gsap.fromTo(el,
+                    { clipPath: 'inset(0 0 100% 0)', y: 30, opacity: 0.4 },
+                    { clipPath: 'inset(0 0 0% 0)', y: 0, opacity: 1, duration: 1.1, ease: 'power3.out',
+                      scrollTrigger: { trigger: el, start: 'top 86%' } });
+            });
+
+            // Numbered rows wipe in from the left with a clip reveal + stagger
+            gsap.utils.toArray('.rows').forEach((rows) => {
+                gsap.fromTo(rows.querySelectorAll('.row'),
+                    { clipPath: 'inset(0 100% 0 0)', x: -20 },
+                    { clipPath: 'inset(0 0% 0 0)', x: 0, duration: 0.9, ease: 'power3.out', stagger: 0.12,
+                      scrollTrigger: { trigger: rows, start: 'top 82%' } });
+            });
+
+            // ---------- Statement: clean word-by-word fade-up (no rotation/scale) ----------
+            [ {words: stmt1Words, trig: '#stmt1'}, {words: stmt2Words, trig: '#stmt2'} ].forEach(({words, trig}) => {
+                gsap.fromTo(words,
+                    { opacity: 0.12, yPercent: 40 },
+                    { opacity: 1, yPercent: 0, stagger: 0.35, ease: 'power2.out',
+                      scrollTrigger: { trigger: trig, start: 'top 82%', end: 'center 58%', scrub: 0.8 } });
+            });
+
+            // ---------- Tech list slide in ----------
+            gsap.from('.tech-list li', {
+                x: -40, opacity: 0, duration: 0.7, ease: 'power3.out', stagger: 0.12,
+                scrollTrigger: { trigger: '.tech-list', start: 'top 80%' },
+            });
+
+            // Section titles wipe up (closing h2 handled separately below)
+            gsap.utils.toArray('.section-title').forEach((el) => {
+                gsap.from(el, {
+                    yPercent: 24, opacity: 0, duration: 1, ease: 'power4.out',
+                    scrollTrigger: { trigger: el, start: 'top 88%' },
+                });
+            });
+
+            // Footer columns rise (brand handled separately in (o))
+            gsap.from('.footer-col', {
+                y: 28, opacity: 0, duration: 0.7, ease: 'power3.out', stagger: 0.1,
+                scrollTrigger: { trigger: '.footer', start: 'top 90%' },
+            });
+
+            // ---------- LIGHT SCROLL EFFECTS (transform/opacity only, smooth) ----------
+
+            // (a) Scroll-progress bar. Cheap: a single scaleX driven by scroll.
+            gsap.to('#progress', {
+                scaleX: 1, ease: 'none', force3D: true,
+                scrollTrigger: { trigger: document.body, start: 'top top', end: 'bottom bottom', scrub: 0.4 },
+            });
+
+            //  (Statements are handled by the word-by-word reveal above. Pinning was
+            //   removed entirely, that was the main cause of the "stick and flip".)
+
+            // (b) Row numbers: a small parallax drift. Transform-only, light.
+            gsap.utils.toArray('.row .n').forEach((n) => {
+                gsap.fromTo(n, { yPercent: 40 }, {
+                    yPercent: -40, ease: 'none', force3D: true,
+                    scrollTrigger: { trigger: n.closest('.row'), start: 'top bottom', end: 'bottom top', scrub: 1 },
+                });
+            });
+
+            // (d) Each row's bottom divider draws in once on enter (fires once, not per frame).
+            gsap.utils.toArray('.row').forEach((row) => {
+                const line = document.createElement('span');
+                line.style.cssText = 'position:absolute;left:0;bottom:-1px;height:1px;width:100%;background:var(--orange);transform:scaleX(0);transform-origin:left;opacity:0.6;will-change:transform;';
+                row.style.position = 'relative';
+                row.appendChild(line);
+                gsap.to(line, {
+                    scaleX: 1, duration: 0.9, ease: 'power3.out', force3D: true,
+                    scrollTrigger: { trigger: row, start: 'top 84%' },
+                });
+            });
+
+            // (f) Hero CTA magnetic pull (pointer-driven, not scroll, no scroll cost).
+            const cta = document.getElementById('heroCta');
+            if (cta && window.matchMedia('(pointer:fine)').matches) {
+                const qx = gsap.quickTo(cta, 'x', { duration: 0.4, ease: 'power3' });
+                const qy = gsap.quickTo(cta, 'y', { duration: 0.4, ease: 'power3' });
+                cta.addEventListener('mousemove', (e) => {
+                    const r = cta.getBoundingClientRect();
+                    qx((e.clientX - (r.left + r.width/2)) * 0.3);
+                    qy((e.clientY - (r.top + r.height/2)) * 0.3);
+                });
+                cta.addEventListener('mouseleave', () => { qx(0); qy(0); });
+            }
+
+            // ========== CLOSING: finale reveals (all fire ONCE, transform/opacity) ==========
+
+            // (g) Glow backdrop fades + scales in once. (Removed the forever-yoyo that
+            //     kept repainting a huge radial gradient every frame.)
+            gsap.fromTo('#closingGlow',
+                { opacity: 0, scale: 0.7 },
+                { opacity: 1, scale: 1, duration: 1.6, ease: 'power2.out', force3D: true,
+                  scrollTrigger: { trigger: '#where', start: 'top 75%' } });
+
+            // (h) Thin rule draws out from the center, once.
+            gsap.to('#closingRule', {
+                scaleX: 1, duration: 1, ease: 'power3.inOut', force3D: true,
+                scrollTrigger: { trigger: '#where', start: 'top 72%' },
+            });
+
+            // (i) Closing heading: word-by-word mask reveal (transform-only, fires once).
+            (function () {
+                const h2 = document.getElementById('closingTitle');
+                if (!h2) return;
+                const parts = h2.innerHTML.split(/(<br\s*\/?>)/i);
+                h2.innerHTML = parts.map(p => {
+                    if (/<br/i.test(p)) return p;
+                    return p.split(/\s+/).filter(Boolean).map(w =>
+                        `<span class="mw"><span>${w}</span></span>`).join(' ');
+                }).join('');
+                gsap.from(h2.querySelectorAll('.mw > span'), {
+                    yPercent: 120, duration: 1, ease: 'expo.out', stagger: 0.08, force3D: true,
+                    scrollTrigger: { trigger: h2, start: 'top 84%' },
+                });
+            })();
+
+            // (j) Closing paragraph: simple fade-up (cheaper than the clip-path wipe).
+            gsap.from('#closingText', {
+                opacity: 0, y: 24, duration: 1, ease: 'power3.out', force3D: true,
+                scrollTrigger: { trigger: '#closingText', start: 'top 82%' },
+            });
+
+            // (k) CTA buttons pop in with an elastic settle, once.
+            gsap.from('.closing-cta .btn', {
+                scale: 0.6, opacity: 0, y: 20, duration: 0.9, ease: 'back.out(2.2)', stagger: 0.14, force3D: true,
+                scrollTrigger: { trigger: '.closing-cta', start: 'top 88%' },
+            });
+
+            // (l) Footer brand fades up, once. (Dropped the animated letter-spacing,
+            //     it triggers layout on every frame and was a jank source.)
+            gsap.from('.footer-brand', {
+                opacity: 0, y: 22, duration: 1, ease: 'power3.out', force3D: true,
+                scrollTrigger: { trigger: '.footer', start: 'top 92%' },
+            });
+
+            // Smooth out ScrollTrigger refresh on resize (debounced by the lib).
+            ScrollTrigger.config({ ignoreMobileResize: true });
+            window.addEventListener('load', () => ScrollTrigger.refresh());
+        });
     </script>
-    
-    <!-- Make THREE global for compatibility -->
-    <script type="module">
-        import * as THREE from 'three';
-        window.THREE = THREE;
-    </script>
-    
-    <script type="module" src="src/main.js"></script>
 </body>
 </html>

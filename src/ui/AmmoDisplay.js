@@ -8,152 +8,168 @@ export class AmmoDisplay {
     }
 
     createAmmoUI() {
+        if (!document.getElementById('ammoStyles')) {
+            const style = document.createElement('style');
+            style.id = 'ammoStyles';
+            style.textContent = `
+                @keyframes ammoPulse {
+                    0%, 100% { opacity: 1; }
+                    50% { opacity: 0.45; }
+                }
+                @keyframes ammoKeyGlow {
+                    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 78, 35, 0); }
+                    50% { box-shadow: 0 0 0 4px rgba(239, 78, 35, 0.3); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
         this.ammoContainer = document.createElement('div');
         this.ammoContainer.id = 'ammoContainer';
         this.ammoContainer.style.cssText = `
             position: fixed;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 300px;
-            height: 120px;
+            bottom: 20px;
+            right: 20px;
+            padding: 14px 18px;
+            background: rgba(26, 36, 71, 0.88);
+            border: 1px solid rgba(239, 78, 35, 0.18);
+            border-radius: 12px;
+            color: rgba(239, 78, 35, 0.9);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            backdrop-filter: blur(10px);
             z-index: 100;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
+            min-width: 160px;
+            user-select: none;
         `;
 
-        // Bullet display
-        this.bulletsContainer = document.createElement('div');
-        this.bulletsContainer.id = 'bulletsContainer';
-        this.bulletsContainer.style.cssText = `
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            justify-content: center;
-            flex-wrap: wrap;
-        `;
+        this.ammoContainer.innerHTML = `
+            <div style="
+                font-size: 10px;
+                letter-spacing: 2px;
+                text-transform: uppercase;
+                color: rgba(239, 78, 35, 0.55);
+                margin-bottom: 6px;
+            ">Ammo</div>
 
-        // Ammo count text
-        this.ammoText = document.createElement('div');
-        this.ammoText.id = 'ammoText';
-        this.ammoText.style.cssText = `
-            color: white;
-            font-size: 24px;
-            font-weight: bold;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
-            text-align: center;
-        `;
+            <div id="ammoPips" style="
+                display: flex;
+                gap: 4px;
+                margin-bottom: 10px;
+                align-items: center;
+            "></div>
 
-        // Reload hint (shows when ammo < max)
-        this.reloadHint = document.createElement('div');
-        this.reloadHint.id = 'reloadHint';
-        this.reloadHint.style.cssText = `
-            color: #ffaa00;
-            font-size: 16px;
-            font-weight: bold;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
-            text-align: center;
-            display: none;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 5px 10px;
-            border-radius: 5px;
-            border: 1px solid #ffaa00;
-            animation: pulse 2s infinite;
-        `;
+            <div style="display: flex; align-items: baseline; gap: 6px;">
+                <div id="ammoCurrent" style="
+                    font-size: 32px;
+                    font-weight: 600;
+                    line-height: 1;
+                    color: #fff;
+                    font-variant-numeric: tabular-nums;
+                ">10</div>
+                <div style="
+                    font-size: 14px;
+                    color: rgba(239, 78, 35, 0.4);
+                    font-variant-numeric: tabular-nums;
+                ">/ <span id="ammoMax">10</span></div>
+            </div>
 
-        // Reload progress bar
-        this.reloadContainer = document.createElement('div');
-        this.reloadContainer.id = 'reloadContainer';
-        this.reloadContainer.style.cssText = `
-            width: 200px;
-            height: 8px;
-            background: rgba(0, 0, 0, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 4px;
-            overflow: hidden;
-            display: none;
-        `;
+            <div id="ammoReloadHint" style="
+                display: none;
+                margin-top: 10px;
+                padding-top: 10px;
+                border-top: 1px solid rgba(239, 78, 35, 0.12);
+                font-size: 11px;
+                color: rgba(239, 78, 35, 0.55);
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            ">
+                <span>Reload</span>
+                <span id="ammoReloadKey" style="
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    min-width: 20px;
+                    height: 20px;
+                    padding: 0 6px;
+                    background: rgba(239, 78, 35, 0.15);
+                    border: 1px solid rgba(239, 78, 35, 0.5);
+                    border-radius: 4px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    color: #ef4e23;
+                ">R</span>
+            </div>
 
-        this.reloadBar = document.createElement('div');
-        this.reloadBar.id = 'reloadBar';
-        this.reloadBar.style.cssText = `
-            height: 100%;
-            width: 0%;
-            background: linear-gradient(90deg, #ff6600, #ffaa00);
-            transition: width 0.1s ease;
-            border-radius: 3px;
+            <div id="ammoReloadingLabel" style="
+                display: none;
+                margin-top: 10px;
+                padding-top: 10px;
+                border-top: 1px solid rgba(239, 78, 35, 0.12);
+                font-size: 11px;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+                color: #ef4e23;
+                font-weight: 600;
+            ">Reloading</div>
         `;
-
-        this.reloadText = document.createElement('div');
-        this.reloadText.id = 'reloadText';
-        this.reloadText.style.cssText = `
-            color: #ffaa00;
-            font-size: 16px;
-            font-weight: bold;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
-            text-align: center;
-            display: none;
-            margin-top: 5px;
-        `;
-
-        this.reloadContainer.appendChild(this.reloadBar);
-        
-        this.ammoContainer.appendChild(this.bulletsContainer);
-        this.ammoContainer.appendChild(this.ammoText);
-        this.ammoContainer.appendChild(this.reloadHint);
-        this.ammoContainer.appendChild(this.reloadContainer);
-        this.ammoContainer.appendChild(this.reloadText);
 
         document.body.appendChild(this.ammoContainer);
 
+        this.pipsContainer = document.getElementById('ammoPips');
+        this.currentEl = document.getElementById('ammoCurrent');
+        this.maxEl = document.getElementById('ammoMax');
+        this.reloadHintEl = document.getElementById('ammoReloadHint');
+        this.reloadingLabelEl = document.getElementById('ammoReloadingLabel');
+        this.reloadKeyEl = document.getElementById('ammoReloadKey');
+
+        this.renderPips();
         this.updateDisplay();
     }
 
-    createBullets() {
-        this.bulletsContainer.innerHTML = '';
-
+    renderPips() {
+        if (!this.pipsContainer) return;
+        this.pipsContainer.innerHTML = '';
         for (let i = 0; i < this.maxAmmo; i++) {
-            const bullet = document.createElement('div');
-            bullet.className = 'bullet';
-            
-            const isEmpty = i >= this.currentAmmo;
-            
-            bullet.style.cssText = `
-                width: 12px;
-                height: 20px;
-                background: ${isEmpty ? 'rgba(100, 100, 100, 0.5)' : 'linear-gradient(180deg, #ffcc00, #ff9900)'};
-                border: 1px solid ${isEmpty ? 'rgba(150, 150, 150, 0.3)' : '#cc6600'};
-                border-radius: 6px 6px 2px 2px;
-                position: relative;
-                transition: all 0.3s ease;
-                transform: ${isEmpty ? 'scale(0.8)' : 'scale(1)'};
-                opacity: ${isEmpty ? '0.4' : '1'};
-                box-shadow: ${isEmpty ? 'none' : '0 2px 4px rgba(255, 153, 0, 0.4)'};
-            `;
-
-            // Add bullet tip
-            const tip = document.createElement('div');
-            tip.style.cssText = `
-                position: absolute;
-                top: -3px;
-                left: 50%;
-                transform: translateX(-50%);
+            const pip = document.createElement('div');
+            pip.dataset.index = String(i);
+            pip.style.cssText = `
                 width: 6px;
-                height: 6px;
-                background: ${isEmpty ? 'rgba(80, 80, 80, 0.5)' : '#cc6600'};
-                border-radius: 50%;
+                height: 14px;
+                border-radius: 2px;
+                background: rgba(239, 78, 35, 0.15);
+                transition: background 0.2s ease, transform 0.15s ease, opacity 0.2s ease;
             `;
-            bullet.appendChild(tip);
+            this.pipsContainer.appendChild(pip);
+        }
+    }
 
-            this.bulletsContainer.appendChild(bullet);
+    setPipState(index, state) {
+        if (!this.pipsContainer) return;
+        const pip = this.pipsContainer.children[index];
+        if (!pip) return;
+        if (state === 'loaded') {
+            pip.style.background = '#ef4e23';
+            pip.style.opacity = '1';
+            pip.style.transform = 'scaleY(1)';
+        } else if (state === 'empty') {
+            pip.style.background = 'rgba(239, 78, 35, 0.15)';
+            pip.style.opacity = '0.7';
+            pip.style.transform = 'scaleY(0.7)';
+        } else if (state === 'filling') {
+            pip.style.background = 'rgba(239, 78, 35, 0.55)';
+            pip.style.opacity = '1';
+            pip.style.transform = 'scaleY(0.9)';
         }
     }
 
     updateAmmo(current, max) {
+        const sizeChanged = max !== this.maxAmmo;
         this.currentAmmo = current;
         this.maxAmmo = max;
+        if (sizeChanged) {
+            this.renderPips();
+        }
         this.updateDisplay();
     }
 
@@ -164,140 +180,72 @@ export class AmmoDisplay {
     }
 
     updateDisplay() {
-        // Update bullets visual
-        this.createBullets();
+        if (!this.currentEl) return;
 
-        // Update ammo text
-        this.ammoText.textContent = `${this.currentAmmo} / ${this.maxAmmo}`;
-        
-        // Color based on ammo level
+        this.currentEl.textContent = this.currentAmmo;
+        if (this.maxEl) this.maxEl.textContent = this.maxAmmo;
+
         if (this.currentAmmo === 0) {
-            this.ammoText.style.color = '#ff4444';
-            this.ammoText.style.animation = 'pulse 1s infinite';
-        } else if (this.currentAmmo <= 3) {
-            this.ammoText.style.color = '#ffaa44';
-            this.ammoText.style.animation = 'none';
+            this.currentEl.style.color = '#ef4e23';
+            this.currentEl.style.animation = 'ammoPulse 0.9s infinite';
+        } else if (this.currentAmmo <= Math.ceil(this.maxAmmo * 0.3)) {
+            this.currentEl.style.color = '#ef4e23';
+            this.currentEl.style.animation = 'none';
         } else {
-            this.ammoText.style.color = '#ffffff';
-            this.ammoText.style.animation = 'none';
+            this.currentEl.style.color = '#ef4e23';
+            this.currentEl.style.animation = 'none';
         }
 
-        // Update reload hint (show when ammo < max and not reloading)
-        if (this.currentAmmo < this.maxAmmo && !this.isReloading) {
-            this.reloadHint.style.display = 'block';
-            this.reloadHint.textContent = 'Press R to reload';
-        } else {
-            this.reloadHint.style.display = 'none';
-        }
-
-        // Update reload display
         if (this.isReloading) {
-            this.reloadContainer.style.display = 'block';
-            this.reloadText.style.display = 'block';
-            this.reloadBar.style.width = `${this.reloadProgress * 100}%`;
-            this.reloadText.textContent = `RELOADING... ${Math.ceil((1 - this.reloadProgress) * 3)}s`;
-            
-            // Animate R key
-            this.animateReloadKey();
+            const filledCount = Math.floor(this.reloadProgress * this.maxAmmo);
+            for (let i = 0; i < this.maxAmmo; i++) {
+                if (i < filledCount) this.setPipState(i, 'loaded');
+                else if (i === filledCount) this.setPipState(i, 'filling');
+                else this.setPipState(i, 'empty');
+            }
+            this.currentEl.style.opacity = '0.5';
+            this.reloadHintEl.style.display = 'none';
+            this.reloadingLabelEl.style.display = 'block';
         } else {
-            this.reloadContainer.style.display = 'none';
-            this.reloadText.style.display = 'none';
-        }
-
-        // Add CSS animations if not already present
-        if (!document.getElementById('ammoStyles')) {
-            const style = document.createElement('style');
-            style.id = 'ammoStyles';
-            style.textContent = `
-                @keyframes pulse {
-                    0% { opacity: 1; }
-                    50% { opacity: 0.5; }
-                    100% { opacity: 1; }
+            for (let i = 0; i < this.maxAmmo; i++) {
+                this.setPipState(i, i < this.currentAmmo ? 'loaded' : 'empty');
+            }
+            this.currentEl.style.opacity = '1';
+            this.reloadingLabelEl.style.display = 'none';
+            if (this.currentAmmo < this.maxAmmo) {
+                this.reloadHintEl.style.display = 'flex';
+                if (this.currentAmmo <= Math.ceil(this.maxAmmo * 0.3) || this.currentAmmo === 0) {
+                    this.reloadKeyEl.style.animation = 'ammoKeyGlow 1s infinite';
+                } else {
+                    this.reloadKeyEl.style.animation = 'none';
                 }
-                
-                @keyframes reloadKeyBounce {
-                    0% { transform: scale(1); }
-                    50% { transform: scale(1.2); }
-                    100% { transform: scale(1); }
-                }
-                
-                .reload-key-hint {
-                    animation: reloadKeyBounce 0.6s ease-in-out;
-                }
-            `;
-            document.head.appendChild(style);
+            } else {
+                this.reloadHintEl.style.display = 'none';
+            }
         }
     }
 
     animateReloadKey() {
-        // Show R key hint during reload
-        if (!this.reloadKeyHint) {
-            this.reloadKeyHint = document.createElement('div');
-            this.reloadKeyHint.style.cssText = `
-                position: absolute;
-                bottom: -40px;
-                left: 50%;
-                transform: translateX(-50%);
-                background: rgba(0, 0, 0, 0.8);
-                color: #ffaa00;
-                padding: 5px 10px;
-                border-radius: 5px;
-                font-size: 14px;
-                font-weight: bold;
-                border: 1px solid #ffaa00;
-            `;
-            this.ammoContainer.appendChild(this.reloadKeyHint);
-        }
-        
-        this.reloadKeyHint.textContent = 'R';
-        this.reloadKeyHint.className = 'reload-key-hint';
-        this.reloadKeyHint.style.display = 'block';
-        
-        // Hide hint when reload finishes
-        if (!this.isReloading && this.reloadKeyHint) {
-            this.reloadKeyHint.style.display = 'none';
-        }
     }
 
     showLowAmmoWarning() {
-        if (this.currentAmmo <= 3 && this.currentAmmo > 0) {
-            // Flash R key hint
-            if (!this.lowAmmoHint) {
-                this.lowAmmoHint = document.createElement('div');
-                this.lowAmmoHint.style.cssText = `
-                    position: fixed;
-                    bottom: 200px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    background: rgba(255, 100, 100, 0.9);
-                    color: white;
-                    padding: 10px 15px;
-                    border-radius: 5px;
-                    font-size: 14px;
-                    font-weight: bold;
-                    z-index: 200;
-                    animation: pulse 1s infinite;
-                `;
-                document.body.appendChild(this.lowAmmoHint);
-            }
-            
-            this.lowAmmoHint.textContent = `LOW AMMO! Press R to reload (${this.currentAmmo} left)`;
-            this.lowAmmoHint.style.display = 'block';
-            
-            // Hide after 3 seconds
-            setTimeout(() => {
-                if (this.lowAmmoHint) {
-                    this.lowAmmoHint.style.display = 'none';
-                }
-            }, 3000);
+        if (this.reloadKeyEl) {
+            this.reloadKeyEl.animate(
+                [
+                    { transform: 'scale(1)' },
+                    { transform: 'scale(1.25)' },
+                    { transform: 'scale(1)' },
+                ],
+                { duration: 350, iterations: 2 }
+            );
         }
     }
-    
+
     hide() {
-        this.ammoContainer.style.display = 'none';
+        if (this.ammoContainer) this.ammoContainer.style.display = 'none';
     }
-    
+
     show() {
-        this.ammoContainer.style.display = 'flex';
+        if (this.ammoContainer) this.ammoContainer.style.display = 'block';
     }
 }

@@ -4,7 +4,8 @@ export class InputManager {
             forward: false,
             backward: false,
             left: false,
-            right: false
+            right: false,
+            jump: false
         };
         this.moveSpeed = 30;
         this.lookSpeed = 0.002;
@@ -20,6 +21,16 @@ export class InputManager {
         this.onMoveCallback = null;
         this.onScoreboardCallback = null;
         this.onReloadCallback = null;
+        this.onBuildModeCallback = null;
+        this.onBombToggleCallback = null;
+        this.onBombPlantStartCallback = null;
+        this.onBombPlantStopCallback = null;
+        
+        // Physics state for Y movement and jumping
+        this.velocity = new THREE.Vector3(0, 0, 0);
+        this.onGround = false;
+        this.gravity = -50;
+        this.jumpSpeed = 20;
     }
 
     setCollisionSystem(collisionSystem) {
@@ -62,6 +73,37 @@ export class InputManager {
                     this.onReloadCallback();
                 }
                 break;
+            case 'KeyB':
+                if (this.onBuildModeCallback) {
+                    this.onBuildModeCallback();
+                }
+                break;
+            case 'KeyT':
+                if (this.onBombToggleCallback) {
+                    this.onBombToggleCallback();
+                }
+                break;
+            case 'KeyG':
+                if (this.onBombDropCallback) {
+                    this.onBombDropCallback();
+                }
+                break;
+            case 'KeyE':
+                // Ignore OS auto-repeat while the key is held.
+                if (!this._eKeyDown) {
+                    this._eKeyDown = true;
+                    if (this.onBombPickupCallback) {
+                        this.onBombPickupCallback();
+                    }
+                    if (this.onDefuseStartCallback) {
+                        this.onDefuseStartCallback();
+                    }
+                }
+                break;
+            case 'Space':
+                event.preventDefault();
+                this.controls.jump = true;
+                break;
             }
         });
 
@@ -84,6 +126,16 @@ export class InputManager {
                 if (this.onScoreboardCallback) {
                     this.onScoreboardCallback(false);
                 }
+                break;
+            case 'KeyE':
+                this._eKeyDown = false;
+                if (this.onDefuseStopCallback) {
+                    this.onDefuseStopCallback();
+                }
+                break;
+            case 'Space':
+                event.preventDefault();
+                this.controls.jump = false;
                 break;
             }
         });
@@ -111,16 +163,41 @@ export class InputManager {
             }
         });
 
-        document.addEventListener('click', () => {
+        // Handle mousedown for shooting or bomb planting
+        document.addEventListener('mousedown', (event) => {
+            if (event.button !== 0) return; // Only left click
+            
+            // DON'T do anything if we're in build mode
+            if (window.game && window.game.isBuildMode) {
+                return;
+            }
+            
             if (this.isPointerLocked) {
-                if (this.onShootCallback) {
-                    this.onShootCallback();
+                // Check if bomb is equipped for planting
+                if (window.game && window.game.bombSystem && window.game.bombSystem.isEquipped) {
+                    if (this.onBombPlantStartCallback) {
+                        this.onBombPlantStartCallback();
+                    }
+                } else {
+                    // Normal shooting
+                    if (this.onShootCallback) {
+                        this.onShootCallback();
+                    }
                 }
             } else {
                 const canvas = document.querySelector('#gameContainer canvas');
                 if (canvas) {
                     canvas.requestPointerLock();
                 }
+            }
+        });
+        
+        // Handle mouseup to stop bomb planting
+        document.addEventListener('mouseup', (event) => {
+            if (event.button !== 0) return; // Only left click
+            
+            if (this.isPointerLocked && this.onBombPlantStopCallback) {
+                this.onBombPlantStopCallback();
             }
         });
 
@@ -151,21 +228,26 @@ export class InputManager {
         if (!this.isPointerLocked) {
             return;
         }
-
         
-        const moveVector = new THREE.Vector3();
+        // Block movement during build phase in team mode
+        if (window.game && window.game.gameMode === 'team' && window.game.isInBuildPhase) {
+            return; // No movement during build phase
+        }
 
+        const currentPos = camera.getPosition().clone();
+        
+        // Handle horizontal movement (WASD) - keep it simple for now
+        const moveVector = new THREE.Vector3();
         
         const forward = new THREE.Vector3();
         camera.getCamera().getWorldDirection(forward);
-        forward.y = 0; 
+        forward.y = 0; // Keep horizontal movement flat
         forward.normalize();
 
         const right = new THREE.Vector3();
         right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
         right.normalize();
 
-        
         let isMoving = false;
         if (this.controls.forward) {
             moveVector.addScaledVector(forward, this.moveSpeed * deltaTime);
@@ -184,28 +266,52 @@ export class InputManager {
             isMoving = true;
         }
 
+        // Handle jumping
+        if (this.controls.jump && this.onGround) {
+            this.velocity.y = this.jumpSpeed;
+            this.onGround = false;
+        }
         
-        const currentPos = camera.getPosition().clone(); 
+        // Apply gravity
+        this.velocity.y += this.gravity * deltaTime;
+        
+        // Calculate new position with jumping/gravity
         const desiredPos = currentPos.clone().add(moveVector);
-
+        desiredPos.y += this.velocity.y * deltaTime;
         
-        const finalPos = this.collisionSystem ?
-            this.collisionSystem.getValidPosition(currentPos, desiredPos, 1.5) :
-            desiredPos;
-
+        // Simple ground collision (keep above ground level)
+        const groundLevel = 10;
+        if (desiredPos.y <= groundLevel) {
+            desiredPos.y = groundLevel;
+            this.velocity.y = 0;
+            this.onGround = true;
+        }
         
-        const actualMovement = finalPos.clone().sub(currentPos);
-
+        // CHECK COLLISION before updating position!
+        const validPos = this.findValidPosition(currentPos, desiredPos);
         
-        camera.getCamera().position.copy(finalPos);
+        // Update position to the valid (collision-checked) position
+        camera.getCamera().position.copy(validPos);
 
-        
-        if (actualMovement.length() > 0.01) {
+        const actualMovement = desiredPos.clone().sub(currentPos);
+        const lastYaw = this._lastSentYaw || 0;
+        const lastPitch = this._lastSentPitch || 0;
+        const rotationDelta = Math.abs(this.yaw - lastYaw) + Math.abs(this.pitch - lastPitch);
+        const positionChanged = actualMovement.length() > 0.01;
+        const rotationChanged = rotationDelta > 0.01;
+        const now = performance.now();
+        const lastSent = this._lastSendTime || 0;
+        const rotationTimeOK = now - lastSent > 50;
+
+        if (positionChanged || (rotationChanged && rotationTimeOK)) {
             if (this.onMoveCallback) {
                 this.onMoveCallback(
                     camera.getPosition(),
                     camera.getRotation()
                 );
+                this._lastSentYaw = this.yaw;
+                this._lastSentPitch = this.pitch;
+                this._lastSendTime = now;
             }
         }
     }
@@ -224,5 +330,143 @@ export class InputManager {
 
     onReload(callback) {
         this.onReloadCallback = callback;
+    }
+
+    onBuildMode(callback) {
+        this.onBuildModeCallback = callback;
+    }
+    
+    onBombToggle(callback) {
+        this.onBombToggleCallback = callback;
+    }
+    
+    onBombDrop(callback) {
+        this.onBombDropCallback = callback;
+    }
+    
+    onBombPickup(callback) {
+        this.onBombPickupCallback = callback;
+    }
+    
+    onBombPlantStart(callback) {
+        this.onBombPlantStartCallback = callback;
+    }
+    
+    onBombPlantStop(callback) {
+        this.onBombPlantStopCallback = callback;
+    }
+
+    onDefuseStart(callback) {
+        this.onDefuseStartCallback = callback;
+    }
+
+    onDefuseStop(callback) {
+        this.onDefuseStopCallback = callback;
+    }
+
+    findValidPosition(currentPos, desiredPos) {
+        if (!this.collisionSystem) {
+            return desiredPos;
+        }
+        
+        // Check if the desired position has any collisions
+        if (!this.collisionSystem.checkCollision(desiredPos, 1.5)) {
+            return desiredPos;
+        }
+        
+        // Try horizontal movement only (sliding along walls)
+        const horizontalOnly = currentPos.clone();
+        horizontalOnly.x = desiredPos.x;
+        horizontalOnly.z = desiredPos.z;
+        
+        if (!this.collisionSystem.checkCollision(horizontalOnly, 1.5)) {
+            // We can move horizontally, but check Y separately
+            const finalPos = horizontalOnly.clone();
+            finalPos.y = this.findValidYPosition(horizontalOnly, desiredPos.y);
+            return finalPos;
+        }
+        
+        // Try X movement only
+        const xOnly = currentPos.clone();
+        xOnly.x = desiredPos.x;
+        if (!this.collisionSystem.checkCollision(xOnly, 1.5)) {
+            const finalPos = xOnly.clone();
+            finalPos.y = this.findValidYPosition(xOnly, desiredPos.y);
+            return finalPos;
+        }
+        
+        // Try Z movement only
+        const zOnly = currentPos.clone();
+        zOnly.z = desiredPos.z;
+        if (!this.collisionSystem.checkCollision(zOnly, 1.5)) {
+            const finalPos = zOnly.clone();
+            finalPos.y = this.findValidYPosition(zOnly, desiredPos.y);
+            return finalPos;
+        }
+        
+        // Can't move horizontally, just try Y movement
+        const finalPos = currentPos.clone();
+        finalPos.y = this.findValidYPosition(currentPos, desiredPos.y);
+        return finalPos;
+    }
+    
+    findValidYPosition(basePos, desiredY) {
+        if (!this.collisionSystem) {
+            return desiredY;
+        }
+        
+        const testPos = basePos.clone();
+        testPos.y = desiredY;
+        
+        // Check if we can move to the desired Y position
+        if (!this.collisionSystem.checkCollision(testPos, 1.5)) {
+            return desiredY;
+        }
+        
+        // We hit something - find the highest valid Y position
+        const groundY = this.findGroundLevel(basePos);
+        
+        // Stop downward velocity if we hit ground
+        if (desiredY <= groundY && this.velocity.y < 0) {
+            this.velocity.y = 0;
+            this.onGround = true;
+        }
+        
+        return Math.max(groundY, basePos.y);
+    }
+    
+    findGroundLevel(position) {
+        if (!this.collisionSystem) {
+            return 10; // Default ground level - same as spawn points
+        }
+        
+        let highestGround = -50; // Start very low
+        
+        // Check for ground colliders at this X,Z position
+        for (const bounds of this.collisionSystem.boxColliders) {
+            if (position.x >= bounds.minX && position.x <= bounds.maxX &&
+                position.z >= bounds.minZ && position.z <= bounds.maxZ) {
+                // Find the highest surface we can stand on
+                const surfaceY = bounds.maxY + 1; // Player height above surface
+                if (surfaceY > highestGround) {
+                    highestGround = surfaceY;
+                }
+            }
+        }
+        
+        // If no ground found, use default spawn height
+        return highestGround > -50 ? highestGround : 10;
+    }
+    
+    checkGroundCollision(position) {
+        const groundLevel = this.findGroundLevel(position);
+        const tolerance = 1; // Small tolerance for ground detection
+        
+        if (Math.abs(position.y - groundLevel) <= tolerance && this.velocity.y <= 0) {
+            this.onGround = true;
+            this.velocity.y = 0;
+        } else {
+            this.onGround = false;
+        }
     }
 }

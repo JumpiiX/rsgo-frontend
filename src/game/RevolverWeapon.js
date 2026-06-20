@@ -217,6 +217,12 @@ export class RevolverWeapon {
     canShoot() {
         return this.currentAmmo > 0 && !this.isReloading;
     }
+
+    getMuzzleWorldPosition() {
+        if (!this.weaponGroup) return null;
+        const localMuzzle = this.muzzleOffset.clone();
+        return localMuzzle.applyMatrix4(this.weaponGroup.matrixWorld);
+    }
     
     shoot() {
         if (!this.canShoot()) return false;
@@ -244,17 +250,20 @@ export class RevolverWeapon {
     animateShoot() {
         if (!this.weaponGroup) return;
 
-        
         const originalZ = this.weaponGroup.position.z;
         const originalRotX = this.weaponGroup.rotation.x;
 
-        this.weaponGroup.position.z = originalZ + 0.05;
-        this.weaponGroup.rotation.x = originalRotX - 0.2;
+        this.weaponGroup.position.z = originalZ + 0.08;
+        this.weaponGroup.rotation.x = originalRotX - 0.32;
 
+        setTimeout(() => {
+            this.weaponGroup.position.z = originalZ + 0.03;
+            this.weaponGroup.rotation.x = originalRotX - 0.1;
+        }, 40);
         setTimeout(() => {
             this.weaponGroup.position.z = originalZ;
             this.weaponGroup.rotation.x = originalRotX;
-        }, 100);
+        }, 130);
     }
     
     startReload() {

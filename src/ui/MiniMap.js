@@ -7,7 +7,7 @@ export class MiniMap {
 
         
         const mapSize = 200; 
-        const viewSize = 600; 
+        const viewSize = 1000; // Increase view size to capture more of the map 
         this.mapCamera = new THREE.OrthographicCamera(
             -viewSize / 2, viewSize / 2,
             viewSize / 2, -viewSize / 2,
@@ -36,12 +36,12 @@ export class MiniMap {
 
         
         this.minimapMaterials = {
-            wall: new THREE.MeshBasicMaterial({ color: 0x445566 }), 
-            ground: new THREE.MeshBasicMaterial({ color: 0x1a1a2e }), 
-            building: new THREE.MeshBasicMaterial({ color: 0x334455 }), 
-            obstacle: new THREE.MeshBasicMaterial({ color: 0x556677 }), 
-            player: new THREE.MeshBasicMaterial({ color: 0x00ff00 }), 
-            tree: new THREE.MeshBasicMaterial({ color: 0x2d4a2b }), 
+            wall: new THREE.MeshBasicMaterial({ color: 0x1a1a1a }), // Even darker gray walls
+            ground: new THREE.MeshBasicMaterial({ color: 0x050505 }), // Almost black ground
+            building: new THREE.MeshBasicMaterial({ color: 0x0f0f0f }), // Very dark buildings
+            obstacle: new THREE.MeshBasicMaterial({ color: 0x222222 }), // Darker gray obstacles
+            player: new THREE.MeshBasicMaterial({ color: 0xff8c00 }), // Orange player
+            tree: new THREE.MeshBasicMaterial({ color: 0x0f1a0f }), // Very dark green trees
         };
     }
 
@@ -51,39 +51,78 @@ export class MiniMap {
         arrow.id = 'minimap-player-arrow';
         arrow.style.cssText = `
             position: fixed;
-            top: 110px;
-            right: 110px;
+            top: ${10 + this.mapSize / 2}px;
+            right: ${10 + this.mapSize / 2}px;
             width: 0;
             height: 0;
             border-left: 6px solid transparent;
             border-right: 6px solid transparent;
-            border-bottom: 16px solid #d2691e;
+            border-bottom: 16px solid #ff8c00;
             z-index: 102;
             pointer-events: none;
             transform: translate(50%, -50%);
-            filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.4));
+            filter: drop-shadow(0 0 4px rgba(255, 140, 0, 0.6));
         `;
         document.body.appendChild(arrow);
     }
 
     createMapBorder() {
-        
-        const mapContainer = document.createElement('div');
-        mapContainer.id = 'minimap-container';
-        mapContainer.style.cssText = `
+        // Create modern dark container like other UI elements
+        const minimapContainer = document.createElement('div');
+        minimapContainer.id = 'minimap-modern-container';
+        minimapContainer.style.cssText = `
             position: fixed;
-            top: 10px;
-            right: 10px;
-            width: 200px;
-            height: 200px;
-            border: 2px solid rgba(139, 90, 43, 0.6);
-            background: transparent;
-            z-index: 100;
+            top: 20px;
+            right: 240px;
+            width: ${this.mapSize + 20}px;
+            height: ${this.mapSize + 20}px;
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            padding: 10px;
+            box-sizing: border-box;
             pointer-events: none;
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
-            border-radius: 4px;
+            z-index: 99;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         `;
-        document.body.appendChild(mapContainer);
+        document.body.appendChild(minimapContainer);
+
+        // Add title and inner container
+        const titleDiv = document.createElement('div');
+        titleDiv.style.cssText = `
+            position: absolute;
+            top: 6px;
+            left: 10px;
+            right: 10px;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.6;
+            color: rgba(255, 255, 255, 0.6);
+            text-align: center;
+            pointer-events: none;
+            z-index: 1;
+        `;
+        titleDiv.textContent = 'Map';
+        minimapContainer.appendChild(titleDiv);
+        
+        // Create inner border for the map area
+        const mapInner = document.createElement('div');
+        mapInner.id = 'minimap-inner-border';
+        mapInner.style.cssText = `
+            width: ${this.mapSize}px;
+            height: ${this.mapSize - 20}px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+            background: #000;
+            margin-top: 20px;
+        `;
+        minimapContainer.appendChild(mapInner);
     }
 
     update(playerPosition, playerRotation) {
@@ -96,8 +135,10 @@ export class MiniMap {
         this.mapCamera.lookAt(playerPosition.x, 0, playerPosition.z);
 
         
-        
-        this.mapCamera.rotation.z = playerRotation;
+        // Reset camera rotation to ensure it's always pointing straight down
+        this.mapCamera.rotation.x = -Math.PI / 2; // Point straight down
+        this.mapCamera.rotation.y = 0;
+        this.mapCamera.rotation.z = 0;
 
         
     }
@@ -115,35 +156,48 @@ export class MiniMap {
 
         
         const mapWidth = this.mapSize;
-        const mapHeight = this.mapSize;
+        const mapHeight = this.mapSize - 20; // Reduced by 20px for title
 
         
         this.renderer.autoClear = false;
 
         
+        // Simple positioning: match the CSS container exactly
+        // Container CSS: top: 20px, right: 240px, size: 220x220, padding: 10px
+        // Inner map area starts at: top: 50px (20 + 20 title + 10 padding), right: 250px (240 + 10 padding)
+        const containerX = width - 240 - 10 - mapWidth; // right: 240px + 10px padding from right edge
+        const containerY = height - (20 + 20 + 10) - mapHeight; // WebGL Y from bottom: screen height - (top + title + padding + map height)
+        
+        // Debug: containerX should be around 688 for 1138 screen width
+        
         this.renderer.setScissorTest(true);
         this.renderer.setScissor(
-            width - mapWidth - 10,
-            height - mapHeight - 10,
+            containerX,
+            containerY,
             mapWidth,
             mapHeight
         );
 
         this.renderer.setViewport(
-            width - mapWidth - 10,
-            height - mapHeight - 10,
+            containerX,
+            containerY,
             mapWidth,
             mapHeight
         );
 
         
-        this.renderer.setClearColor(0x2d2416, 1);
+        this.renderer.setClearColor(0x000000, 1); // Pure black background
         this.renderer.setClearAlpha(1);
         this.renderer.clear(true, true, false);
 
         
         this.applyMinimapColors();
 
+        // Debug: Check if we have objects to render
+        const visibleObjects = this.scene.children.filter(obj => obj.visible).length;
+        if (visibleObjects === 0) {
+            console.log('⚠️ Minimap: No visible objects in scene');
+        }
         
         this.renderer.render(this.scene, this.mapCamera);
 

@@ -1,3 +1,5 @@
+import { HUD, hudPanel } from './HudTheme.js';
+
 export class Compass {
     constructor() {
         console.log('Compass: Initializing...');
@@ -22,9 +24,8 @@ export class Compass {
             align-items: center;
             justify-content: center;
             overflow: hidden;
-            background: rgba(20, 12, 8, 0.4);
-            border: 1px solid rgba(210, 105, 30, 0.3);
-            border-radius: 2px;
+            ${hudPanel(12)}
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         `;
         document.body.appendChild(compassContainer);
 
@@ -43,6 +44,7 @@ export class Compass {
         
         const createCompassTape = () => {
             const tape = document.createElement('div');
+            tape.id = 'compass-tape';
             tape.style.cssText = `
                 position: absolute;
                 display: flex;
@@ -56,43 +58,23 @@ export class Compass {
                 const actualDeg = deg % 360;
                 let label = '';
                 let fontSize = '12px';
-                let color = 'rgba(210, 105, 30, 0.3)';
+                let color = HUD.textFaint;
                 let fontWeight = 'normal';
                 const width = '30px';
 
-                
+                // Cardinals = bright orange; N a touch brighter.
                 if (actualDeg === 0) {
-                    label = 'N';
-                    fontSize = '18px';
-                    color = '#d2691e';
-                    fontWeight = 'bold';
+                    label = 'N'; fontSize = '18px'; color = HUD.orange; fontWeight = '700';
                 } else if (actualDeg === 90) {
-                    label = 'E';
-                    fontSize = '18px';
-                    color = '#cd853f';
-                    fontWeight = 'bold';
+                    label = 'E'; fontSize = '18px'; color = `rgba(${HUD.orangeRGB}, 0.8)`; fontWeight = '600';
                 } else if (actualDeg === 180) {
-                    label = 'S';
-                    fontSize = '18px';
-                    color = '#cd853f';
-                    fontWeight = 'bold';
+                    label = 'S'; fontSize = '18px'; color = `rgba(${HUD.orangeRGB}, 0.8)`; fontWeight = '600';
                 } else if (actualDeg === 270) {
-                    label = 'W';
-                    fontSize = '18px';
-                    color = '#cd853f';
-                    fontWeight = 'bold';
-                }
-                
-                else if (actualDeg % 15 === 0) {
-                    label = '|';
-                    fontSize = '8px';
-                    color = 'rgba(210, 105, 30, 0.2)';
-                }
-                
-                else if (actualDeg % 5 === 0) {
-                    label = '·';
-                    fontSize = '6px';
-                    color = 'rgba(210, 105, 30, 0.15)';
+                    label = 'W'; fontSize = '18px'; color = `rgba(${HUD.orangeRGB}, 0.8)`; fontWeight = '600';
+                } else if (actualDeg % 15 === 0) {
+                    label = '|'; fontSize = '8px'; color = `rgba(${HUD.orangeRGB}, 0.25)`;
+                } else if (actualDeg % 5 === 0) {
+                    label = '·'; fontSize = '6px'; color = `rgba(${HUD.orangeRGB}, 0.18)`;
                 }
 
                 if (label) {
@@ -120,26 +102,28 @@ export class Compass {
 
         
         const leftFade = document.createElement('div');
+        leftFade.id = 'compass-left-fade';
         leftFade.style.cssText = `
             position: fixed;
             top: 20px;
             left: calc(50% - 150px);
             width: 30px;
             height: 40px;
-            background: linear-gradient(to right, rgba(20, 12, 8, 0.6), transparent);
+            background: linear-gradient(to right, rgba(${HUD.navyRGB}, 0.85), transparent);
             z-index: 101;
             pointer-events: none;
         `;
         document.body.appendChild(leftFade);
 
         const rightFade = document.createElement('div');
+        rightFade.id = 'compass-right-fade';
         rightFade.style.cssText = `
             position: fixed;
             top: 20px;
             right: calc(50% - 150px);
             width: 30px;
             height: 40px;
-            background: linear-gradient(to left, rgba(20, 12, 8, 0.6), transparent);
+            background: linear-gradient(to left, rgba(${HUD.navyRGB}, 0.85), transparent);
             z-index: 101;
             pointer-events: none;
         `;
@@ -147,6 +131,7 @@ export class Compass {
 
         
         const centerLine = document.createElement('div');
+        centerLine.id = 'compass-center-line';
         centerLine.style.cssText = `
             position: fixed;
             top: 22px;
@@ -154,24 +139,25 @@ export class Compass {
             transform: translateX(-50%);
             width: 2px;
             height: 36px;
-            background: #d2691e;
+            background: ${HUD.orange};
             z-index: 102;
             pointer-events: none;
-            opacity: 0.8;
+            opacity: 0.9;
         `;
         document.body.appendChild(centerLine);
 
         
         this.degreeDisplay = document.createElement('div');
+        this.degreeDisplay.id = 'compass-degree-display';
         this.degreeDisplay.style.cssText = `
             position: fixed;
             top: 62px;
             left: 50%;
             transform: translateX(-50%);
-            color: rgba(210, 105, 30, 0.6);
+            color: ${HUD.textDim};
             font-size: 11px;
             font-weight: normal;
-            font-family: 'Arial', sans-serif;
+            font-family: 'Inter', sans-serif;
             z-index: 100;
             pointer-events: none;
             letter-spacing: 1px;

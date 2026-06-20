@@ -1,5 +1,15 @@
 import { MaterialManager } from '../utils/MaterialManager.js';
 
+// RSGO navy palette for the map (replaces the old greys for a modern look).
+// Base navy is the brand #1a2447; floors/walls are lighter navy tints so the
+// layout still reads with depth — all in the same navy family.
+const MAP_COLORS = {
+    ground: 0x121a36, // deep navy base plane
+    floor:  0x2a3a63, // walkable areas / paths — mid navy, clearly above ground
+    wall:   0x3b4f82, // walls — lighter navy so they clearly stand out
+    wallEmissive: 0x0d1326,
+};
+
 export class MapBuilder {
     constructor(scene, collisionSystem = null) {
         this.scene = scene;
@@ -7,696 +17,531 @@ export class MapBuilder {
         this.materials = new MaterialManager();
     }
 
-    buildMap() {
-        this.createGround();
-        this.createMapBoundaries();
-        this.createCityBlocks();
-        this.createStreets();
-        this.createVehicles();
-        this.createTrees();
-        this.createHidingSpots();
-        this.createCityProps();
-        this.createDecorations();
-        
+    buildMap(mapType = 'city') {
+        console.log('🗺️ MapBuilder.buildMap called with type:', mapType);
+        if (mapType === 'orangePlanet') {
+            console.log('✅ Building minimalist competitive map');
+            this.buildMinimalistMap();
+        }
     }
-
-    createGround() {
-        const groundGeometry = new THREE.PlaneGeometry(800, 800);
-        const ground = new THREE.Mesh(groundGeometry, this.materials.get('ground'));
+    
+    buildOrangePlanetMap() {
+        this.buildMinimalistMap();
+    }
+    
+    buildMinimalistMap() {
+        console.log('Building Minimalist Competitive Map...');
+        
+        // Map parameters
+        this.wallHeight = 25;
+        this.wallThickness = 4;
+        this.pathWidth = 100;
+        this.spawnSize = 120;
+        this.bombSiteSize = 180;
+        
+        // Key positions
+        this.bottomSpawnZ = -300;
+        this.topSpawnZ = 300;
+        this.siteAX = -250;
+        this.siteBX = 250;
+        this.siteZ = 0;
+        
+        // 1. Create ground
+        this.createMinimalistGround();
+        
+        // 2. Create clean floor areas
+        this.createCleanFloorLayout();
+        
+        // 3. Create simple walls
+        this.createSimpleWalls();
+    }
+    
+    createMinimalistGround() {
+        const groundGeometry = new THREE.PlaneGeometry(1200, 1200);
+        const groundMaterial = new THREE.MeshLambertMaterial({
+            color: MAP_COLORS.ground,
+            side: THREE.DoubleSide
+        });
+        
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
         ground.rotation.x = -Math.PI / 2;
+        ground.position.y = 0;
         ground.receiveShadow = true;
         this.scene.add(ground);
     }
+    
+    createCleanFloorLayout() {
+        const floorColor = MAP_COLORS.floor;
 
-    createMapBoundaries() {
-        
-        const walls = [
-            
-            { pos: [-200, 20, -380], size: [200, 40, 8] },
-            { pos: [-50, 20, -350], size: [100, 40, 8] },
-            { pos: [100, 20, -380], size: [200, 40, 8] },
-            { pos: [250, 20, -320], size: [100, 40, 8] },
+        this.createFloor(0, this.bottomSpawnZ, this.spawnSize, this.spawnSize, floorColor);
+        this.createFloor(0, this.topSpawnZ, this.spawnSize, this.spawnSize, floorColor);
+        this.createFloor(this.siteAX, this.siteZ, this.bombSiteSize, this.bombSiteSize, floorColor);
+        this.createFloor(this.siteBX, this.siteZ, this.bombSiteSize, this.bombSiteSize, floorColor);
 
-            
-            { pos: [-150, 20, 380], size: [200, 40, 8] },
-            { pos: [50, 20, 350], size: [150, 40, 8] },
-            { pos: [200, 20, 380], size: [200, 40, 8] },
+        this.createBombSiteMarker(this.siteAX, this.siteZ, 'A');
+        this.createBombSiteMarker(this.siteBX, this.siteZ, 'B');
 
-            
-            { pos: [380, 20, -200], size: [8, 40, 200] },
-            { pos: [350, 20, 0], size: [8, 40, 150] },
-            { pos: [380, 20, 200], size: [8, 40, 200] },
+        // Spawn markers so you can tell at a glance which side is which:
+        // attacker spawn (z = -300) = RED, defender spawn (z = +300) = BLUE.
+        // These match the server's team-role spawns in spawn_system.rs.
+        this.createSpawnMarker(0, this.bottomSpawnZ, 0xff0000); // attacker = red
+        this.createSpawnMarker(0, this.topSpawnZ, 0x0000ff);    // defender = blue
 
-            
-            { pos: [-380, 20, -150], size: [8, 40, 200] },
-            { pos: [-350, 20, 50], size: [8, 40, 200] },
-            { pos: [-380, 20, 250], size: [8, 40, 150] },
-
-            
-            { pos: [-320, 20, -320], size: [80, 40, 80] },
-            { pos: [320, 20, -280], size: [60, 40, 60] },
-            { pos: [300, 20, 300], size: [80, 40, 80] },
-            { pos: [-300, 20, 320], size: [60, 40, 60] }
+        const diagonals = [
+            { sx: 0, sz: this.bottomSpawnZ, ex: this.siteAX, ez: this.siteZ },
+            { sx: 0, sz: this.bottomSpawnZ, ex: this.siteBX, ez: this.siteZ },
+            { sx: 0, sz: this.topSpawnZ, ex: this.siteAX, ez: this.siteZ },
+            { sx: 0, sz: this.topSpawnZ, ex: this.siteBX, ez: this.siteZ },
         ];
+        for (const d of diagonals) {
+            const dx = d.ex - d.sx;
+            const dz = d.ez - d.sz;
+            const len = Math.sqrt(dx * dx + dz * dz);
+            const angle = Math.atan2(dx, dz);
+            this.createAngledFloor((d.sx + d.ex) / 2, (d.sz + d.ez) / 2, this.pathWidth, len, angle, floorColor);
+        }
 
-        walls.forEach(wall => {
-            const mesh = new THREE.Mesh(new THREE.BoxGeometry(...wall.size), this.materials.get('wall'));
-            mesh.position.set(...wall.pos);
-            mesh.castShadow = true;
-            this.scene.add(mesh);
-
-            
-            if (this.collisionSystem) {
-                this.collisionSystem.addBoxCollider(
-                    new THREE.Vector3(...wall.pos),
-                    new THREE.Vector3(...wall.size),
-                    'wall'
-                );
-            }
-        });
+        const midLength = Math.abs(this.siteBX - this.siteAX) - this.bombSiteSize;
+        this.createFloor(0, this.siteZ, midLength, this.pathWidth, floorColor);
     }
 
-    createCityBlocks() {
-        
-        const cityBlocks = [
-            
-            { pos: [-180, 45, -250], size: [100, 90, 70], type: 'darkBuilding' }, 
-            { pos: [-80, 20, -260], size: [50, 40, 50], type: 'building' },       
-            { pos: [-140, 12, -180], size: [35, 24, 45], type: 'crate' },        
-            { pos: [-220, 30, -200], size: [40, 60, 30], type: 'darkBuilding' }, 
+    createBombSiteMarker(x, z, letter) {
+        const size = 512;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const cx = size / 2;
+        const cy = size / 2;
 
-            
-            { pos: [-200, 18, -100], size: [25, 36, 100], type: 'darkBuilding' }, 
-            { pos: [-250, 25, -50], size: [70, 50, 35], type: 'building' },      
-            { pos: [-150, 35, -50], size: [30, 70, 30], type: 'darkBuilding' },  
+        // Navy disc + thin orange ring + orange letter (brand palette).
+        ctx.fillStyle = '#1a2447';
+        ctx.beginPath();
+        ctx.arc(cx, cy, size * 0.46, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ef4e23';
+        ctx.lineWidth = size * 0.03;
+        ctx.beginPath();
+        ctx.arc(cx, cy, size * 0.44, 0, Math.PI * 2);
+        ctx.stroke();
 
-            
-            { pos: [0, 40, -100], size: [70, 80, 55], type: 'darkBuilding' },    
-            { pos: [-50, 20, 0], size: [55, 40, 70], type: 'building' },         
-            { pos: [50, 30, 0], size: [55, 60, 70], type: 'darkBuilding' },      
-            { pos: [0, 15, -30], size: [100, 30, 20], type: 'building' },        
+        ctx.fillStyle = '#ef4e23';
+        ctx.font = `bold ${Math.round(size * 0.62)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(letter, cx, cy + size * 0.02);
 
-            
-            { pos: [-30, 8, 100], size: [20, 16, 25], type: 'building' },
-            { pos: [0, 10, 100], size: [25, 20, 25], type: 'darkBuilding' },
-            { pos: [30, 7, 100], size: [20, 14, 25], type: 'crate' },
-            { pos: [60, 9, 100], size: [18, 18, 25], type: 'building' },
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.anisotropy = 16;
+        texture.minFilter = THREE.LinearMipmapLinearFilter;
+        texture.magFilter = THREE.LinearFilter;
 
-            
-            { pos: [200, 25, 250], size: [90, 50, 90], type: 'darkBuilding' },   
-            { pos: [120, 30, 200], size: [50, 60, 35], type: 'building' },       
-            { pos: [250, 15, 150], size: [35, 30, 70], type: 'crate' },         
-            { pos: [150, 20, 280], size: [40, 40, 40], type: 'darkBuilding' },  
-
-            
-            { pos: [300, 50, 0], size: [70, 100, 60], type: 'darkBuilding' },   
-            { pos: [250, 12, -100], size: [50, 24, 50], type: 'building' },     
-            { pos: [280, 18, -50], size: [30, 36, 40], type: 'building' },      
-            { pos: [320, 8, 100], size: [40, 16, 80], type: 'crate' },          
-
-            
-            { pos: [-300, 45, 0], size: [70, 90, 80], type: 'darkBuilding' },   
-            { pos: [-250, 10, 100], size: [50, 20, 50], type: 'building' },     
-            { pos: [-280, 25, -80], size: [35, 50, 35], type: 'darkBuilding' }, 
-            { pos: [-320, 15, 50], size: [25, 30, 60], type: 'building' },      
-
-            
-            { pos: [-320, 60, -320], size: [35, 120, 35], type: 'darkBuilding' }, 
-            { pos: [320, 40, 320], size: [45, 80, 45], type: 'darkBuilding' },    
-            { pos: [320, 35, -320], size: [40, 70, 40], type: 'building' },       
-            { pos: [-320, 45, 320], size: [38, 90, 38], type: 'darkBuilding' },   
-
-            
-            { pos: [150, 6, -150], size: [35, 12, 35], type: 'crate' },         
-            { pos: [-150, 10, 150], size: [45, 20, 45], type: 'building' },     
-            { pos: [180, 15, -200], size: [25, 30, 50], type: 'darkBuilding' }, 
-            { pos: [-180, 12, 200], size: [40, 24, 30], type: 'building' },     
-
-            
-            { pos: [100, 18, -50], size: [30, 36, 25], type: 'building' },
-            { pos: [-100, 22, 50], size: [35, 44, 30], type: 'darkBuilding' },
-            { pos: [0, 25, -200], size: [80, 50, 20], type: 'darkBuilding' },
-            { pos: [0, 8, 200], size: [60, 16, 35], type: 'crate' },
-        ];
-
-        cityBlocks.forEach(block => {
-            const building = new THREE.Mesh(
-                new THREE.BoxGeometry(...block.size),
-                this.materials.get(block.type)
-            );
-            building.position.set(...block.pos);
-            building.castShadow = true;
-            this.scene.add(building);
-
-            
-            if (this.collisionSystem) {
-                this.collisionSystem.addBoxCollider(
-                    new THREE.Vector3(...block.pos),
-                    new THREE.Vector3(...block.size),
-                    'building'
-                );
-            }
-
-            
-            if (block.size[1] > 15) {
-                this.addWindows(block.pos, block.size);
-            }
+        const markerGeometry = new THREE.PlaneGeometry(110, 110);
+        const markerMaterial = new THREE.MeshBasicMaterial({
+            map: texture,
+            transparent: true,
         });
+        const marker = new THREE.Mesh(markerGeometry, markerMaterial);
+        marker.rotation.x = -Math.PI / 2;
+        marker.position.set(x, 0.15, z);
+        marker.name = letter === 'A' ? 'bombSiteA' : 'bombSiteB';
+        this.scene.add(marker);
     }
 
-    addWindows(buildingPos, buildingSize) {
-        const windowsPerFloor = Math.floor(buildingSize[0] / 8);
-        const floors = Math.floor(buildingSize[1] / 6);
+    createSpawnMarker(x, z, color) {
+        // A filled disc with a brighter ring outline, laid flat on the floor.
+        const radius = 50;
 
-        for (let floor = 1; floor < floors; floor++) {
-            for (let win = 0; win < windowsPerFloor; win++) {
-                
-                const windowFront = new THREE.Mesh(
-                    new THREE.BoxGeometry(2, 2, 0.2),
-                    this.materials.get('window')
-                );
-                windowFront.position.set(
-                    buildingPos[0] - buildingSize[0]/2 + win * 8 + 4,
-                    buildingPos[1] - buildingSize[1]/2 + floor * 6,
-                    buildingPos[2] + buildingSize[2]/2 + 0.1
-                );
-                this.scene.add(windowFront);
+        const discGeometry = new THREE.CircleGeometry(radius, 48);
+        const discMaterial = new THREE.MeshBasicMaterial({
+            color: color,
+            transparent: true,
+            opacity: 0.35,
+            side: THREE.DoubleSide,
+        });
+        const disc = new THREE.Mesh(discGeometry, discMaterial);
+        disc.rotation.x = -Math.PI / 2;
+        disc.position.set(x, 0.2, z);
+        disc.name = 'spawnMarker';
+        this.scene.add(disc);
+
+        const ringGeometry = new THREE.RingGeometry(radius * 0.9, radius, 48);
+        const ringMaterial = new THREE.MeshBasicMaterial({
+            color: color,
+            transparent: true,
+            opacity: 0.9,
+            side: THREE.DoubleSide,
+        });
+        const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.set(x, 0.25, z);
+        ring.name = 'spawnMarkerRing';
+        this.scene.add(ring);
+    }
+
+    createSimpleWalls() {
+        const halfSpawn = this.spawnSize / 2;
+        const halfSite = this.bombSiteSize / 2;
+        const halfMid = this.pathWidth / 2;
+        const halfPath = this.pathWidth / 2;
+
+        const rects = {
+            bottomSpawn: {
+                xMin: -halfSpawn, xMax: halfSpawn,
+                zMin: this.bottomSpawnZ - halfSpawn, zMax: this.bottomSpawnZ + halfSpawn,
+            },
+            topSpawn: {
+                xMin: -halfSpawn, xMax: halfSpawn,
+                zMin: this.topSpawnZ - halfSpawn, zMax: this.topSpawnZ + halfSpawn,
+            },
+            siteA: {
+                xMin: this.siteAX - halfSite, xMax: this.siteAX + halfSite,
+                zMin: this.siteZ - halfSite, zMax: this.siteZ + halfSite,
+            },
+            siteB: {
+                xMin: this.siteBX - halfSite, xMax: this.siteBX + halfSite,
+                zMin: this.siteZ - halfSite, zMax: this.siteZ + halfSite,
+            },
+            mid: {
+                xMin: this.siteAX + halfSite, xMax: this.siteBX - halfSite,
+                zMin: this.siteZ - halfMid, zMax: this.siteZ + halfMid,
+            },
+        };
+
+        const diagonals = [
+            this.buildDiagonal(0, this.bottomSpawnZ, this.siteAX, this.siteZ, halfPath),
+            this.buildDiagonal(0, this.bottomSpawnZ, this.siteBX, this.siteZ, halfPath),
+            this.buildDiagonal(0, this.topSpawnZ, this.siteAX, this.siteZ, halfPath),
+            this.buildDiagonal(0, this.topSpawnZ, this.siteBX, this.siteZ, halfPath),
+        ];
+
+        this._allRects = rects;
+        this._allDiagonals = diagonals;
+
+        this.placeEdgeWalls(rects.bottomSpawn, [diagonals[0], diagonals[1]]);
+        this.placeEdgeWalls(rects.topSpawn, [diagonals[2], diagonals[3]]);
+        this.placeEdgeWalls(rects.siteA, [diagonals[0], diagonals[2], { isMid: true, edge: 'right' }], rects.mid);
+        this.placeEdgeWalls(rects.siteB, [diagonals[1], diagonals[3], { isMid: true, edge: 'left' }], rects.mid);
+
+        this.placeMidConnectorWalls(rects.mid);
+
+        for (const diag of diagonals) {
+            this.placeDiagonalLongWalls(diag);
+        }
+    }
+
+    isOnGrey(x, z) {
+        const r = this._allRects;
+        if (!r) return false;
+        for (const key of Object.keys(r)) {
+            const rect = r[key];
+            if (x >= rect.xMin - 1e-3 && x <= rect.xMax + 1e-3 &&
+                z >= rect.zMin - 1e-3 && z <= rect.zMax + 1e-3) {
+                return true;
+            }
+        }
+        for (const diag of this._allDiagonals) {
+            const lx = x - diag.sx;
+            const lz = z - diag.sz;
+            const along = lx * diag.ux + lz * diag.uz;
+            const perp = lx * diag.px + lz * diag.pz;
+            if (along >= -1e-3 && along <= diag.len + 1e-3 &&
+                perp >= -diag.halfPath - 1e-3 && perp <= diag.halfPath + 1e-3) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    buildDiagonal(sx, sz, ex, ez, halfPath) {
+        const dx = ex - sx;
+        const dz = ez - sz;
+        const len = Math.sqrt(dx * dx + dz * dz);
+        const ux = dx / len;
+        const uz = dz / len;
+        const px = -uz;
+        const pz = ux;
+        return {
+            sx, sz, ex, ez, len,
+            ux, uz, px, pz, halfPath,
+            sideA: { ox: sx + px * halfPath, oz: sz + pz * halfPath, ux, uz },
+            sideB: { ox: sx - px * halfPath, oz: sz - pz * halfPath, ux, uz },
+        };
+    }
+
+    placeEdgeWalls(rect, openings, midRect = null) {
+        const edges = [
+            { axis: 'z', value: rect.zMin, min: rect.xMin, max: rect.xMax, name: 'bottom' },
+            { axis: 'z', value: rect.zMax, min: rect.xMin, max: rect.xMax, name: 'top' },
+            { axis: 'x', value: rect.xMin, min: rect.zMin, max: rect.zMax, name: 'left' },
+            { axis: 'x', value: rect.xMax, min: rect.zMin, max: rect.zMax, name: 'right' },
+        ];
+
+        for (const edge of edges) {
+            const cuts = [];
+            for (const op of openings) {
+                if (op.isMid && midRect) {
+                    if (
+                        (op.edge === 'right' && edge.name === 'right' && edge.axis === 'x') ||
+                        (op.edge === 'left' && edge.name === 'left' && edge.axis === 'x')
+                    ) {
+                        cuts.push({ a: midRect.zMin, b: midRect.zMax });
+                    }
+                    continue;
+                }
+                const interval = this.diagonalEdgeOverlap(op, edge);
+                if (interval) cuts.push(interval);
+            }
+            this.emitEdgeSegments(edge, cuts);
+        }
+    }
+
+    diagonalEdgeOverlap(diag, edge) {
+        const corners = this.diagonalCorners(diag);
+        let lo = Infinity, hi = -Infinity;
+        const intersect = (p1, p2) => {
+            if (edge.axis === 'z') {
+                if ((p1.z - edge.value) * (p2.z - edge.value) > 0) return null;
+                if (p1.z === p2.z) return null;
+                const t = (edge.value - p1.z) / (p2.z - p1.z);
+                return p1.x + t * (p2.x - p1.x);
+            } else {
+                if ((p1.x - edge.value) * (p2.x - edge.value) > 0) return null;
+                if (p1.x === p2.x) return null;
+                const t = (edge.value - p1.x) / (p2.x - p1.x);
+                return p1.z + t * (p2.z - p1.z);
+            }
+        };
+        for (let i = 0; i < 4; i++) {
+            const p1 = corners[i];
+            const p2 = corners[(i + 1) % 4];
+            const v = intersect(p1, p2);
+            if (v !== null) {
+                if (v < lo) lo = v;
+                if (v > hi) hi = v;
+            }
+        }
+        for (const c of corners) {
+            const coord = edge.axis === 'z' ? c.x : c.z;
+            const other = edge.axis === 'z' ? c.z : c.x;
+            if (Math.abs(other - edge.value) < 1e-6) {
+                if (coord < lo) lo = coord;
+                if (coord > hi) hi = coord;
+            }
+        }
+        if (!isFinite(lo) || !isFinite(hi) || hi - lo < 1e-6) return null;
+        const a = Math.max(lo, edge.min);
+        const b = Math.min(hi, edge.max);
+        if (b - a < 1e-6) return null;
+        return { a, b };
+    }
+
+    diagonalCorners(diag) {
+        const { sx, sz, ex, ez, px, pz, halfPath } = diag;
+        return [
+            { x: sx + px * halfPath, z: sz + pz * halfPath },
+            { x: ex + px * halfPath, z: ez + pz * halfPath },
+            { x: ex - px * halfPath, z: ez - pz * halfPath },
+            { x: sx - px * halfPath, z: sz - pz * halfPath },
+        ];
+    }
+
+    emitEdgeSegments(edge, cuts) {
+        cuts.sort((a, b) => a.a - b.a);
+        const merged = [];
+        for (const c of cuts) {
+            if (merged.length && c.a <= merged[merged.length - 1].b) {
+                merged[merged.length - 1].b = Math.max(merged[merged.length - 1].b, c.b);
+            } else {
+                merged.push({ a: c.a, b: c.b });
+            }
+        }
+
+        let cursor = edge.min;
+        for (const m of merged) {
+            if (m.a > cursor) {
+                this.emitAxisWall(edge, cursor, m.a);
+            }
+            cursor = Math.max(cursor, m.b);
+        }
+        if (cursor < edge.max) {
+            this.emitAxisWall(edge, cursor, edge.max);
+        }
+    }
+
+    emitAxisWall(edge, start, end) {
+        const length = end - start;
+        if (length < 0.5) return;
+        const mid = (start + end) / 2;
+        const y = this.wallHeight / 2;
+        if (edge.axis === 'z') {
+            this.createWall(mid, y, edge.value, length, this.wallHeight, this.wallThickness);
+        } else {
+            this.createWall(edge.value, y, mid, this.wallThickness, this.wallHeight, length);
+        }
+    }
+
+    placeMidConnectorWalls(mid) {
+        this.emitMidEdge(mid, mid.zMin, -1);
+        this.emitMidEdge(mid, mid.zMax, 1);
+    }
+
+    emitMidEdge(mid, zEdge, outwardSign) {
+        const probe = 1.5;
+        const step = 1;
+        const segments = [];
+        let active = null;
+        for (let x = mid.xMin; x <= mid.xMax; x += step) {
+            const nz = zEdge + outwardSign * probe;
+            const outwardBlue = !this.isOnGrey(x, nz);
+            if (outwardBlue) {
+                if (!active) active = { start: x, end: x };
+                else active.end = x;
+            } else if (active) {
+                segments.push(active);
+                active = null;
+            }
+        }
+        if (active) segments.push(active);
+
+        const y = this.wallHeight / 2;
+        for (const seg of segments) {
+            const length = seg.end - seg.start;
+            if (length < 2) continue;
+            const cx = (seg.start + seg.end) / 2;
+            this.createWall(cx, y, zEdge, length, this.wallHeight, this.wallThickness);
+        }
+    }
+
+    placeDiagonalLongWalls(diag) {
+        this.emitDiagonalSide(diag, 1);
+        this.emitDiagonalSide(diag, -1);
+    }
+
+    emitDiagonalSide(diag, sign) {
+        const { sx, sz, px, pz, halfPath, len, ux, uz } = diag;
+        const ox = sx + px * halfPath * sign;
+        const oz = sz + pz * halfPath * sign;
+        const probe = 1.5;
+        const step = 1;
+        const segments = [];
+        let active = null;
+        for (let t = 0; t <= len; t += step) {
+            const x = ox + ux * t;
+            const z = oz + uz * t;
+            const nx = x + px * sign * probe;
+            const nz = z + pz * sign * probe;
+            const outwardBlue = !this.isOnGrey(nx, nz);
+            if (outwardBlue) {
+                if (!active) active = { start: t, end: t };
+                else active.end = t;
+            } else if (active) {
+                segments.push(active);
+                active = null;
+            }
+        }
+        if (active) segments.push(active);
+
+        const rotation = Math.atan2(ux, uz);
+        const chunkLen = 6;
+        for (const seg of segments) {
+            const total = seg.end - seg.start;
+            if (total < 2) continue;
+            const chunks = Math.max(1, Math.ceil(total / chunkLen));
+            const chunkSize = total / chunks;
+            for (let i = 0; i < chunks; i++) {
+                const tMid = seg.start + chunkSize * (i + 0.5);
+                const cx = ox + ux * tMid;
+                const cz = oz + uz * tMid;
+                this.createAngledWall(cx, this.wallHeight / 2, cz, this.wallThickness, this.wallHeight, chunkSize, rotation);
             }
         }
     }
 
-    createStreets() {
-        
-        const streets = [
-            
-            { pos: [0, 0.1, 0], size: [600, 0.2, 12] },      
-            { pos: [0, 0.1, -150], size: [500, 0.2, 10] },   
-            { pos: [0, 0.1, 150], size: [500, 0.2, 10] },    
-
-            
-            { pos: [-150, 0.1, 0], size: [10, 0.2, 600] },   
-            { pos: [150, 0.1, 0], size: [10, 0.2, 600] },    
-            { pos: [-75, 0.1, 0], size: [8, 0.2, 400] },     
-            { pos: [75, 0.1, 0], size: [8, 0.2, 400] },      
-
-            
-            { pos: [-200, 0.1, -200], size: [150, 0.2, 8] }, 
-            { pos: [200, 0.1, 200], size: [150, 0.2, 8] },   
-            { pos: [-200, 0.1, 200], size: [8, 0.2, 150] },  
-            { pos: [200, 0.1, -200], size: [8, 0.2, 150] },  
-
-            
-            { pos: [-250, 0.1, -50], size: [80, 0.2, 6] },
-            { pos: [250, 0.1, 50], size: [80, 0.2, 6] },
-            { pos: [50, 0.1, -250], size: [6, 0.2, 80] },
-            { pos: [-50, 0.1, 250], size: [6, 0.2, 80] },
-
-            
-            { pos: [-180, 0.05, 100], size: [40, 0.1, 30] },
-            { pos: [180, 0.05, -100], size: [40, 0.1, 30] },
-            { pos: [0, 0.05, 50], size: [30, 0.1, 20] },
-        ];
-
-        streets.forEach(street => {
-            const mesh = new THREE.Mesh(new THREE.BoxGeometry(...street.size), this.materials.get('street'));
-            mesh.position.set(...street.pos);
-            mesh.receiveShadow = true;
-            this.scene.add(mesh);
+    createWall(x, y, z, width, height, depth) {
+        const wallGeometry = new THREE.BoxGeometry(width, height, depth);
+        const wallMaterial = new THREE.MeshLambertMaterial({
+            color: MAP_COLORS.wall,
+            emissive: MAP_COLORS.wallEmissive,
+            emissiveIntensity: 0.05
         });
-    }
-
-    createVehicles() {
         
-        const vehicles = [
-            
-            { pos: [-100, 2, -20], rot: 0.2, type: 'car' },
-            { pos: [120, 2, 30], rot: -0.5, type: 'car' },
-            { pos: [-180, 2, 120], rot: 0, type: 'van' },
-            { pos: [200, 2, -150], rot: 1.2, type: 'car' },
-            { pos: [-50, 2, 180], rot: -0.3, type: 'car' },
-            { pos: [80, 2, -200], rot: 0.8, type: 'van' },
-
-            
-            { pos: [-170, 2, 90], rot: 0, type: 'car' },
-            { pos: [-190, 2, 90], rot: 0, type: 'car' },
-            { pos: [-170, 2, 110], rot: 0, type: 'van' },
-            { pos: [170, 2, -90], rot: 3.14, type: 'car' },
-            { pos: [190, 2, -90], rot: 3.14, type: 'car' },
-            { pos: [170, 2, -110], rot: 3.14, type: 'van' },
-
-            
-            { pos: [0, 2, -80], rot: 0.4, type: 'destroyed' },
-            { pos: [-130, 2, 0], rot: -0.6, type: 'destroyed' },
-            { pos: [150, 2, 50], rot: 1.0, type: 'destroyed' },
-
-            
-            { pos: [-250, 3, -100], rot: 1.57, type: 'truck' },
-            { pos: [280, 3, 150], rot: -1.57, type: 'truck' },
-            { pos: [50, 2, 250], rot: 0, type: 'van' },
-        ];
-
-        vehicles.forEach(vehicle => {
-            let geometry, material;
-
-            if (vehicle.type === 'car') {
-                
-                geometry = new THREE.BoxGeometry(8, 3, 4);
-                material = new THREE.MeshLambertMaterial({ color: 0x2a2a2a });
-            } else if (vehicle.type === 'van') {
-                
-                geometry = new THREE.BoxGeometry(10, 4, 4.5);
-                material = new THREE.MeshLambertMaterial({ color: 0x3a3a3a });
-            } else if (vehicle.type === 'truck') {
-                
-                geometry = new THREE.BoxGeometry(14, 5, 5);
-                material = new THREE.MeshLambertMaterial({ color: 0x4a4a4a });
-            } else if (vehicle.type === 'destroyed') {
-                
-                geometry = new THREE.BoxGeometry(8, 2.5, 4);
-                material = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
-            }
-
-            const mesh = new THREE.Mesh(geometry, material);
-            mesh.position.set(...vehicle.pos);
-            mesh.rotation.y = vehicle.rot;
-            mesh.castShadow = true;
-            this.scene.add(mesh);
-
-            
-            if (vehicle.type !== 'destroyed') {
-                const wheelGeometry = new THREE.CylinderGeometry(0.8, 0.8, 0.5, 8);
-                const wheelMaterial = new THREE.MeshLambertMaterial({ color: 0x0a0a0a });
-                const wheelPositions = [
-                    [-2.5, -1, 1.5], [2.5, -1, 1.5],
-                    [-2.5, -1, -1.5], [2.5, -1, -1.5]
-                ];
-
-                wheelPositions.forEach(wp => {
-                    const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
-                    wheel.position.set(
-                        vehicle.pos[0] + wp[0] * Math.cos(vehicle.rot) - wp[2] * Math.sin(vehicle.rot),
-                        vehicle.pos[1] + wp[1],
-                        vehicle.pos[2] + wp[0] * Math.sin(vehicle.rot) + wp[2] * Math.cos(vehicle.rot)
-                    );
-                    wheel.rotation.z = Math.PI / 2;
-                    wheel.rotation.y = vehicle.rot;
-                    this.scene.add(wheel);
-                });
-            }
-
-            
-            if (this.collisionSystem) {
-                
-                const vehicleSize = vehicle.type === 'bus' ?
-                    new THREE.Vector3(10, 4, 25) :
-                    new THREE.Vector3(8, 3, 15);
-
-                this.collisionSystem.addBoxCollider(
-                    new THREE.Vector3(vehicle.pos[0], vehicle.pos[1] + vehicleSize.y / 2, vehicle.pos[2]),
-                    vehicleSize,
-                    'vehicle'
-                );
-            }
-        });
-    }
-
-    createTrees() {
+        const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+        wall.position.set(x, y, z);
+        wall.castShadow = true;
+        wall.receiveShadow = true;
+        this.scene.add(wall);
         
-        const trees = [
-            
-            { pos: [-30, 0, -180], size: 1.2 },
-            { pos: [30, 0, -180], size: 1.0 },
-            { pos: [-30, 0, 180], size: 1.1 },
-            { pos: [30, 0, 180], size: 1.3 },
-
-            
-            { pos: [-200, 0, 250], size: 1.5 },
-            { pos: [-220, 0, 270], size: 1.2 },
-            { pos: [-180, 0, 270], size: 1.0 },
-            { pos: [-210, 0, 290], size: 1.4 },
-
-            { pos: [200, 0, -250], size: 1.3 },
-            { pos: [220, 0, -270], size: 1.1 },
-            { pos: [180, 0, -270], size: 1.2 },
-
-            
-            { pos: [-100, 0, -50], size: 0.9 },
-            { pos: [100, 0, 50], size: 1.0 },
-            { pos: [-280, 0, 0], size: 1.4 },
-            { pos: [280, 0, 0], size: 1.3 },
-            { pos: [0, 0, -280], size: 1.2 },
-            { pos: [0, 0, 280], size: 1.1 },
-
-            
-            { pos: [-350, 0, -350], size: 1.5 },
-            { pos: [350, 0, 350], size: 1.5 },
-            { pos: [-350, 0, 350], size: 1.4 },
-            { pos: [350, 0, -350], size: 1.4 },
-        ];
-
-        trees.forEach(tree => {
-            
-            const trunkGeometry = new THREE.CylinderGeometry(
-                tree.size * 0.8,
-                tree.size * 1.2,
-                8 * tree.size,
-                6
+        if (this.collisionSystem) {
+            this.collisionSystem.addBoxCollider(
+                { x, y, z },
+                { x: width, y: height, z: depth }
             );
-            const trunkMaterial = new THREE.MeshLambertMaterial({ color: 0x3a2a1a });
-            const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-            trunk.position.set(tree.pos[0], tree.pos[1] + 4 * tree.size, tree.pos[2]);
-            trunk.castShadow = true;
-            this.scene.add(trunk);
-
-            
-            const leafMaterial = new THREE.MeshLambertMaterial({ color: 0x1a3a1a });
-
-            
-            const leaves1 = new THREE.Mesh(
-                new THREE.ConeGeometry(5 * tree.size, 6 * tree.size, 6),
-                leafMaterial
-            );
-            leaves1.position.set(tree.pos[0], tree.pos[1] + 10 * tree.size, tree.pos[2]);
-            leaves1.castShadow = true;
-            this.scene.add(leaves1);
-
-            
-            const leaves2 = new THREE.Mesh(
-                new THREE.ConeGeometry(4 * tree.size, 5 * tree.size, 6),
-                leafMaterial
-            );
-            leaves2.position.set(tree.pos[0], tree.pos[1] + 13 * tree.size, tree.pos[2]);
-            leaves2.castShadow = true;
-            this.scene.add(leaves2);
-
-            
-            const leaves3 = new THREE.Mesh(
-                new THREE.ConeGeometry(3 * tree.size, 4 * tree.size, 6),
-                leafMaterial
-            );
-            leaves3.position.set(tree.pos[0], tree.pos[1] + 16 * tree.size, tree.pos[2]);
-            leaves3.castShadow = true;
-            this.scene.add(leaves3);
-
-            
-            if (this.collisionSystem) {
-                this.collisionSystem.addCylinderCollider(
-                    new THREE.Vector3(tree.pos[0], tree.pos[1], tree.pos[2]),
-                    tree.size * 1.5,  
-                    20 * tree.size,   
-                    'tree'
-                );
-            }
-        });
+        }
+        
+        return wall;
     }
-
-    createCityProps() {
-        
-        const props = [
-            
-            { type: 'lamp', pos: [-75, 0, -100] },
-            { type: 'lamp', pos: [75, 0, -100] },
-            { type: 'lamp', pos: [-75, 0, 100] },
-            { type: 'lamp', pos: [75, 0, 100] },
-            { type: 'lamp', pos: [-150, 0, 0] },
-            { type: 'lamp', pos: [150, 0, 0] },
-
-            
-            { type: 'bench', pos: [-50, 1, -200], rot: 0 },
-            { type: 'bench', pos: [50, 1, 200], rot: 3.14 },
-            { type: 'bench', pos: [-200, 1, 50], rot: 1.57 },
-            { type: 'bench', pos: [200, 1, -50], rot: -1.57 },
-
-            
-            { type: 'bin', pos: [-20, 0, -150] },
-            { type: 'bin', pos: [20, 0, 150] },
-            { type: 'bin', pos: [-100, 0, 20] },
-            { type: 'bin', pos: [100, 0, -20] },
-
-            
-            { type: 'busStop', pos: [-120, 0, -50], rot: 0 },
-            { type: 'busStop', pos: [120, 0, 50], rot: 3.14 },
-        ];
-
-        props.forEach(prop => {
-            if (prop.type === 'lamp') {
-                
-                const postGeometry = new THREE.CylinderGeometry(0.3, 0.4, 15, 6);
-                const postMaterial = new THREE.MeshLambertMaterial({ color: 0x3a3a3a });
-                const post = new THREE.Mesh(postGeometry, postMaterial);
-                post.position.set(prop.pos[0], prop.pos[1] + 7.5, prop.pos[2]);
-                this.scene.add(post);
-
-                
-                const lampLight = new THREE.PointLight(0xffaa66, 0.5, 40);
-                lampLight.position.set(prop.pos[0], prop.pos[1] + 14, prop.pos[2]);
-                this.scene.add(lampLight);
-
-                
-                if (this.collisionSystem) {
-                    this.collisionSystem.addCylinderCollider(
-                        new THREE.Vector3(prop.pos[0], prop.pos[1], prop.pos[2]),
-                        0.5,  
-                        15,   
-                        'prop'
-                    );
-                }
-
-            } else if (prop.type === 'bench') {
-                const benchGeometry = new THREE.BoxGeometry(6, 1, 2);
-                const benchMaterial = new THREE.MeshLambertMaterial({ color: 0x4a3a2a });
-                const bench = new THREE.Mesh(benchGeometry, benchMaterial);
-                bench.position.set(...prop.pos);
-                bench.rotation.y = prop.rot;
-                this.scene.add(bench);
-
-                
-                if (this.collisionSystem) {
-                    this.collisionSystem.addBoxCollider(
-                        new THREE.Vector3(...prop.pos),
-                        new THREE.Vector3(6, 1, 2),
-                        'prop'
-                    );
-                }
-
-            } else if (prop.type === 'bin') {
-                const binGeometry = new THREE.CylinderGeometry(1, 1.2, 3, 6);
-                const binMaterial = new THREE.MeshLambertMaterial({ color: 0x2a4a2a });
-                const bin = new THREE.Mesh(binGeometry, binMaterial);
-                bin.position.set(prop.pos[0], prop.pos[1] + 1.5, prop.pos[2]);
-                this.scene.add(bin);
-
-                
-                if (this.collisionSystem) {
-                    this.collisionSystem.addCylinderCollider(
-                        new THREE.Vector3(prop.pos[0], prop.pos[1], prop.pos[2]),
-                        1.2,  
-                        3,    
-                        'prop'
-                    );
-                }
-
-            } else if (prop.type === 'busStop') {
-                
-                const shelterGeometry = new THREE.BoxGeometry(8, 10, 3);
-                const shelterMaterial = new THREE.MeshLambertMaterial({
-                    color: 0x3a3a4a,
-                    transparent: true,
-                    opacity: 0.8
-                });
-                const shelter = new THREE.Mesh(shelterGeometry, shelterMaterial);
-                shelter.position.set(prop.pos[0], prop.pos[1] + 5, prop.pos[2]);
-                shelter.rotation.y = prop.rot;
-                this.scene.add(shelter);
-
-                
-                if (this.collisionSystem) {
-                    this.collisionSystem.addBoxCollider(
-                        new THREE.Vector3(prop.pos[0], prop.pos[1] + 5, prop.pos[2]),
-                        new THREE.Vector3(8, 10, 3),
-                        'prop'
-                    );
-                }
-            }
+    
+    createAngledWall(x, y, z, width, height, depth, rotation) {
+        const wallGeometry = new THREE.BoxGeometry(width, height, depth);
+        const wallMaterial = new THREE.MeshLambertMaterial({
+            color: MAP_COLORS.wall,
+            emissive: MAP_COLORS.wallEmissive,
+            emissiveIntensity: 0.05
         });
-    }
-
-    createHidingSpots() {
         
-        const covers = [
-            
-            { pos: [-180, 3, -220], size: [8, 6, 8], type: 'crate' },
-            { pos: [-220, 3, -280], size: [12, 6, 8], type: 'crate' },
-            { pos: [-150, 2, -250], size: [6, 4, 12], type: 'crate' },
-
-            
-            { pos: [0, 3, -150], size: [15, 6, 6], type: 'crate' },
-            { pos: [-30, 2, -70], size: [8, 4, 8], type: 'crate' },
-            { pos: [30, 2, -70], size: [8, 4, 8], type: 'crate' },
-
-            
-            { pos: [180, 3, 220], size: [8, 6, 8], type: 'crate' },
-            { pos: [220, 3, 280], size: [12, 6, 8], type: 'crate' },
-            { pos: [150, 2, 250], size: [6, 4, 12], type: 'crate' },
-
-            
-            { pos: [-100, 2, -150], size: [6, 4, 20], type: 'wall' },
-            { pos: [-120, 2, -180], size: [20, 4, 6], type: 'wall' },
-
-            
-            { pos: [100, 2, 150], size: [6, 4, 20], type: 'wall' },
-            { pos: [120, 2, 180], size: [20, 4, 6], type: 'wall' },
-
-            
-            { pos: [0, 4, 50], size: [100, 8, 4], type: 'wall' },
-            { pos: [0, 4, -50], size: [100, 8, 4], type: 'wall' },
-
-            
-            { pos: [-320, 2, -320], size: [15, 4, 4], type: 'wall' },
-            { pos: [320, 2, 320], size: [15, 4, 4], type: 'wall' },
-            { pos: [320, 2, -320], size: [4, 4, 15], type: 'wall' },
-            { pos: [-320, 2, 320], size: [4, 4, 15], type: 'wall' },
-
-            
-            { pos: [180, 3, -100], size: [10, 6, 10], type: 'crate' },
-            { pos: [-180, 3, 100], size: [10, 6, 10], type: 'crate' },
-            { pos: [250, 2, 0], size: [8, 4, 16], type: 'crate' },
-            { pos: [-250, 2, 0], size: [8, 4, 16], type: 'crate' },
-
-            
-            { pos: [150, 2, -120], size: [12, 4, 4], type: 'wall' },
-            { pos: [-150, 2, 120], size: [12, 4, 4], type: 'wall' },
-
-            
-            { pos: [80, 3, 0], size: [4, 6, 30], type: 'wall' },
-            { pos: [-80, 3, 0], size: [4, 6, 30], type: 'wall' },
-            { pos: [0, 3, 200], size: [60, 6, 4], type: 'wall' },
-            { pos: [0, 3, -200], size: [60, 6, 4], type: 'wall' },
-        ];
-
-        covers.forEach(cover => {
-            const mesh = new THREE.Mesh(new THREE.BoxGeometry(...cover.size), this.materials.get(cover.type));
-            mesh.position.set(...cover.pos);
-            mesh.castShadow = true;
-            this.scene.add(mesh);
-        });
-    }
-
-    createDecorations() {
+        const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+        wall.position.set(x, y, z);
+        wall.rotation.y = rotation;
+        wall.castShadow = true;
+        wall.receiveShadow = true;
+        this.scene.add(wall);
         
-        const fireBarrels = [
-            [-30, 3, -30], [30, 3, 30], [-100, 3, 0], [100, 3, 0]
-        ];
-
-        fireBarrels.forEach(pos => {
-            const barrel = new THREE.Mesh(
-                new THREE.CylinderGeometry(1.5, 1.5, 6),
-                new THREE.MeshLambertMaterial({ color: 0x8B4513 })
+        if (this.collisionSystem) {
+            const cos = Math.cos(rotation);
+            const sin = Math.sin(rotation);
+            const rotatedWidth = Math.abs(width * cos) + Math.abs(depth * sin);
+            const rotatedDepth = Math.abs(width * sin) + Math.abs(depth * cos);
+            
+            this.collisionSystem.addBoxCollider(
+                { x, y, z },
+                { x: rotatedWidth, y: height, z: rotatedDepth }
             );
-            barrel.position.set(...pos);
-            barrel.castShadow = true;
-            this.scene.add(barrel);
-
-            
-            const fireLight = new THREE.PointLight(0xff4400, 0.7, 30);
-            fireLight.position.set(pos[0], pos[1] + 4, pos[2]);
-            this.scene.add(fireLight);
-        });
-
+        }
         
-        const towers = [
-            [-170, 40, -170], [170, 40, 170]
-        ];
-
-        towers.forEach(pos => {
-            const tower = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.3, 0.3, 80),
-                new THREE.MeshLambertMaterial({ color: 0x666666 })
-            );
-            tower.position.set(pos[0], pos[1], pos[2]);
-            tower.castShadow = true;
-            this.scene.add(tower);
-
-            
-            const towerLight = new THREE.PointLight(0xff0000, 0.8, 100);
-            towerLight.position.set(pos[0], pos[1] + 35, pos[2]);
-            this.scene.add(towerLight);
-        });
+        return wall;
     }
-
-    createSpawnMarkers() {
+    
+    createFloor(x, z, width, depth, color = MAP_COLORS.floor) {
+        const floorGeometry = new THREE.PlaneGeometry(width, depth);
+        const floorMaterial = new THREE.MeshLambertMaterial({
+            color: color,
+            side: THREE.DoubleSide
+        });
         
-        const spawnPoints = [
-            
-            { x: -30, y: 10, z: 320 },      
-            { x: -50, y: 10, z: 330 },      
-            { x: 50, y: 10, z: 330 },       
-            { x: -100, y: 10, z: 300 },     
-            { x: 100, y: 10, z: 300 },      
-
-            
-            
-            { x: -50, y: 10, z: -330 },     
-            { x: 50, y: 10, z: -330 },      
-            { x: -100, y: 10, z: -300 },    
-            { x: 100, y: 10, z: -300 },     
-
-            
-            { x: -200, y: 10, z: 100 },     
-            { x: 200, y: 10, z: -100 },     
-            { x: -50, y: 10, z: 150 },      
-            { x: -100, y: 10, z: -100 },    
-            { x: 100, y: 10, z: 100 },      
-        ];
-
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.set(x, 0.1, z);
+        floor.receiveShadow = true;
+        this.scene.add(floor);
         
-        const spawnColors = [
-            0xFF1493,  
-            0xFF4500,  
-            0xFFD700,  
-            0x32CD32,  
-            0x00CED1,  
-            0x1E90FF,  
-            0x8A2BE2,  
-            0xDC143C,  
-            0xFF69B4,  
-            0x00FA9A,  
-            0xFFB6C1,  
-            0x20B2AA,  
-            0xF0E68C,  
-            0x9ACD32,  
-            0xFF6347,  
-        ];
-
-        spawnPoints.forEach((spawn, index) => {
-            const color = spawnColors[index];
-
-            
-            const lineGeometry = new THREE.CylinderGeometry(1, 1, 200, 8);
-            const lineMaterial = new THREE.MeshBasicMaterial({
-                color: color,
-                emissive: color,
-                emissiveIntensity: 1
-            });
-            const line = new THREE.Mesh(lineGeometry, lineMaterial);
-            line.position.set(spawn.x, spawn.y + 100, spawn.z); 
-            this.scene.add(line);
-
-            
-            const sphereGeometry = new THREE.SphereGeometry(3, 8, 8);
-            const sphereMaterial = new THREE.MeshBasicMaterial({
-                color: color,
-                emissive: color,
-                emissiveIntensity: 0.5
-            });
-            const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-            sphere.position.set(spawn.x, spawn.y, spawn.z);
-            this.scene.add(sphere);
+        return floor;
+    }
+    
+    createAngledFloor(x, z, width, depth, rotation, color = MAP_COLORS.floor) {
+        const floorGeometry = new THREE.PlaneGeometry(width, depth);
+        const floorMaterial = new THREE.MeshLambertMaterial({
+            color: color,
+            side: THREE.DoubleSide
         });
 
-        console.log('DEBUG: Spawn markers RE-ENABLED with new colors:');
-        console.log('  T-Side (1-5): Deep Pink, Orange Red, Gold, Lime Green, Dark Turquoise');
-        console.log('  CT-Side (6-10): Dodger Blue, Blue Violet, Crimson, Hot Pink, Medium Spring Green');
-        console.log('  Mid (11-15): Light Pink, Light Sea Green, Khaki, Yellow Green, Tomato');
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        floor.rotation.z = rotation;
+        floor.position.set(x, 0.1, z);
+        floor.receiveShadow = true;
+        this.scene.add(floor);
+
+        return floor;
     }
 }

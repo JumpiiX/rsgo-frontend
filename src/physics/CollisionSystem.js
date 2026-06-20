@@ -19,6 +19,11 @@ export class CollisionSystem {
         this.boxColliders.push(bounds);
     }
 
+    removeCollidersByType(type) {
+        this.boxColliders = this.boxColliders.filter(c => c.type !== type);
+        this.cylinderColliders = this.cylinderColliders.filter(c => c.type !== type);
+    }
+
     addCylinderCollider(position, radius, height, type = 'default') {
         const cylinder = {
             x: position.x,
@@ -37,14 +42,14 @@ export class CollisionSystem {
     }
 
     checkCollision(position, radius = 1.5) {
-        
+        // Check collision with all box colliders
         for (const bounds of this.boxColliders) {
             if (position.x + radius > bounds.minX &&
                 position.x - radius < bounds.maxX &&
                 position.z + radius > bounds.minZ &&
                 position.z - radius < bounds.maxZ &&
-                position.y >= bounds.minY &&
-                position.y <= bounds.maxY + 10) { 
+                position.y >= bounds.minY - 5 &&  // Allow some vertical tolerance
+                position.y <= bounds.maxY + 5) {   // Allow some vertical tolerance
                 return true;
             }
         }

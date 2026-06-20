@@ -17,7 +17,7 @@ export class LightingSystem {
         this.scene.add(ambientLight);
 
         
-        const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x545454, 1.5);
+        const hemiLight = new THREE.HemisphereLight(0x9fb8ff, 0x1a2447, 1.5);
         this.scene.add(hemiLight);
     }
 
@@ -85,8 +85,11 @@ export class LightingSystem {
             opacity: 0.8
         });
 
-        const stars = new THREE.Points(starGeometry, starMaterial);
-        this.scene.add(stars);
+        this.stars = new THREE.Points(starGeometry, starMaterial);
+        this.stars.name = 'stars';
+        // Put stars on layer 1 (main camera will see layers 0 and 1, minimap only layer 0)
+        this.stars.layers.set(1);
+        this.scene.add(this.stars);
 
         
         const brightStars = [
@@ -95,15 +98,20 @@ export class LightingSystem {
             [0, 220, 0], [-100, 200, 100], [100, 210, -100]
         ];
 
+        this.brightStarLights = [];
         brightStars.forEach(pos => {
             const starLight = new THREE.PointLight(0xffffff, 0.8, 200);
             starLight.position.set(...pos);
+            starLight.name = 'starLight';
+            // Put star lights on layer 1
+            starLight.layers.set(1);
             this.scene.add(starLight);
+            this.brightStarLights.push(starLight);
         });
     }
 
     createStreetLights() {
-        
+        // No street light poles for clean map - keeping just the lighting
         const streetLightPositions = [
             [-60, 25, -80], [60, 25, 80], [-100, 25, 40],
             [100, 25, -40], [0, 25, 120], [0, 25, -120]
@@ -115,13 +123,13 @@ export class LightingSystem {
             streetLight.castShadow = true;
             this.scene.add(streetLight);
 
-            
-            const poleGeometry = new THREE.CylinderGeometry(0.5, 0.5, 25);
-            const poleMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
-            const pole = new THREE.Mesh(poleGeometry, poleMaterial);
-            pole.position.set(pos[0], 12.5, pos[2]);
-            pole.castShadow = true;
-            this.scene.add(pole);
+            // DISABLED: No more black poles!
+            // const poleGeometry = new THREE.CylinderGeometry(0.5, 0.5, 25);
+            // const poleMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+            // const pole = new THREE.Mesh(poleGeometry, poleMaterial);
+            // pole.position.set(pos[0], 12.5, pos[2]);
+            // pole.castShadow = true;
+            // this.scene.add(pole);
         });
     }
 
