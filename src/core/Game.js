@@ -262,6 +262,8 @@ export class Game {
                 console.log('Halftime — resetting map (clearing built walls)');
                 this.clearBuildWalls();
             };
+            // Authoritative bullet holes from the server (other players' shots).
+            this.network.onWallHole((message) => this.applyServerWallHole(message));
         }
 
         this.playerManager = new PlayerManager(this.scene.getScene());
@@ -600,6 +602,8 @@ export class Game {
                         console.log('Halftime — resetting map (clearing built walls)');
                         this.clearBuildWalls();
                     };
+                    // Authoritative bullet holes from the server (other players' shots).
+                    this.network.onWallHole((message) => this.applyServerWallHole(message));
                 }
 
                 // Skip the old mode-select step: it's always Team vs Team. Create
@@ -1070,6 +1074,15 @@ export class Game {
             
 
             
+            // WALL OCCLUSION (mirrors the server): if a wall sits between us and
+            // the player, the shot is blocked — don't show a hitmarker, don't
+            // predict damage/death locally. The server would reject it anyway, so
+            // predicting it caused ghost hitmarkers + fake death animations.
+            if (this.isShotBlockedByWall(playerPosition, shootDirection, closestHit.distance)) {
+                this.checkWallHit(playerPosition, shootDirection); // still punch the hole / show impact
+                return null;
+            }
+
             this.addPlayerImpact(closestHit.player.mesh, playerPosition, shootDirection);
 
             const killed = this.playerManager.hitPlayer(closestHit.playerId);
@@ -1081,7 +1094,36 @@ export class Game {
         this.checkWallHit(playerPosition, shootDirection);
         return null;
 
-        
+
+    }
+
+    // Is a wall between the shooter and a player at `playerDistance` along the
+    // shot? Raycasts map walls + placed build walls. A destructible wall does NOT
+    // block if the bullet passes through one of its existing holes (consistent
+    // with the server's hole logic).
+    isShotBlockedByWall(from, dir, playerDistance) {
+        const raycaster = new THREE.Raycaster();
+        raycaster.set(from, dir);
+        raycaster.far = playerDistance;
+
+        const walls = [];
+        this.scene.getScene().traverse((child) => {
+            if (child.isMesh && (child.userData.isMapWall || child.userData.isDestructible)) {
+                walls.push(child);
+            }
+        });
+
+        const hits = raycaster.intersectObjects(walls);
+        for (const hit of hits) {
+            if (hit.distance >= playerDistance) break; // wall is behind the player
+            const wall = hit.object;
+            // Destructible wall: a shot through an existing hole isn't blocked.
+            if (wall.userData.isDestructible && this.checkBulletThroughHole(wall, hit.point)) {
+                continue;
+            }
+            return true; // a solid wall is in the way
+        }
+        return false;
     }
 
     checkWallHit(shooterPos, shootDirection) {
@@ -1137,23 +1179,67 @@ export class Game {
         
         const holeRadius = 1.2;
         console.log('🔫 Creating hole in wall');
-        
+
         // Convert hit point to wall's local coordinates
         const localHitPoint = wall.worldToLocal(hitPoint.clone());
-        
+
         // Add the hole (max 2)
         wall.userData.bulletHoles.push({
             position: localHitPoint.clone(),
             normal: normal.clone(),
             radius: holeRadius
         });
-        
+
         // Recreate wall geometry with holes
         this.recreateWallWithHoles(wall);
-        
+
         console.log(`🕳️ Hole ${wall.userData.bulletHoles.length} of 2 created`);
+
+        // Tell the server so it records the hole (shots can pass through it) AND
+        // broadcasts it to the OTHER clients so everyone sees the same holes.
+        // local_x = along the wall's width (local X); world_y = absolute height
+        // (matches the server occlusion test). These match the server's Hole frame.
+        if (this.network) {
+            this.network.sendWallHit(
+                wall.position.x, wall.position.z,
+                localHitPoint.x, hitPoint.y, holeRadius
+            );
+        }
     }
-    
+
+    // Apply an authoritative bullet hole sent by the server (a hole from ANOTHER
+    // player's shot). Finds the matching destructible wall by position and adds
+    // the hole if it isn't already there (the shooter already made it locally).
+    applyServerWallHole(message) {
+        const { wall_x, wall_z, local_x, world_y, radius } = message;
+        // Find the nearest destructible build wall to the reported center.
+        let wall = null, best = 4.0; // 2-unit tolerance squared
+        for (const w of (this.buildWalls || [])) {
+            if (!w.userData || !w.userData.isDestructible) continue;
+            const d2 = (w.position.x - wall_x) ** 2 + (w.position.z - wall_z) ** 2;
+            if (d2 <= best) { best = d2; wall = w; }
+        }
+        if (!wall) return;
+        if (!wall.userData.bulletHoles) wall.userData.bulletHoles = [];
+        if (wall.userData.bulletHoles.length >= 2) return;
+
+        // local_x is along width, world_y is absolute; convert to the wall's local
+        // frame (local Y is centered on the wall, so subtract the wall's Y).
+        const localY = world_y - wall.position.y;
+        // Skip if we already have a hole very close to this spot (shooter's local one).
+        const dup = wall.userData.bulletHoles.some((h) =>
+            Math.abs(h.position.x - local_x) < 0.5 && Math.abs(h.position.y - localY) < 0.5);
+        if (dup) return;
+
+        wall.userData.bulletHoles.push({
+            position: new THREE.Vector3(local_x, localY, 0),
+            normal: new THREE.Vector3(0, 0, 1),
+            radius: radius || 1.2,
+        });
+        this.recreateWallWithHoles(wall);
+        console.log('🕳️ Applied server wall hole at', local_x, localY);
+    }
+
     addBulletDecalToWall(wall, hitPoint, normal) {
         // Small FLAT bullet mark — same as normal walls (was a big 0.5 sphere
         // "bubble", which we no longer want). A thin circle laid on the surface.

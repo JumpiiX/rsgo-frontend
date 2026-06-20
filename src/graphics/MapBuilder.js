@@ -470,18 +470,19 @@ export class MapBuilder {
         wall.position.set(x, y, z);
         wall.castShadow = true;
         wall.receiveShadow = true;
+        wall.userData.isMapWall = true; // so shots can be occlusion-tested against it
         this.scene.add(wall);
-        
+
         if (this.collisionSystem) {
             this.collisionSystem.addBoxCollider(
                 { x, y, z },
                 { x: width, y: height, z: depth }
             );
         }
-        
+
         return wall;
     }
-    
+
     createAngledWall(x, y, z, width, height, depth, rotation) {
         const wallGeometry = new THREE.BoxGeometry(width, height, depth);
         const wallMaterial = new THREE.MeshLambertMaterial({
@@ -495,6 +496,7 @@ export class MapBuilder {
         wall.rotation.y = rotation;
         wall.castShadow = true;
         wall.receiveShadow = true;
+        wall.userData.isMapWall = true; // so shots can be occlusion-tested against it
         this.scene.add(wall);
         
         if (this.collisionSystem) {

@@ -266,6 +266,14 @@ export class NetworkClient {
                 this.onMapResetCallback();
             }
             break;
+
+        case 'wall_hole':
+            // Authoritative bullet hole from the server — render it on the
+            // matching wall so every client shows the same holes.
+            if (this.onWallHoleCallback) {
+                this.onWallHoleCallback(message);
+            }
+            break;
         }
     }
 
@@ -420,6 +428,21 @@ export class NetworkClient {
         }
     }
 
+    // Tell the server a bullet punched a hole in a destructible wall. The server
+    // records it (so shots can pass through) and broadcasts it to all clients.
+    sendWallHit(wallX, wallZ, localX, worldY, radius) {
+        if (this.isConnected()) {
+            this.send({
+                type: 'wall_hit',
+                wall_x: wallX,
+                wall_z: wallZ,
+                local_x: localX,
+                world_y: worldY,
+                radius: radius,
+            });
+        }
+    }
+
     send(data) {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             // Per-message send logging floods the console during movement (one
@@ -497,7 +520,11 @@ export class NetworkClient {
     onBuildingPlaced(callback) {
         this.onBuildingPlacedCallback = callback;
     }
-    
+
+    onWallHole(callback) {
+        this.onWallHoleCallback = callback;
+    }
+
     processPendingPlayers() {
         console.log('Processing', this.pendingPlayers.length, 'pending players');
         for (const player of this.pendingPlayers) {
