@@ -3,13 +3,12 @@ version: '3.8'
 services:
   frontend:
     build: .
-    ports:
-      - "80:80"
+    # No external port: Caddy reverse-proxies to it as rsgo-frontend:80 on the shared network.
     restart: unless-stopped
     container_name: rsgo-frontend
     networks:
-      - rsgo-network
+      - rsgo-shared-network
 
 networks:
-  rsgo-network:
-    driver: bridge
+  rsgo-shared-network:
+    external: true

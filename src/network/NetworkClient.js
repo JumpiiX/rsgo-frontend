@@ -21,9 +21,21 @@ export class NetworkClient {
     }
 
     connect() {
-        const wsUrl = window.location.hostname === 'localhost'
-            ? 'ws://localhost:6969'
-            : `ws://${window.location.hostname}:6969`;
+        // Pick the WS scheme from the PAGE protocol. On an https:// page the
+        // browser BLOCKS insecure ws:// (mixed content) — the socket looks like
+        // it "opens" then is silently killed, so the backend never sees the
+        // connection. On https we therefore use wss:// and route through the
+        // reverse proxy path (/ws) which terminates TLS in front of the backend.
+        let wsUrl;
+        if (window.location.hostname === 'localhost') {
+            wsUrl = 'ws://localhost:6969';
+        } else if (window.location.protocol === 'https:') {
+            // Secure: go through the proxy on the same host:443, path /ws.
+            wsUrl = `wss://${window.location.host}/ws`;
+        } else {
+            // Plain http: direct to the backend port.
+            wsUrl = `ws://${window.location.hostname}:6969`;
+        }
         console.log('[WS] connecting to', wsUrl);
         this.ws = new WebSocket(wsUrl);
 
