@@ -25,12 +25,17 @@
     </script>
     
     <style>
-        body { 
-            margin: 0; 
-            padding: 0; 
-            overflow: hidden; 
-            background: #000; 
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #000;
             font-family: Arial, sans-serif;
+            /* logo cursor (32x32 png), hotspot centred at 16,16 — same as website */
+            cursor: url("models/rsgo-cursor.png") 16 16, crosshair;
+        }
+        a, button, [role="button"], input {
+            cursor: url("models/rsgo-cursor.png") 16 16, pointer;
         }
         #gameContainer {
             position: relative;
@@ -64,10 +69,11 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 4px;
-            height: 4px;
-            background: white;
-            border-radius: 2px;
+            /* RSGO logo reticle as the crosshair (same asset as the site cursor) */
+            width: 32px;
+            height: 32px;
+            background: url("models/rsgo-cursor.png") center / contain no-repeat;
+            pointer-events: none;
             z-index: 100;
         }
         
@@ -132,13 +138,13 @@
             display: inline-flex; align-items: center; gap: 10px;
             padding: 15px 30px; border: 2px solid var(--orange); border-radius: 12px;
             background: var(--orange); color: var(--navy); font-family: inherit;
-            font-size: 16px; font-weight: 700; cursor: pointer;
+            font-size: 16px; font-weight: 700; cursor: url("models/rsgo-cursor.png") 16 16, pointer;
             transition: transform 0.15s ease, background 0.2s, color 0.2s;
         }
         .rsgo-btn:hover  { transform: translateY(-2px); }
         .rsgo-btn:active { transform: translateY(0); }
         /* Disabled: hollow — navy fill, orange outline/text. */
-        .rsgo-btn:disabled { background: var(--navy); color: var(--orange); opacity: 0.5; cursor: default; transform: none; }
+        .rsgo-btn:disabled { background: var(--navy); color: var(--orange); opacity: 0.5; cursor: url("models/rsgo-cursor.png") 16 16, default; transform: none; }
 
         /* ===== Minimalist name + loader ===== */
         .rsgo-name-card, .rsgo-load-card {
@@ -170,7 +176,7 @@
         .rsgo-arrow {
             flex: 0 0 auto; width: 46px; height: 46px; border-radius: 50%;
             border: none; background: var(--orange); color: var(--navy);
-            font-size: 22px; font-weight: 700; cursor: pointer; font-family: inherit;
+            font-size: 22px; font-weight: 700; cursor: url("models/rsgo-cursor.png") 16 16, pointer; font-family: inherit;
             display: flex; align-items: center; justify-content: center;
             opacity: 0.35; transform: scale(0.9);
             transition: opacity 0.25s ease, transform 0.25s ease;
@@ -227,7 +233,7 @@
         .rsgo-split { padding: 0; align-items: stretch; }     /* halves fill the screen */
         .rsgo-half {
             flex: 1; display: flex; align-items: center; justify-content: center;
-            cursor: pointer; position: relative;
+            cursor: url("models/rsgo-cursor.png") 16 16, pointer; position: relative;
             transition: flex 0.35s ease, filter 0.2s ease;
         }
         /* LEFT = ORANGE team on NAVY bg (orange ink). */
@@ -275,7 +281,7 @@
            pure orange, regardless of what's underneath. */
         .rsgo-split-start {
             position: absolute; top: 72%; left: 50%; transform: translate(-50%, -50%);
-            z-index: 3; width: 260px; height: 60px; padding: 0; cursor: pointer;
+            z-index: 3; width: 260px; height: 60px; padding: 0; cursor: url("models/rsgo-cursor.png") 16 16, pointer;
             border: none; background: none; border-radius: 12px; overflow: hidden;
             isolation: isolate; /* own stacking context — nothing composites through */
             font-family: inherit; transition: transform 0.15s ease;
@@ -291,7 +297,7 @@
         .rsgo-split-start .lbl-orange { background: var(--navy);   color: var(--orange); }
         .rsgo-split-start:hover:not(:disabled) { transform: translate(-50%, -50%) scale(1.06); }
         /* Disabled: still fully solid (pure colors); just not clickable. */
-        .rsgo-split-start:disabled { cursor: default; }
+        .rsgo-split-start:disabled { cursor: url("models/rsgo-cursor.png") 16 16, default; }
     </style>
 </head>
 <body>

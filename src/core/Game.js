@@ -2952,21 +2952,13 @@ export class Game {
             color: #ef4e23;
         `;
 
-        // Swatch previews each wall in MY team color, with the X marker for the
-        // destructible one (X in the accent/opposite color).
+        // Swatch previews each wall in MY team color. The destructible wall looks
+        // the same as the others on purpose — only the "Destructible" label tells
+        // the builder which one it is; in-world it's indistinguishable to enemies.
         const myTeam = this.playerTeam === 'red' ? 'red' : 'orange';
         const main = myTeam === 'red' ? '#1a2447' : '#ef4e23';
-        const accent = myTeam === 'red' ? '#ef4e23' : '#1a2447';
         const slotInner = (hotkey, name, price, wallType) => {
-            const isDestructible = wallType === 'destructible';
-            // Small CSS X via crossed linear-gradients for the destructible swatch.
-            const swatch = isDestructible
-                ? `background:
-                     linear-gradient(to top right, transparent 44%, ${accent} 44%, ${accent} 56%, transparent 56%),
-                     linear-gradient(to top left, transparent 44%, ${accent} 44%, ${accent} 56%, transparent 56%),
-                     ${main};
-                   border: 2px solid ${accent};`
-                : `background: ${main}; border: 2px solid ${main};`;
+            const swatch = `background: ${main}; border: 2px solid ${main};`;
             return `
             <div class="wall-option" data-wall="${wallType}" style="
                 position: relative;
@@ -3995,88 +3987,18 @@ export class Game {
             : { main: 0xef4e23, accent: 0x1a2447, emissive: 0x331100 }; // orange team
     }
 
-    // Build a wall's material color (by team) and, for destructible walls, add a
-    // bold X (two corner-to-corner diagonals) + thick edge outline in the ACCENT
-    // (opposite) color so the player can tell "shoot here" at a glance.
+    // Color a wall in its team's main color. Destructible walls are deliberately
+    // rendered IDENTICALLY to normal walls (no X / special marker) so enemies
+    // can't tell at a glance which walls can be shot through — they have to test
+    // it. The `isDestructible` flag only controls the hole mechanic, not looks.
     decorateWall(wall, width, height, depth, team, isDestructible) {
         const c = this.teamWallColors(team);
-        if (!isDestructible) {
-            // Plain wall — just the team main color.
-            if (wall.material) {
-                wall.material.map = null;
-                wall.material.color = new THREE.Color(c.main);
-                if ('emissive' in wall.material) wall.material.emissive = new THREE.Color(c.emissive);
-                wall.material.needsUpdate = true;
-            }
-            return;
-        }
-
-        // Destructible: PAINT the X + border directly INTO the wall surface via a
-        // canvas texture (flat, flush, part of the wall) instead of building 3D
-        // bars on top. The texture is driven through BOTH map AND emissiveMap with
-        // full-white emissive, so the navy/orange render as their EXACT palette
-        // colors, unlit — no Phong shading washing them out, and no color shift
-        // when the wall is shot and its geometry (UVs) is rebuilt.
-        const tex = this.makeDestructibleTexture(c.main, c.accent);
         if (wall.material) {
-            // color BLACK so the lit (Phong) channel contributes nothing, and
-            // drive the surface purely from the emissive texture. Result: the wall
-            // shows the EXACT palette navy/orange, fully unlit — no shading washes
-            // them into a different-looking color, and no shift when shot.
             wall.material.map = null;
-            wall.material.color = new THREE.Color(0x000000);
-            if ('emissiveMap' in wall.material) {
-                wall.material.emissiveMap = tex;
-                wall.material.emissive = new THREE.Color(0xffffff);
-                wall.material.emissiveIntensity = 1;
-            } else {
-                wall.material.map = tex;
-            }
+            wall.material.color = new THREE.Color(c.main);
+            if ('emissive' in wall.material) wall.material.emissive = new THREE.Color(c.emissive);
             wall.material.needsUpdate = true;
         }
-    }
-
-    // Build (and cache) a canvas texture: solid `main` fill, with an accent-color
-    // border frame + corner-to-corner X painted flat into it. Cached per
-    // main/accent pair so we don't redraw a canvas for every wall.
-    makeDestructibleTexture(main, accent) {
-        this._destructibleTexCache = this._destructibleTexCache || {};
-        const key = main + '_' + accent;
-        if (this._destructibleTexCache[key]) return this._destructibleTexCache[key];
-
-        const S = 256;
-        const canvas = document.createElement('canvas');
-        canvas.width = canvas.height = S;
-        const ctx = canvas.getContext('2d');
-        const hex = (n) => '#' + n.toString(16).padStart(6, '0');
-
-        // Fill with the wall's main color.
-        ctx.fillStyle = hex(main);
-        ctx.fillRect(0, 0, S, S);
-
-        // Accent strokes — ~6% of the wall, so a touch thinner than before.
-        ctx.strokeStyle = hex(accent);
-        ctx.lineWidth = S * 0.06;
-        ctx.lineCap = 'square';
-
-        // Border frame (inset by half the line width so it sits fully inside).
-        const inset = ctx.lineWidth / 2;
-        ctx.strokeRect(inset, inset, S - 2 * inset, S - 2 * inset);
-
-        // Corner-to-corner X, all the way into the corners.
-        ctx.beginPath();
-        ctx.moveTo(inset, inset);         ctx.lineTo(S - inset, S - inset);
-        ctx.moveTo(S - inset, inset);     ctx.lineTo(inset, S - inset);
-        ctx.stroke();
-
-        const tex = new THREE.CanvasTexture(canvas);
-        tex.anisotropy = 4;
-        // Tag as sRGB so the palette hex values render as their EXACT colors
-        // (without this the renderer treats it as linear and the navy/orange
-        // come out as a washed-out, different-looking shade).
-        if ('colorSpace' in tex) tex.colorSpace = THREE.SRGBColorSpace;
-        this._destructibleTexCache[key] = tex;
-        return tex;
     }
 
     placeWallAtPosition(position, rotation) {
