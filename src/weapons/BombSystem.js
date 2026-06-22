@@ -127,7 +127,10 @@ export class BombSystem {
         if (window.gameInstance && window.gameInstance.weaponSystem) {
             window.gameInstance.weaponSystem.hide();
         }
-        
+
+        // Refresh the HUD so the indicator + the bottom-center "G drop" prompt show.
+        this.updateBombUI();
+
         console.log('Bomb equipped successfully');
         return true;
     }
@@ -137,12 +140,15 @@ export class BombSystem {
         
         this.isEquipped = false;
         this.bombGroup.visible = false;
-        
+
         // Show weapon again
         if (window.gameInstance && window.gameInstance.weaponSystem) {
             window.gameInstance.weaponSystem.show();
         }
-        
+
+        // Refresh the HUD so the bottom-center "G drop" prompt hides again.
+        this.updateBombUI();
+
         console.log('Bomb unequipped');
     }
     
@@ -820,6 +826,56 @@ export class BombSystem {
         if (bombIndicator) {
             bombIndicator.style.display = 'none';
         }
+        this.hideDropPrompt();
+    }
+
+    // Bottom-center prompt, shown the WHOLE time the bomb is equipped, so the
+    // player always knows they can drop it with G.
+    updateDropPrompt() {
+        let prompt = document.getElementById('bombDropPrompt');
+        if (!prompt) {
+            prompt = document.createElement('div');
+            prompt.id = 'bombDropPrompt';
+            prompt.style.cssText = `
+                position: fixed;
+                bottom: 88px;
+                left: 50%;
+                transform: translateX(-50%);
+                display: none;
+                align-items: center;
+                gap: 9px;
+                padding: 8px 16px;
+                background: rgba(26, 36, 71, 0.88);
+                border: 1px solid rgba(239, 78, 35, 0.35);
+                border-radius: 999px;
+                color: #ef4e23;
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 12px;
+                letter-spacing: 0.5px;
+                backdrop-filter: blur(10px);
+                z-index: 100;
+                white-space: nowrap;
+                pointer-events: none;
+            `;
+            prompt.innerHTML = `
+                <span style="
+                    display: inline-flex; align-items: center; justify-content: center;
+                    min-width: 18px; height: 18px; padding: 0 5px;
+                    background: rgba(239, 78, 35, 0.15);
+                    border: 1px solid rgba(239, 78, 35, 0.6);
+                    border-radius: 4px;
+                    font-size: 11px; font-weight: 700; letter-spacing: 1px;
+                ">G</span>
+                <span>Drop the bomb</span>
+            `;
+            document.body.appendChild(prompt);
+        }
+        prompt.style.display = this.isEquipped ? 'flex' : 'none';
+    }
+
+    hideDropPrompt() {
+        const prompt = document.getElementById('bombDropPrompt');
+        if (prompt) prompt.style.display = 'none';
     }
     
     showBombUI() {
@@ -835,84 +891,100 @@ export class BombSystem {
             // Create bomb indicator UI
             bombIndicator = document.createElement('div');
             bombIndicator.id = 'bombIndicator';
+            // Slim, minimalist pill in the lower-right: bomb glyph + status + key
+            // hint on a single row. No more chunky 80×100 box.
             bombIndicator.style.cssText = `
                 position: fixed;
-                bottom: 160px;
-                right: 20px;
-                width: 80px;
-                height: 100px;
+                bottom: 150px;
+                right: 24px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 9px 14px;
                 background: rgba(26, 36, 71, 0.88);
                 border: 1px solid rgba(239, 78, 35, 0.35);
-                border-radius: 12px;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                font-size: 10px;
-                color: white;
+                border-radius: 10px;
                 font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
                 backdrop-filter: blur(10px);
                 z-index: 100;
-                transition: all 0.3s ease;
+                transition: border-color 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
             `;
             document.body.appendChild(bombIndicator);
         }
-        
+
         if (this.hasBomb) {
             bombIndicator.style.display = 'flex';
-            
-            // Modern bomb icon using SVG instead of emoji
+
             const isActive = this.isEquipped;
-            const color = isActive ? '#ef4e23' : '#ef4e23';
             const glowColor = isActive ? 'rgba(239, 78, 35, 0.4)' : 'rgba(239, 78, 35, 0.2)';
-            
-            bombIndicator.innerHTML = `
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" style="margin-bottom: 4px;">
-                    <!-- Bomb body -->
-                    <circle cx="12" cy="14" r="7" fill="${color}" opacity="0.9"/>
-                    <circle cx="12" cy="14" r="7" stroke="${color}" stroke-width="1.5" fill="none"/>
-                    
-                    <!-- Fuse -->
-                    <rect x="11" y="5" width="2" height="4" fill="${color}"/>
-                    
-                    <!-- Spark -->
-                    <g style="${isActive ? 'animation: pulse 1s infinite;' : ''}">
-                        <circle cx="12" cy="4" r="2" fill="${isActive ? '#ef4e23' : '#ef4e23'}" opacity="${isActive ? '1' : '0.6'}"/>
-                        <circle cx="12" cy="4" r="3" fill="${isActive ? '#ef4e23' : '#ef4e23'}" opacity="${isActive ? '0.4' : '0'}"/>
-                    </g>
-                    
-                    <!-- Highlight on bomb -->
-                    <ellipse cx="10" cy="12" rx="2" ry="3" fill="white" opacity="0.2"/>
-                </svg>
-                <div style="text-transform: uppercase; letter-spacing: 1px; opacity: 0.8; font-weight: 500; font-size: 11px; margin-bottom: 4px;">
-                    ${isActive ? 'ARMED' : 'BOMB'}
-                </div>
-                <div style="
-                    display: inline-block;
-                    padding: 2px 6px;
+
+            // A small key-chip helper so hints render consistently.
+            const keyChip = (k) => `
+                <span style="
+                    display: inline-flex; align-items: center; justify-content: center;
+                    min-width: 16px; height: 16px; padding: 0 4px;
                     background: rgba(239, 78, 35, 0.15);
-                    border: 1px solid rgba(239, 78, 35, 0.25);
-                    border-radius: 4px;
-                    font-size: 10px;
-                    font-weight: 600;
-                    color: rgba(239, 78, 35, 0.8);
-                    letter-spacing: 1px;
-                ">T</div>
+                    border: 1px solid rgba(239, 78, 35, 0.5);
+                    border-radius: 3px;
+                    font-size: 9px; font-weight: 700; color: #ef4e23; letter-spacing: 0.5px;
+                ">${k}</span>`;
+
+            // Filled, rounder bomb glyph: solid body with a small shine, a short
+            // neck, a curved fuse, and a spark that pulses when armed.
+            const bombGlyph = `
+                <svg width="24" height="24" viewBox="0 0 24 24" style="flex-shrink:0;">
+                    <!-- body -->
+                    <circle cx="10.5" cy="15" r="6.5" fill="#ef4e23"/>
+                    <!-- neck -->
+                    <rect x="13.5" y="7.5" width="2.6" height="3.2" rx="0.8"
+                          transform="rotate(35 14.8 9)" fill="#ef4e23"/>
+                    <!-- curved fuse -->
+                    <path d="M15.5 8 q3 -1.5 3.6 -3.2" fill="none"
+                          stroke="#ef4e23" stroke-width="1.6" stroke-linecap="round"/>
+                    <!-- shine -->
+                    <circle cx="8" cy="12.5" r="1.6" fill="#fff" opacity="0.25"/>
+                    <!-- spark -->
+                    <g style="${isActive ? 'animation: pulse 1s infinite; transform-origin: 19px 4.5px;' : ''}">
+                        <circle cx="19" cy="4.5" r="2" fill="#ef4e23"/>
+                        <circle cx="19" cy="4.5" r="3.4" fill="#ef4e23" opacity="${isActive ? '0.35' : '0'}"/>
+                    </g>
+                </svg>`;
+
+            bombIndicator.innerHTML = `
+                ${bombGlyph}
+                <div style="display: flex; flex-direction: column; line-height: 1.2; gap: 2px;">
+                    <span style="font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #ef4e23;">
+                        ${isActive ? 'Armed' : 'Bomb'}
+                    </span>
+                    ${isActive ? `
+                        <span style="font-size: 9px; letter-spacing: 0.3px; color: rgba(239, 78, 35, 0.5); display: flex; align-items: center; gap: 5px;">
+                            Hold left-click to plant
+                        </span>
+                    ` : `
+                        <span style="font-size: 9px; letter-spacing: 0.3px; color: rgba(239, 78, 35, 0.6); display: flex; align-items: center; gap: 5px;">
+                            ${keyChip('T')} Equip bomb
+                        </span>
+                    `}
+                </div>
             `;
-            
+
             if (this.isEquipped) {
                 bombIndicator.style.borderColor = 'rgba(239, 78, 35, 0.6)';
-                bombIndicator.style.boxShadow = `0 0 20px ${glowColor}`;
+                bombIndicator.style.boxShadow = `0 0 16px ${glowColor}`;
                 bombIndicator.style.background = 'rgba(239, 78, 35, 0.12)';
             } else {
                 bombIndicator.style.borderColor = 'rgba(239, 78, 35, 0.35)';
-                bombIndicator.style.boxShadow = `0 0 10px ${glowColor}`;
+                bombIndicator.style.boxShadow = 'none';
                 bombIndicator.style.background = 'rgba(26, 36, 71, 0.88)';
             }
         } else {
             bombIndicator.style.display = 'none';
         }
-        
+
+        // Persistent bottom-center prompt: visible the whole time the bomb is
+        // equipped, telling the player they can drop it with G.
+        this.updateDropPrompt();
+
         // Add pulse animation if not already present
         if (!document.getElementById('bombPulseStyles')) {
             const style = document.createElement('style');

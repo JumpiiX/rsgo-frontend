@@ -47,6 +47,10 @@ export class RifleWeapon {
         this.reloadTime = 3960; // ms — overwritten with the exact Reload clip length on load
         this.reloadStartTime = 0;
         this.autoReloadEnabled = true;
+        // Ammo count the reload started from. Reloading is INCREMENTAL: the
+        // magazine refills proportionally over the clip, so the player can cancel
+        // (by shooting) and keep whatever rounds were already loaded.
+        this.reloadStartAmmo = 0;
 
         // Recoil (kept for the HUD/feel; the Shoot clip does the visual kick).
         this.recoilAmount = 0;
@@ -160,9 +164,14 @@ export class RifleWeapon {
         this.clock += deltaTime;
         if (this.mixer) this.mixer.update(deltaTime);
 
-        // HUD reload timing (drives the ammo refill + reload bar).
+        // Incremental reload: refill the magazine proportionally to how much of
+        // the clip has played, so a cancel (shooting) keeps the rounds loaded so
+        // far. currentAmmo climbs from reloadStartAmmo toward maxAmmo over the clip.
         if (this.isReloading) {
             const elapsed = Date.now() - this.reloadStartTime;
+            const progress = Math.min(1, elapsed / this.reloadTime);
+            const loaded = Math.floor((this.maxAmmo - this.reloadStartAmmo) * progress);
+            this.currentAmmo = Math.min(this.maxAmmo, this.reloadStartAmmo + loaded);
             if (elapsed >= this.reloadTime) this.finishReload();
         }
 
@@ -177,11 +186,15 @@ export class RifleWeapon {
     }
 
     canShoot() {
-        return this.currentAmmo > 0 && !this.isReloading;
+        // Mid-reload is fine to shoot — it cancels the reload (see shoot()) as
+        // long as at least one round is already chambered.
+        return this.currentAmmo > 0;
     }
 
     shoot() {
         if (!this.canShoot()) return false;
+        // Shooting cancels an in-progress reload, keeping the rounds loaded so far.
+        if (this.isReloading) this.cancelReload();
         this.currentAmmo--;
         this.animateShoot(); // the rifle's Shoot clip provides the visual recoil
         if (this.currentAmmo === 0 && this.autoReloadEnabled) {
@@ -204,12 +217,23 @@ export class RifleWeapon {
         if (this.isReloading || this.currentAmmo === this.maxAmmo) return false;
         this.isReloading = true;
         this.reloadStartTime = Date.now();
+        this.reloadStartAmmo = this.currentAmmo; // refill grows from here
         // Play the Reload clip; its duration === this.reloadTime so they finish together.
         if (this.actions.reload) {
             this.actions.reload.reset();
             this.actions.reload.play();
         }
         return true;
+    }
+
+    // Stop the reload WITHOUT topping off — currentAmmo keeps whatever was loaded
+    // incrementally so far. Used when the player shoots mid-reload.
+    cancelReload() {
+        if (!this.isReloading) return;
+        this.isReloading = false;
+        this.reloadStartTime = 0;
+        if (this.actions.reload) this.actions.reload.stop();
+        if (this.actions.idle) { this.actions.idle.reset(); this.actions.idle.play(); }
     }
 
     finishReload() {

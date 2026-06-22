@@ -128,6 +128,16 @@ export class SimpleMiniMap {
         `;
         document.body.appendChild(this.playerIcon);
 
+        // Pin the arrow to the minimap's center, and KEEP it there on resize.
+        // The minimap is anchored top-right (top:20, right:20), so its center X
+        // depends on window width — recompute whenever the window changes size.
+        this.positionPlayerIcon();
+        this._onResize = () => this.positionPlayerIcon();
+        window.addEventListener('resize', this._onResize);
+    }
+
+    positionPlayerIcon() {
+        if (!this.playerIcon) return;
         const centerX = window.innerWidth - 20 - (this.size + 2) / 2;
         const centerY = 20 + (this.size + 2) / 2;
         this.playerIcon.style.left = centerX + 'px';
@@ -160,20 +170,15 @@ export class SimpleMiniMap {
         ctx.arc(s / 2, s / 2, s / 2, 0, Math.PI * 2);
         ctx.clip();
 
-        ctx.translate(s / 2, s / 2);
-        ctx.rotate(this.cameraRotation + Math.PI);
-        ctx.scale(-scale, -scale);
-        ctx.translate(-this.playerPos.x, -this.playerPos.z);
+        // Walkable paths — drawn as ONE uniform orange shape. Filling each rect
+        // straight onto the map at low alpha makes overlaps STACK into darker
+        // patches (the "two floors on top of each other" look in the minimap).
+        // Instead: render the whole path union OPAQUE on an offscreen buffer
+        // (overlaps merge into solid orange there), then blit that buffer onto
+        // the map ONCE at 0.45 alpha — so the union reads as a single flat tone.
+        this.drawPathUnion(scale);
 
-        // Walkable paths — orange at low opacity over the navy disc.
-        ctx.fillStyle = `rgba(${HUD.orangeRGB}, 0.45)`;
-        for (const r of this.mapShapes.rects) {
-            ctx.save();
-            ctx.translate(r.cx, r.cz);
-            if (r.angle) ctx.rotate(-r.angle);
-            ctx.fillRect(-r.w / 2, -r.h / 2, r.w, r.h);
-            ctx.restore();
-        }
+        this.applyWorldTransform(ctx, scale);
 
         for (const site of this.mapShapes.sites) {
             ctx.save();
@@ -195,7 +200,62 @@ export class SimpleMiniMap {
         ctx.restore();
     }
 
+    // The world→minimap transform: center on the disc, rotate with the camera,
+    // flip+scale world units to map pixels, and offset by the player position
+    // (so the player is always at the disc center). Shared by the main draw and
+    // the offscreen path buffer so they line up exactly.
+    applyWorldTransform(c, scale) {
+        const s = this.size;
+        c.translate(s / 2, s / 2);
+        c.rotate(this.cameraRotation + Math.PI);
+        c.scale(-scale, -scale);
+        c.translate(-this.playerPos.x, -this.playerPos.z);
+    }
+
+    // Render the walkable-path rectangles to an offscreen canvas at FULL opacity
+    // (so overlapping rects merge into one solid region), then composite that
+    // buffer onto the minimap once at a single alpha. Result: uniform orange with
+    // no darker "stacked" patches where paths cross.
+    drawPathUnion(scale) {
+        const s = this.size;
+        const dpr = window.devicePixelRatio || 1;
+
+        if (!this._pathCanvas) {
+            this._pathCanvas = document.createElement('canvas');
+            this._pathCanvas.width = s * dpr;
+            this._pathCanvas.height = s * dpr;
+            this._pathCtx = this._pathCanvas.getContext('2d');
+        }
+        const pc = this._pathCtx;
+
+        pc.setTransform(dpr, 0, 0, dpr, 0, 0);
+        pc.clearRect(0, 0, s, s);
+
+        pc.save();
+        this.applyWorldTransform(pc, scale);
+        pc.fillStyle = `rgb(${HUD.orangeRGB})`;
+        for (const r of this.mapShapes.rects) {
+            pc.save();
+            pc.translate(r.cx, r.cz);
+            if (r.angle) pc.rotate(-r.angle);
+            pc.fillRect(-r.w / 2, -r.h / 2, r.w, r.h);
+            pc.restore();
+        }
+        pc.restore();
+
+        // Blit the whole union onto the map at one alpha (the source canvas is
+        // already at device-pixel resolution, so draw it in CSS-pixel space).
+        this.ctx.save();
+        this.ctx.globalAlpha = 0.45;
+        this.ctx.drawImage(this._pathCanvas, 0, 0, s, s);
+        this.ctx.restore();
+    }
+
     destroy() {
+        if (this._onResize) {
+            window.removeEventListener('resize', this._onResize);
+            this._onResize = null;
+        }
         if (this.container && this.container.parentNode) {
             this.container.parentNode.removeChild(this.container);
         }

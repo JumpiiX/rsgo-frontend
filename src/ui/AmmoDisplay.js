@@ -24,88 +24,86 @@ export class AmmoDisplay {
             document.head.appendChild(style);
         }
 
+        // Compact ammo readout: just a big current number, a small "/ max", and a
+        // thin reload progress bar underneath. No more 30 pip-bars hogging space.
         this.ammoContainer = document.createElement('div');
         this.ammoContainer.id = 'ammoContainer';
         this.ammoContainer.style.cssText = `
             position: fixed;
             bottom: 20px;
-            right: 20px;
-            padding: 14px 18px;
-            background: rgba(26, 36, 71, 0.88);
-            border: 1px solid rgba(239, 78, 35, 0.18);
-            border-radius: 12px;
+            right: 24px;
             color: rgba(239, 78, 35, 0.9);
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            backdrop-filter: blur(10px);
             z-index: 100;
-            min-width: 160px;
             user-select: none;
+            text-align: right;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
         `;
 
         this.ammoContainer.innerHTML = `
-            <div style="
-                font-size: 10px;
-                letter-spacing: 2px;
-                text-transform: uppercase;
-                color: rgba(239, 78, 35, 0.55);
-                margin-bottom: 6px;
-            ">Ammo</div>
-
-            <div id="ammoPips" style="
-                display: flex;
-                gap: 4px;
-                margin-bottom: 10px;
-                align-items: center;
-            "></div>
-
-            <div style="display: flex; align-items: baseline; gap: 6px;">
+            <div style="display: flex; align-items: baseline; justify-content: flex-end; gap: 6px; line-height: 1;">
                 <div id="ammoCurrent" style="
-                    font-size: 32px;
-                    font-weight: 600;
-                    line-height: 1;
-                    color: #fff;
+                    font-size: 44px;
+                    font-weight: 700;
+                    color: #ef4e23;
                     font-variant-numeric: tabular-nums;
-                ">10</div>
+                ">30</div>
                 <div style="
-                    font-size: 14px;
-                    color: rgba(239, 78, 35, 0.4);
+                    font-size: 18px;
+                    font-weight: 500;
+                    color: rgba(239, 78, 35, 0.6);
                     font-variant-numeric: tabular-nums;
-                ">/ <span id="ammoMax">10</span></div>
+                ">/ <span id="ammoMax">30</span></div>
+            </div>
+
+            <div id="ammoBarTrack" style="
+                margin-top: 6px;
+                margin-left: auto;
+                width: 96px;
+                height: 3px;
+                border-radius: 2px;
+                background: rgba(239, 78, 35, 0.18);
+                overflow: hidden;
+            ">
+                <div id="ammoBarFill" style="
+                    height: 100%;
+                    width: 100%;
+                    background: #ef4e23;
+                    border-radius: 2px;
+                    transition: width 0.08s linear;
+                "></div>
             </div>
 
             <div id="ammoReloadHint" style="
                 display: none;
-                margin-top: 10px;
-                padding-top: 10px;
-                border-top: 1px solid rgba(239, 78, 35, 0.12);
+                margin-top: 6px;
                 font-size: 11px;
-                color: rgba(239, 78, 35, 0.55);
-                display: flex;
+                letter-spacing: 0.5px;
+                color: rgba(239, 78, 35, 0.65);
                 align-items: center;
-                gap: 8px;
+                justify-content: flex-end;
+                gap: 6px;
             ">
                 <span>Reload</span>
                 <span id="ammoReloadKey" style="
                     display: inline-flex;
                     align-items: center;
                     justify-content: center;
-                    min-width: 20px;
-                    height: 20px;
-                    padding: 0 6px;
+                    min-width: 18px;
+                    height: 18px;
+                    padding: 0 5px;
                     background: rgba(239, 78, 35, 0.15);
                     border: 1px solid rgba(239, 78, 35, 0.5);
                     border-radius: 4px;
-                    font-size: 11px;
-                    font-weight: 600;
+                    font-size: 10px;
+                    font-weight: 700;
                     color: #ef4e23;
                 ">R</span>
             </div>
 
             <div id="ammoReloadingLabel" style="
                 display: none;
-                margin-top: 10px;
-                padding-top: 10px;
-                border-top: 1px solid rgba(239, 78, 35, 0.12);
+                margin-top: 6px;
                 font-size: 11px;
                 letter-spacing: 1.5px;
                 text-transform: uppercase;
@@ -116,60 +114,19 @@ export class AmmoDisplay {
 
         document.body.appendChild(this.ammoContainer);
 
-        this.pipsContainer = document.getElementById('ammoPips');
         this.currentEl = document.getElementById('ammoCurrent');
         this.maxEl = document.getElementById('ammoMax');
+        this.barFillEl = document.getElementById('ammoBarFill');
         this.reloadHintEl = document.getElementById('ammoReloadHint');
         this.reloadingLabelEl = document.getElementById('ammoReloadingLabel');
         this.reloadKeyEl = document.getElementById('ammoReloadKey');
 
-        this.renderPips();
         this.updateDisplay();
     }
 
-    renderPips() {
-        if (!this.pipsContainer) return;
-        this.pipsContainer.innerHTML = '';
-        for (let i = 0; i < this.maxAmmo; i++) {
-            const pip = document.createElement('div');
-            pip.dataset.index = String(i);
-            pip.style.cssText = `
-                width: 6px;
-                height: 14px;
-                border-radius: 2px;
-                background: rgba(239, 78, 35, 0.15);
-                transition: background 0.2s ease, transform 0.15s ease, opacity 0.2s ease;
-            `;
-            this.pipsContainer.appendChild(pip);
-        }
-    }
-
-    setPipState(index, state) {
-        if (!this.pipsContainer) return;
-        const pip = this.pipsContainer.children[index];
-        if (!pip) return;
-        if (state === 'loaded') {
-            pip.style.background = '#ef4e23';
-            pip.style.opacity = '1';
-            pip.style.transform = 'scaleY(1)';
-        } else if (state === 'empty') {
-            pip.style.background = 'rgba(239, 78, 35, 0.15)';
-            pip.style.opacity = '0.7';
-            pip.style.transform = 'scaleY(0.7)';
-        } else if (state === 'filling') {
-            pip.style.background = 'rgba(239, 78, 35, 0.55)';
-            pip.style.opacity = '1';
-            pip.style.transform = 'scaleY(0.9)';
-        }
-    }
-
     updateAmmo(current, max) {
-        const sizeChanged = max !== this.maxAmmo;
         this.currentAmmo = current;
         this.maxAmmo = max;
-        if (sizeChanged) {
-            this.renderPips();
-        }
         this.updateDisplay();
     }
 
@@ -185,40 +142,28 @@ export class AmmoDisplay {
         this.currentEl.textContent = this.currentAmmo;
         if (this.maxEl) this.maxEl.textContent = this.maxAmmo;
 
-        if (this.currentAmmo === 0) {
-            this.currentEl.style.color = '#ef4e23';
-            this.currentEl.style.animation = 'ammoPulse 0.9s infinite';
-        } else if (this.currentAmmo <= Math.ceil(this.maxAmmo * 0.3)) {
-            this.currentEl.style.color = '#ef4e23';
-            this.currentEl.style.animation = 'none';
-        } else {
-            this.currentEl.style.color = '#ef4e23';
-            this.currentEl.style.animation = 'none';
-        }
+        // Always orange; just pulse when fully empty.
+        this.currentEl.style.color = '#ef4e23';
+        this.currentEl.style.animation = this.currentAmmo === 0 ? 'ammoPulse 0.9s infinite' : 'none';
 
         if (this.isReloading) {
-            const filledCount = Math.floor(this.reloadProgress * this.maxAmmo);
-            for (let i = 0; i < this.maxAmmo; i++) {
-                if (i < filledCount) this.setPipState(i, 'loaded');
-                else if (i === filledCount) this.setPipState(i, 'filling');
-                else this.setPipState(i, 'empty');
-            }
-            this.currentEl.style.opacity = '0.5';
+            // Bar fills left-to-right with reload progress.
+            if (this.barFillEl) this.barFillEl.style.width = `${Math.round(this.reloadProgress * 100)}%`;
+            this.currentEl.style.opacity = '0.7';
             this.reloadHintEl.style.display = 'none';
             this.reloadingLabelEl.style.display = 'block';
         } else {
-            for (let i = 0; i < this.maxAmmo; i++) {
-                this.setPipState(i, i < this.currentAmmo ? 'loaded' : 'empty');
+            // Bar shows magazine fullness.
+            if (this.barFillEl) {
+                const frac = this.maxAmmo > 0 ? this.currentAmmo / this.maxAmmo : 0;
+                this.barFillEl.style.width = `${Math.round(frac * 100)}%`;
             }
             this.currentEl.style.opacity = '1';
             this.reloadingLabelEl.style.display = 'none';
             if (this.currentAmmo < this.maxAmmo) {
                 this.reloadHintEl.style.display = 'flex';
-                if (this.currentAmmo <= Math.ceil(this.maxAmmo * 0.3) || this.currentAmmo === 0) {
-                    this.reloadKeyEl.style.animation = 'ammoKeyGlow 1s infinite';
-                } else {
-                    this.reloadKeyEl.style.animation = 'none';
-                }
+                this.reloadKeyEl.style.animation =
+                    (this.currentAmmo <= Math.ceil(this.maxAmmo * 0.3)) ? 'ammoKeyGlow 1s infinite' : 'none';
             } else {
                 this.reloadHintEl.style.display = 'none';
             }

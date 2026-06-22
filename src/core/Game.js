@@ -16,6 +16,7 @@ import { Compass } from '../ui/Compass.js';
 import { HUD, ensureHudKeyframes } from '../ui/HudTheme.js';
 import { Scoreboard } from '../ui/Scoreboard.js';
 import { KillFeed } from '../ui/KillFeed.js';
+import { NotificationFeed } from '../ui/NotificationFeed.js';
 import { AmmoDisplay } from '../ui/AmmoDisplay.js';
 import { KillCamSystem } from '../game/KillCamSystem.js';
 import { ReplayRecorder } from '../game/ReplayRecorder.js';
@@ -43,6 +44,7 @@ export class Game {
         window.game = this;
         window.gameInstance = this; // Also set gameInstance for BombSystem
         this.killFeed = null;
+        this.notifications = null;
         this.ammoDisplay = null;
 
         this.gameStarted = false;
@@ -235,27 +237,30 @@ export class Game {
                         z: message.position_z || 0 
                     };
                     this.bombSystem.onBombPlanted(message.timer, position);
-                    
+
                     // If this player planted the bomb, remove it from their hand
                     if (message.player_id === this.network.playerId) {
                         this.bombSystem.onLocalBombPlanted();
                         console.log('Bomb removed from local player hand after server confirmation');
                     }
                 }
+                this.notify('Bomb planted', 'Site under attack');
             };
-            
+
             this.network.onBombDefusedCallback = (message) => {
                 console.log(`Bomb defused by player ${message.player_id}`);
                 if (this.bombSystem) {
                     this.bombSystem.onBombDefused();
                 }
+                this.notify('Bomb defused', 'Site secured');
             };
-            
+
             this.network.onBombExplodedCallback = () => {
                 console.log('Bomb exploded!');
                 if (this.bombSystem) {
                     this.bombSystem.onBombExploded();
                 }
+                this.notify('Bomb detonated');
             };
 
             this.network.onMapResetCallback = () => {
@@ -295,7 +300,30 @@ export class Game {
         this.miniMap = new SimpleMiniMap(this.scene.getScene(), this.renderer.getRenderer());
         this.compass = new Compass();
         this.scoreboard = new Scoreboard();
-        this.killFeed = new KillFeed();
+
+        // One shared notification COLUMN, right of the round counter. Everything
+        // stacks in flow (no fixed-top gaps): round-end banner first, then live
+        // notifications, then the kill feed directly underneath. So when a round
+        // result is showing, the kill feed sits right under it — no empty space.
+        this.notifColumn = document.createElement('div');
+        this.notifColumn.id = 'notifColumn';
+        this.notifColumn.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 280px;
+            width: 320px;
+            z-index: 100;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        `;
+        document.body.appendChild(this.notifColumn);
+
+        // Order in column: notifications above, kill feed below (banner is
+        // inserted at the very top on demand by showRoundEndMessage).
+        this.notifications = new NotificationFeed(this.notifColumn);
+        this.killFeed = new KillFeed(this.notifColumn);
         this.ammoDisplay = new AmmoDisplay();
 
         this.replayRecorder = new ReplayRecorder({
@@ -575,27 +603,30 @@ export class Game {
                                 z: message.position_z || 0 
                             };
                             this.bombSystem.onBombPlanted(message.timer, position);
-                            
+
                             // If this player planted the bomb, remove it from their hand
                             if (message.player_id === this.network.playerId) {
                                 this.bombSystem.onLocalBombPlanted();
                                 console.log('Bomb removed from local player hand after server confirmation');
                             }
                         }
+                        this.notify('Bomb planted', 'Site under attack');
                     };
-                    
+
                     this.network.onBombDefusedCallback = (message) => {
                         console.log(`Bomb defused by player ${message.player_id}`);
                         if (this.bombSystem) {
                             this.bombSystem.onBombDefused();
                         }
+                        this.notify('Bomb defused', 'Site secured');
                     };
-                    
+
                     this.network.onBombExplodedCallback = () => {
                         console.log('Bomb exploded!');
                         if (this.bombSystem) {
                             this.bombSystem.onBombExploded();
                         }
+                        this.notify('Bomb detonated');
                     };
 
                     this.network.onMapResetCallback = () => {
@@ -2038,31 +2069,37 @@ export class Game {
         if (!killCounter) {
             killCounter = document.createElement('div');
             killCounter.id = 'killCounter';
+            // Sits just UNDER the minimap (minimap: top 20 + 202 tall = 222),
+            // right-aligned to it, so it never overlaps the minimap circle.
             killCounter.style.cssText = `
                 position: fixed;
-                top: 280px;
-                right: 20px;
-                background: rgba(26, 36, 71, 0.88);
-                border: 1px solid rgba(239, 78, 35, 0.18);
-                border-radius: 12px;
+                top: 234px;
+                right: 24px;
                 color: rgba(239, 78, 35, 0.9);
-                padding: 14px 18px;
-                font-size: 13px;
                 font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
                 z-index: 100;
-                min-width: 80px;
-                backdrop-filter: blur(10px);
                 display: flex;
                 align-items: center;
-                gap: 8px;
+                justify-content: flex-end;
+                gap: 7px;
+                text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
             `;
             document.body.appendChild(killCounter);
         }
+        // Compact inline pill: crisp target/reticle icon + count + "kills" label.
+        // A clean crosshair reads far better at small sizes than a tiny skull.
         killCounter.innerHTML = `
-            <div style="display: flex; flex-direction: column; align-items: flex-start;">
-                <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.6; margin-bottom: 2px;">Eliminations</div>
-                <div style="font-size: 24px; font-weight: 300; color: #ef4e23; line-height: 1;">${this.kills}</div>
-            </div>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                 stroke="#ef4e23" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;">
+                <circle cx="12" cy="12" r="7"/>
+                <line x1="12" y1="1" x2="12" y2="5"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="1" y1="12" x2="5" y2="12"/>
+                <line x1="19" y1="12" x2="23" y2="12"/>
+                <circle cx="12" cy="12" r="1.6" fill="#ef4e23" stroke="none"/>
+            </svg>
+            <span style="font-size: 22px; font-weight: 700; color: #ef4e23; line-height: 1; font-variant-numeric: tabular-nums;">${this.kills}</span>
+            <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.5;">Kills</span>
         `;
     }
 
@@ -2682,13 +2719,20 @@ export class Game {
             pitch: this.input.pitch
         };
         
-        // Set camera to bird view position - higher up and centered over map
-        this.camera.getCamera().position.set(0, 300, 100); // Higher and slightly back for better view
-        this.camera.getCamera().lookAt(0, 0, 0); // Look at map center
-        
-        // Update input manager rotation to match bird view
+        // Bird view, FLIPPED PER TEAM so a player always sees their OWN spawn +
+        // tunnels at the bottom of the screen and the ENEMY's (red, no-build) at
+        // the top. The player's spawn is at z = 300 * myHalfSign; we put the
+        // camera on that same side and look at center, so their side renders low.
+        const half = this.myHalfSign || -1;
+        const cam = this.camera.getCamera();
+        cam.position.set(0, 300, 100 * half); // sit on the player's own side
+        cam.up.set(0, 1, 0);
+        cam.lookAt(0, 0, 0); // look at map center → own side renders at the bottom
+
+        // Build mode has no pointer lock, so these don't drive the camera; we set
+        // them only so the restored-on-exit baseline is sane.
         this.input.yaw = 0;
-        this.input.pitch = -Math.PI / 3; // 60 degree angle down (not straight down)
+        this.input.pitch = -Math.PI / 3;
         
         // Exit pointer lock for easier UI interaction
         this.input.isPointerLocked = false;
@@ -2716,6 +2760,8 @@ export class Game {
         if (roundContainer) {
             roundContainer.style.display = 'none';
         }
+
+        if (this.notifColumn) this.notifColumn.style.display = 'none';
 
         if (this.bombSystem) {
             this.bombSystem.hideBombUI();
@@ -2880,6 +2926,8 @@ export class Game {
         if (roundContainer) {
             roundContainer.style.display = 'block';
         }
+
+        if (this.notifColumn) this.notifColumn.style.display = 'flex';
 
         if (this.bombSystem) {
             this.bombSystem.showBombUI();
@@ -3775,51 +3823,60 @@ export class Game {
         return { x: pos.x, z: pos.z, hx, hz };
     }
 
-    // Would placing this wall fully SEAL the mid tunnel (the direct A↔B corridor)?
-    // We flood-fill the open space of the mid corridor (with the candidate wall
-    // added) and check whether the A-side opening still connects to the B-side
-    // opening. If they're cut off, this placement closes the only direct route →
-    // refuse it. Partial walls are fine; only the sealing wall is blocked.
-    wouldSealMidTunnel(position) {
-        // Mid corridor bounds (from MapBuilder: x∈[-160,160], z∈[-50,50]).
-        const X_MIN = -160, X_MAX = 160, Z_MIN = -50, Z_MAX = 50;
-        // Only relevant if the candidate actually sits in/around the corridor.
-        if (position.z < Z_MIN - 20 || position.z > Z_MAX + 20) return false;
-        if (position.x < X_MIN - 20 || position.x > X_MAX + 20) return false;
+    // All FIVE tunnels of the bowtie map as corridors {start, end, width}: the mid
+    // A↔B lane plus the four diagonal spawn↔site lanes. Every tunnel must keep at
+    // least one gap — you may never wall one off completely. Cached.
+    allTunnels() {
+        if (this._tunnels) return this._tunnels;
+        const PATH = 100, SPAWN_Z = 300, SITE_X = 250;
+        const mk = (sx, sz, ex, ez) => {
+            const dx = ex - sx, dz = ez - sz;
+            const len = Math.hypot(dx, dz);
+            const ux = dx / len, uz = dz / len;   // along the corridor
+            const px = -uz, pz = ux;               // across it
+            return { sx, sz, ux, uz, px, pz, len, half: PATH / 2 };
+        };
+        this._tunnels = [
+            mk(-160, 0, 160, 0),                 // mid (A↔B), trimmed to between sites
+            mk(0, -SPAWN_Z, -SITE_X, 0),         // bottom spawn → site A
+            mk(0, -SPAWN_Z, SITE_X, 0),          // bottom spawn → site B
+            mk(0, SPAWN_Z, -SITE_X, 0),          // top spawn → site A
+            mk(0, SPAWN_Z, SITE_X, 0),           // top spawn → site B
+        ];
+        return this._tunnels;
+    }
 
-        const walls = (this.buildWalls || []).map((m) => this.wallFootprint(m));
-        walls.push(this.candidateFootprint(position));
-
-        const step = 5;
-        const pad = 1; // shrink wall test a hair so touching walls still leave a seam? no — keep solid
-        const blocked = (x, z) => {
+    // Can you still walk from one END of this corridor to the other, given the
+    // walls? Flood-fill the corridor's own open space in its LOCAL frame (along ×
+    // across) and check the start end still connects to the far end.
+    tunnelStillOpen(c, walls, pad) {
+        const stepA = 4, stepP = 4;
+        const blocked = (wx, wz) => {
             for (const w of walls) {
-                if (Math.abs(x - w.x) <= w.hx + pad && Math.abs(z - w.z) <= w.hz + pad) return true;
+                if (Math.abs(wx - w.x) <= w.hx + pad && Math.abs(wz - w.z) <= w.hz + pad) return true;
             }
             return false;
         };
-
-        // Build the grid of open cells inside the corridor.
+        const toWorld = (a, p) => ({ x: c.sx + c.ux * a + c.px * p, z: c.sz + c.uz * a + c.pz * p });
         const cols = [], rows = [];
-        for (let x = X_MIN; x <= X_MAX; x += step) cols.push(x);
-        for (let z = Z_MIN; z <= Z_MAX; z += step) rows.push(z);
+        for (let a = 0; a <= c.len; a += stepA) cols.push(a);
+        for (let p = -c.half; p <= c.half; p += stepP) rows.push(p);
         const key = (ci, ri) => ci + '_' + ri;
         const open = new Set();
         for (let ci = 0; ci < cols.length; ci++) {
             for (let ri = 0; ri < rows.length; ri++) {
-                if (!blocked(cols[ci], rows[ri])) open.add(key(ci, ri));
+                const w = toWorld(cols[ci], rows[ri]);
+                if (!blocked(w.x, w.z)) open.add(key(ci, ri));
             }
         }
-        // Seeds: open cells on the far-LEFT column (A side). Targets: far-RIGHT.
-        const queue = [];
-        const seen = new Set();
+        const queue = [], seen = new Set();
         for (let ri = 0; ri < rows.length; ri++) {
             if (open.has(key(0, ri))) { queue.push([0, ri]); seen.add(key(0, ri)); }
         }
-        const lastCol = cols.length - 1;
+        const last = cols.length - 1;
         while (queue.length) {
             const [ci, ri] = queue.shift();
-            if (ci === lastCol) return false; // reached B side → tunnel still open
+            if (ci === last) return true; // reached the far end → still open
             for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
                 const nc = ci + dc, nr = ri + dr;
                 if (nc < 0 || nr < 0 || nc >= cols.length || nr >= rows.length) continue;
@@ -3827,8 +3884,29 @@ export class Game {
                 if (open.has(k) && !seen.has(k)) { seen.add(k); queue.push([nc, nr]); }
             }
         }
-        // Never reached the right side → this wall seals the corridor.
-        return true;
+        return false; // never reached the far end → corridor sealed
+    }
+
+    // Would placing this wall fully SEAL any tunnel? Rule: every one of the five
+    // tunnels must keep at least one open gap across its width. We add the
+    // candidate wall, then for each tunnel the candidate touches, check it can
+    // still be crossed end-to-end. Refuse the placement if any tunnel closes.
+    wouldSealAnyTunnel(position) {
+        const walls = (this.buildWalls || []).map((m) => this.wallFootprint(m));
+        const candidate = this.candidateFootprint(position);
+        walls.push(candidate);
+        const pad = 1;
+        for (const c of this.allTunnels()) {
+            // Only test tunnels the candidate actually sits in/near (perf + avoids
+            // false positives on far tunnels). Project candidate center to local.
+            const lx = candidate.x - c.sx, lz = candidate.z - c.sz;
+            const along = lx * c.ux + lz * c.uz;
+            const perp = lx * c.px + lz * c.pz;
+            if (along < -20 || along > c.len + 20) continue;
+            if (Math.abs(perp) > c.half + 20) continue;
+            if (!this.tunnelStillOpen(c, walls, pad)) return true;
+        }
+        return false;
     }
 
     canPlaceWallAtPosition(position, wallType, shouldFlash = false) {
@@ -3840,11 +3918,12 @@ export class Game {
             return false;
         }
 
-        // ZONE RULE 2: can't place the wall that would fully seal the mid tunnel
-        // (the direct A↔B corridor). Partial walls are fine; only the sealing one
-        // is refused, so there's always a way through mid.
-        if (this.wouldSealMidTunnel(gridPos)) {
-            if (shouldFlash) this.flashBuildZoneWarning("Can't fully close the mid tunnel");
+        // ZONE RULE 2: every tunnel must keep at least one open gap — you can't
+        // fully wall off ANY tunnel (mid A↔B or any of the four spawn→site lanes).
+        // Partial walls are fine; only the wall that would seal a tunnel shut is
+        // refused.
+        if (this.wouldSealAnyTunnel(gridPos)) {
+            if (shouldFlash) this.flashBuildZoneWarning("Can't fully close a tunnel");
             return false;
         }
 
@@ -4629,6 +4708,12 @@ export class Game {
     }
     
     // Clean, minimalist round-end banner matching the rest of the HUD.
+    // Push a transient toast into the notification column (right of the round
+    // counter). Safe no-op if the feed isn't created yet.
+    notify(title, subtitle = '', accent = '#ef4e23') {
+        if (this.notifications) this.notifications.push(title, subtitle, accent);
+    }
+
     // title: the big line (e.g. "Defenders win"); subtitle: small caps reason
     // (e.g. "Bomb defused"); accent: thin top color bar (team color).
     showRoundEndMessage(title, subtitle = '', accent = '#ffffff') {
@@ -4637,50 +4722,52 @@ export class Game {
         if (!message) {
             message = document.createElement('div');
             message.id = 'roundEndMessage';
-            // Compact, minimal banner pinned near the TOP of the screen — not a
-            // big box in the middle that blocks the view.
+            // Lives at the TOP of the shared notification column (in flow), so the
+            // notifications + kill feed stack DIRECTLY beneath it with no gap.
+            // Away from the health/shield panel (bottom-left), out of the
+            // crosshair's way — the player can keep fighting while seeing who won.
             message.style.cssText = `
-                position: fixed;
-                top: 14px;
-                left: 50%;
-                transform: translateX(-50%) translateY(-8px);
-                padding: 7px 16px;
-                background: rgba(26, 36, 71, 0.9);
-                border: 1px solid rgba(239, 78, 35, 0.18);
-                border-left: 3px solid ${accent};
-                border-radius: 8px;
-                backdrop-filter: blur(8px);
+                width: 100%;
+                box-sizing: border-box;
+                padding: 16px 22px;
+                background: rgba(26, 36, 71, 0.92);
+                border: 1px solid rgba(239, 78, 35, 0.2);
+                border-left: 5px solid ${accent};
+                border-radius: 4px 12px 12px 4px;
+                backdrop-filter: blur(10px);
                 color: #ef4e23;
                 font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-                z-index: 500;
-                text-align: center;
-                white-space: nowrap;
+                text-align: left;
                 opacity: 0;
-                transition: opacity 0.2s ease, transform 0.2s ease;
+                transform: translateX(-12px);
+                transition: opacity 0.25s ease, transform 0.25s ease;
                 pointer-events: none;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
             `;
-            document.body.appendChild(message);
+            // Insert as the FIRST child of the column so it sits above everything.
+            const col = document.getElementById('notifColumn') || document.body;
+            col.insertBefore(message, col.firstChild);
         }
         // Keep the accent on the left border even when reusing the element.
         message.style.borderLeftColor = accent;
 
         message.innerHTML = `
-            <span style="font-size: 14px; font-weight: 500; letter-spacing: 0.3px;">${title}</span>
-            ${subtitle ? `<span style="font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.5; margin-left: 8px;">${subtitle}</span>` : ''}
+            <div style="font-size: 32px; font-weight: 800; letter-spacing: 0.5px; line-height: 1.05; color: #ef4e23; text-transform: uppercase;">${title}</div>
+            ${subtitle ? `<div style="font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; color: rgba(239, 78, 35, 0.6); margin-top: 6px;">${subtitle}</div>` : ''}
         `;
 
         message.style.display = 'block';
         requestAnimationFrame(() => {
             message.style.opacity = '1';
-            message.style.transform = 'translateX(-50%) translateY(0)';
+            message.style.transform = 'translateX(0)';
         });
 
         if (this._roundEndMsgTimer) clearTimeout(this._roundEndMsgTimer);
         this._roundEndMsgTimer = setTimeout(() => {
             message.style.opacity = '0';
-            message.style.transform = 'translateX(-50%) translateY(-8px)';
-            setTimeout(() => { message.style.display = 'none'; }, 250);
-        }, 4000);
+            message.style.transform = 'translateX(-12px)';
+            setTimeout(() => { message.style.display = 'none'; }, 300);
+        }, 6000);
     }
     
     killPlayer(reason) {
