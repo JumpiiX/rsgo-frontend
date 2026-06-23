@@ -6,17 +6,24 @@ export class CollisionSystem {
         this.cylinderColliders = [];
     }
 
-    addBoxCollider(position, size, type = 'default') {
-        const bounds = {
-            minX: position.x - size.x / 2,
-            maxX: position.x + size.x / 2,
-            minZ: position.z - size.z / 2,
-            maxZ: position.z + size.z / 2,
+    // A box collider, optionally rotated about Y. We store the center, half-
+    // extents and rotation; checkCollision un-rotates the test point into the
+    // box's local frame so a rotated wall (e.g. a 90° or diagonal build wall)
+    // collides on its real footprint, not an axis-aligned approximation.
+    addBoxCollider(position, size, type = 'default', rotation = 0) {
+        const box = {
+            cx: position.x,
+            cz: position.z,
+            hx: size.x / 2,   // half-extent along the box's LOCAL x (width)
+            hz: size.z / 2,   // half-extent along the box's LOCAL z (depth)
             minY: position.y - size.y / 2,
             maxY: position.y + size.y / 2,
+            rotation: rotation,
+            cos: Math.cos(-rotation),  // precomputed for the world→local un-rotate
+            sin: Math.sin(-rotation),
             type: type
         };
-        this.boxColliders.push(bounds);
+        this.boxColliders.push(box);
     }
 
     removeCollidersByType(type) {
@@ -42,14 +49,18 @@ export class CollisionSystem {
     }
 
     checkCollision(position, radius = 1.5) {
-        // Check collision with all box colliders
-        for (const bounds of this.boxColliders) {
-            if (position.x + radius > bounds.minX &&
-                position.x - radius < bounds.maxX &&
-                position.z + radius > bounds.minZ &&
-                position.z - radius < bounds.maxZ &&
-                position.y >= bounds.minY - 5 &&  // Allow some vertical tolerance
-                position.y <= bounds.maxY + 5) {   // Allow some vertical tolerance
+        // Check collision with all box colliders. Each box may be rotated about
+        // Y: transform the point into the box's local frame (un-rotate around its
+        // center) so the test is a plain AABB-vs-circle in that frame.
+        for (const box of this.boxColliders) {
+            if (position.y < box.minY - 5 || position.y > box.maxY + 5) continue; // vertical tolerance
+            // World offset from the box center, then un-rotate into local space.
+            const dx = position.x - box.cx;
+            const dz = position.z - box.cz;
+            const lx = dx * box.cos - dz * box.sin;
+            const lz = dx * box.sin + dz * box.cos;
+            if (lx + radius > -box.hx && lx - radius < box.hx &&
+                lz + radius > -box.hz && lz - radius < box.hz) {
                 return true;
             }
         }

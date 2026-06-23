@@ -3823,33 +3823,35 @@ export class Game {
         return { x: pos.x, z: pos.z, hx, hz };
     }
 
-    // All FIVE tunnels of the bowtie map as corridors {start, end, width}: the mid
-    // A↔B lane plus the four diagonal spawn↔site lanes. Every tunnel must keep at
-    // least one gap — you may never wall one off completely. Cached.
-    allTunnels() {
-        if (this._tunnels) return this._tunnels;
-        const PATH = 100, SPAWN_Z = 300, SITE_X = 250;
+    // The FIVE tunnels of the bowtie map as oriented corridors {sx,sz, ux,uz (along),
+    // px,pz (across), len, half}: the 4 diagonal spawn→site lanes + the mid A↔B lane.
+    // Each must ALWAYS keep at least one open gap across its width — you can never
+    // fully wall off any single tunnel, even if a detour exists. Cached.
+    tunnels() {
+        if (this._tunnelList) return this._tunnelList;
+        const SPAWN_Z = 300, SITE_X = 250, PATH = 100;
         const mk = (sx, sz, ex, ez) => {
             const dx = ex - sx, dz = ez - sz;
             const len = Math.hypot(dx, dz);
-            const ux = dx / len, uz = dz / len;   // along the corridor
-            const px = -uz, pz = ux;               // across it
+            const ux = dx / len, uz = dz / len;   // along
+            const px = -uz, pz = ux;               // across
             return { sx, sz, ux, uz, px, pz, len, half: PATH / 2 };
         };
-        this._tunnels = [
-            mk(-160, 0, 160, 0),                 // mid (A↔B), trimmed to between sites
-            mk(0, -SPAWN_Z, -SITE_X, 0),         // bottom spawn → site A
-            mk(0, -SPAWN_Z, SITE_X, 0),          // bottom spawn → site B
-            mk(0, SPAWN_Z, -SITE_X, 0),          // top spawn → site A
-            mk(0, SPAWN_Z, SITE_X, 0),           // top spawn → site B
+        this._tunnelList = [
+            mk(0, -SPAWN_Z, -SITE_X, 0),   // bottom spawn → site A
+            mk(0, -SPAWN_Z, SITE_X, 0),    // bottom spawn → site B
+            mk(0, SPAWN_Z, -SITE_X, 0),    // top spawn → site A
+            mk(0, SPAWN_Z, SITE_X, 0),     // top spawn → site B
+            mk(-SITE_X, 0, SITE_X, 0),     // mid (A↔B)
         ];
-        return this._tunnels;
+        return this._tunnelList;
     }
 
-    // Can you still walk from one END of this corridor to the other, given the
-    // walls? Flood-fill the corridor's own open space in its LOCAL frame (along ×
-    // across) and check the start end still connects to the far end.
-    tunnelStillOpen(c, walls, pad) {
+    // Can you still walk from one END of this tunnel to the other, given the walls?
+    // Flood-fill the corridor's OWN open space in its local frame (along × across)
+    // and check the start edge still connects to the far edge. Returns true if the
+    // tunnel is still passable.
+    tunnelPassable(c, walls, pad) {
         const stepA = 4, stepP = 4;
         const blocked = (wx, wz) => {
             for (const w of walls) {
@@ -3875,7 +3877,7 @@ export class Game {
         }
         const last = cols.length - 1;
         while (queue.length) {
-            const [ci, ri] = queue.shift();
+            const [ci, ri] = queue.pop();
             if (ci === last) return true; // reached the far end → still open
             for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
                 const nc = ci + dc, nr = ri + dr;
@@ -3884,27 +3886,21 @@ export class Game {
                 if (open.has(k) && !seen.has(k)) { seen.add(k); queue.push([nc, nr]); }
             }
         }
-        return false; // never reached the far end → corridor sealed
+        return false; // never reached the far end → tunnel sealed
     }
 
-    // Would placing this wall fully SEAL any tunnel? Rule: every one of the five
-    // tunnels must keep at least one open gap across its width. We add the
-    // candidate wall, then for each tunnel the candidate touches, check it can
-    // still be crossed end-to-end. Refuse the placement if any tunnel closes.
+    // Would placing this wall fully SEAL any tunnel? Rule: EVERY one of the five
+    // tunnels must keep at least one open gap across its width. We add the candidate
+    // wall, then check each tunnel can still be crossed end-to-end. Refuse if any
+    // tunnel closes. (We test ALL five, not just nearby ones, so a wall — straight,
+    // diagonal or a half-circle — that seals a tunnel from outside its lane is still
+    // caught.)
     wouldSealAnyTunnel(position) {
         const walls = (this.buildWalls || []).map((m) => this.wallFootprint(m));
-        const candidate = this.candidateFootprint(position);
-        walls.push(candidate);
+        walls.push(this.candidateFootprint(position));
         const pad = 1;
-        for (const c of this.allTunnels()) {
-            // Only test tunnels the candidate actually sits in/near (perf + avoids
-            // false positives on far tunnels). Project candidate center to local.
-            const lx = candidate.x - c.sx, lz = candidate.z - c.sz;
-            const along = lx * c.ux + lz * c.uz;
-            const perp = lx * c.px + lz * c.pz;
-            if (along < -20 || along > c.len + 20) continue;
-            if (Math.abs(perp) > c.half + 20) continue;
-            if (!this.tunnelStillOpen(c, walls, pad)) return true;
+        for (const c of this.tunnels()) {
+            if (!this.tunnelPassable(c, walls, pad)) return true;
         }
         return false;
     }
@@ -3919,9 +3915,9 @@ export class Game {
         }
 
         // ZONE RULE 2: every tunnel must keep at least one open gap — you can't
-        // fully wall off ANY tunnel (mid A↔B or any of the four spawn→site lanes).
-        // Partial walls are fine; only the wall that would seal a tunnel shut is
-        // refused.
+        // fully wall off ANY of the five tunnels (the four spawn→site lanes or the
+        // mid A↔B lane). Partial walls are fine; only the wall that would seal a
+        // tunnel shut is refused.
         if (this.wouldSealAnyTunnel(gridPos)) {
             if (shouldFlash) this.flashBuildZoneWarning("Can't fully close a tunnel");
             return false;
@@ -4147,12 +4143,15 @@ export class Game {
         this.scene.getScene().add(wall);
         this.buildWalls.push(wall);  // Track for cleanup
         
-        // Add collision
+        // Add collision — tag as 'buildWall' (so map reset can clear it) and pass
+        // the wall's Y rotation so a rotated wall collides on its real footprint.
         this.collisionSystem.addBoxCollider(
             { x: position.x, y: yPos, z: position.z },
             { x: width, y: height, z: depth },
+            'buildWall',
+            rotation
         );
-        
+
         // Deduct money
         this.buildMoney -= cost;
         this.playerMoney = this.buildMoney; // Keep playerMoney in sync

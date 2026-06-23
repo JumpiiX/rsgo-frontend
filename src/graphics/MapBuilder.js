@@ -500,17 +500,16 @@ export class MapBuilder {
         this.scene.add(wall);
         
         if (this.collisionSystem) {
-            const cos = Math.cos(rotation);
-            const sin = Math.sin(rotation);
-            const rotatedWidth = Math.abs(width * cos) + Math.abs(depth * sin);
-            const rotatedDepth = Math.abs(width * sin) + Math.abs(depth * cos);
-            
+            // The collider is rotation-aware now, so pass the real rotation and the
+            // wall's true extents (no need to inflate to an axis-aligned bounding box).
             this.collisionSystem.addBoxCollider(
                 { x, y, z },
-                { x: rotatedWidth, y: height, z: rotatedDepth }
+                { x: width, y: height, z: depth },
+                'default',
+                rotation
             );
         }
-        
+
         return wall;
     }
     
