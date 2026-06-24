@@ -2789,8 +2789,12 @@ export class Game {
         console.log('Build mode ready - barrier selected, drag mode enabled');
     }
 
-    // Lay translucent red strips over the enemy's two diagonal tunnels (the lanes
-    // a team may NOT build in). Only visible in build mode.
+    // Lay a smooth translucent red strip over each of the enemy's two diagonal
+    // tunnels — the lanes a team may NOT build in. Each strip is a single rotated
+    // plane that follows the tunnel exactly: it mirrors MapBuilder.createAngledFloor
+    // (pathWidth 100, full spawn→site length, angle atan2(dx,dz)), so the red edge is
+    // a clean straight line matching the tunnel floor — no grid staircase. We trim the
+    // far end so the strip stops at the shared bomb site (which stays buildable).
     createEnemyZoneOverlay() {
         this.removeEnemyZoneOverlay();
         if (!this.myHalfSign) return; // half unknown → nothing to mark
@@ -2799,22 +2803,19 @@ export class Game {
             color: 0xd63030, transparent: true, opacity: 0.28,
             side: THREE.DoubleSide, depthWrite: false,
         });
-        const SITE_TRIM = 110; // stop the strip before the (shared) bomb site
-        // pathWidth of the diagonal floors in MapBuilder is 100, so match it.
-        const STRIP_WIDTH = 100;
+        const PATH = 100;       // diagonal floor width in MapBuilder
         for (const c of this.enemyTunnelCorridors()) {
-            // Cover the lane from the enemy spawn down to just shy of the site, so
-            // the overlay matches the actual rule (sites stay buildable / unmarked).
-            const len = Math.max(20, c.len - SITE_TRIM);
-            const geo = new THREE.PlaneGeometry(STRIP_WIDTH, len);
+            // The strip spans the FULL lane (spawn → site center), matching
+            // isInEnemyTunnel exactly — the lane stays blocked right up to the site.
+            const len = c.len;
+            const geo = new THREE.PlaneGeometry(PATH, len);
             const strip = new THREE.Mesh(geo, mat);
             strip.rotation.x = -Math.PI / 2;
-            // MATCH MapBuilder.createAngledFloor: it uses rotation.z = atan2(dx,dz)
-            // with dx,dz = (site - spawn). Our (ux,uz) is that same direction
-            // normalized, so the angle is atan2(ux, uz) WITHOUT negation. (The
-            // earlier minus sign rotated the strip off the tunnel.)
+            // Match createAngledFloor's orientation: rotation.z = atan2(dx, dz) where
+            // (dx,dz) is spawn→site; (c.ux,c.uz) is that direction normalized.
             strip.rotation.z = Math.atan2(c.ux, c.uz);
-            const midAlong = len / 2; // start at the spawn end
+            // Center the (trimmed) strip along the lane, starting from the spawn end.
+            const midAlong = len / 2;
             strip.position.set(c.sx + c.ux * midAlong, 0.3, c.sz + c.uz * midAlong);
             strip.renderOrder = 2;
             this.enemyZoneGroup.add(strip);
@@ -3765,32 +3766,36 @@ export class Game {
     // only routes to the sites. halfWidth is generous so a wall anywhere across
     // the corridor is caught.
     enemyTunnelCorridors() {
-        const SPAWN_Z = 300, SITE_X = 250, HALF_WIDTH = 60;
+        // HALF_WIDTH 50 = pathWidth 100 / 2, so the no-build lane is exactly the
+        // visible diagonal tunnel floor (and matches the red overlay strip).
+        const SPAWN_Z = 300, SITE_X = 250, HALF_WIDTH = 50;
+        const SITE_HALF = 90; // bomb-site half-size — the lane STOPS at the site edge,
+                              // so the no-build zone doesn't run into the shared site.
         // Our half is myHalfSign; the enemy spawns on the opposite side.
         const enemyZ = -this.myHalfSign * SPAWN_Z;
         if (!this.myHalfSign) return []; // unknown half → don't restrict
         const mk = (siteX) => {
             const sx = 0, sz = enemyZ, ex = siteX, ez = 0;
             const dx = ex - sx, dz = ez - sz;
-            const len = Math.hypot(dx, dz);
-            const ux = dx / len, uz = dz / len;   // along
+            const fullLen = Math.hypot(dx, dz);
+            const ux = dx / fullLen, uz = dz / fullLen;   // along
             const px = -uz, pz = ux;              // perpendicular
+            // Trim the site end so the lane ends where the site box starts (its near
+            // edge ~SITE_HALF from the site center), not at the site center.
+            const len = Math.max(20, fullLen - SITE_HALF);
             return { sx, sz, len, ux, uz, px, pz, halfWidth: HALF_WIDTH };
         };
         return [mk(-SITE_X), mk(SITE_X)];
     }
 
-    // Is (x,z) inside one of the ENEMY tunnel corridors? We also exclude the
-    // shared bomb-site boxes (radius ~halfSite around ±250,0) so a team can
-    // still build on the sites themselves — only the enemy's tunnel LANES are off
-    // limits, not the contested sites.
+    // Is (x,z) inside one of the ENEMY tunnel corridors? The enemy's spawn→site
+    // LANES are off limits. The tunnel check takes PRIORITY over the shared-site
+    // exclusion: where a lane overlaps the site box (the tunnel MOUTH right next to
+    // the site) it stays blocked — otherwise a wall could sneak into the red lane
+    // just shy of the site. Only cells that are in the site box AND not in any lane
+    // are allowed (so you can still build ON the contested site itself).
     isInEnemyTunnel(x, z) {
-        const SITE_X = 250, SITE_HALF = 90; // bomb-site half-size (shared ground)
-        // On a bomb site → allowed (shared).
-        if (Math.abs(z) <= SITE_HALF &&
-            (Math.abs(x - SITE_X) <= SITE_HALF || Math.abs(x + SITE_X) <= SITE_HALF)) {
-            return false;
-        }
+        // In an enemy lane → blocked, regardless of the site box.
         for (const c of this.enemyTunnelCorridors()) {
             const lx = x - c.sx, lz = z - c.sz;
             const along = lx * c.ux + lz * c.uz;
@@ -3799,6 +3804,31 @@ export class Game {
                 perp >= -c.halfWidth && perp <= c.halfWidth) {
                 return true;
             }
+        }
+        return false;
+    }
+
+    // Would a wall placed at `pos` (with the current rotation) touch the enemy
+    // tunnel red zone ANYWHERE along its body? The red zone is the source of truth:
+    // if any part of the wall's footprint falls in it, the placement is refused —
+    // not just when the wall's center does. We sample points across the wall's
+    // 20×2 footprint and test each with isInEnemyTunnel (the same rule the overlay
+    // draws), so a wall edge clipping the angled lane is caught too.
+    wallTouchesEnemyTunnel(pos) {
+        if (!this.myHalfSign) return false; // half unknown → no restriction
+        const fp = this.candidateFootprint(pos); // {x,z,hx,hz} axis-aligned (walls are 0/90°)
+        const STEP = 2; // sample every 2 units across the footprint — finer than the 2-thick wall
+        for (let dx = -fp.hx; dx <= fp.hx; dx += STEP) {
+            for (let dz = -fp.hz; dz <= fp.hz; dz += STEP) {
+                if (this.isInEnemyTunnel(fp.x + dx, fp.z + dz)) return true;
+            }
+            // Make sure the far edge (dz === +hz) is always sampled even if hz isn't
+            // a multiple of STEP.
+            if (this.isInEnemyTunnel(fp.x + dx, fp.z + fp.hz)) return true;
+        }
+        // And the far x edge for every z sample.
+        for (let dz = -fp.hz; dz <= fp.hz; dz += STEP) {
+            if (this.isInEnemyTunnel(fp.x + fp.hx, fp.z + dz)) return true;
         }
         return false;
     }
@@ -3908,8 +3938,10 @@ export class Game {
     canPlaceWallAtPosition(position, wallType, shouldFlash = false) {
         const gridPos = this.snapToGrid(position);
 
-        // ZONE RULE: can't build in the enemy's two diagonal tunnels.
-        if (this.isInEnemyTunnel(gridPos.x, gridPos.z)) {
+        // ZONE RULE: can't build in the enemy's two diagonal tunnels. The red zone
+        // is the source of truth — if ANY part of the wall's footprint touches it
+        // (not just the center), the placement is refused.
+        if (this.wallTouchesEnemyTunnel(gridPos)) {
             if (shouldFlash) this.flashBuildZoneWarning("Can't build in enemy tunnels");
             return false;
         }
