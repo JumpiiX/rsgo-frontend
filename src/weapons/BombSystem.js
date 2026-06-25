@@ -671,60 +671,25 @@ export class BombSystem {
         this.hideBombTimerUI();
     }
     
-    showBombTimerUI(timeLeft) {
-        // Create bomb timer UI for all players
-        let timerDisplay = document.getElementById('bombTimer');
-        if (!timerDisplay) {
-            timerDisplay = document.createElement('div');
-            timerDisplay.id = 'bombTimer';
-            timerDisplay.style.cssText = `
-                position: fixed;
-                top: 80px;
-                left: 50%;
-                transform: translateX(-50%);
-                background: transparent;
-                color: #ef4e23;
-                padding: 0;
-                border-radius: 0;
-                font-size: 48px;
-                font-weight: normal;
-                text-align: center;
-                z-index: 99;
-                border: none;
-                box-shadow: none;
-                font-family: 'Arial', sans-serif;
-                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
-            `;
-            document.body.appendChild(timerDisplay);
+    // The bomb timer is now rendered inside the round box (Game.updateRoundDisplay
+    // reads this.bombPlanted + this.bombTimer and styles it red/urgent). We just
+    // poke the round display to re-render; no standalone box anymore.
+    showBombTimerUI(_timeLeft) {
+        const game = window.gameInstance;
+        if (game && typeof game.updateRoundDisplay === 'function') {
+            game.updateRoundDisplay();
         }
-        
-        const seconds = Math.ceil(timeLeft);
-        timerDisplay.innerHTML = `<div style="font-size: 16px; margin-bottom: 5px; color: #ef4e23; text-transform: uppercase; letter-spacing: 2px;">BOMB PLANTED</div><div style="color: #ef4e23; font-size: 48px; font-weight: normal; font-family: Arial, sans-serif;">${seconds}</div>`;
-        timerDisplay.style.display = 'block';
-        
-        // Flash red when low time
-        if (seconds <= 10) {
-            timerDisplay.style.animation = 'bombFlash 0.5s ease-in-out infinite';
-        }
-        
-        // Add CSS animation if not present
-        if (!document.getElementById('bombTimerStyles')) {
-            const style = document.createElement('style');
-            style.id = 'bombTimerStyles';
-            style.textContent = `
-                @keyframes bombFlash {
-                    0%, 100% { color: #ef4e23; opacity: 1; transform: scale(1); }
-                    50% { color: #ef4e23; opacity: 0.5; transform: scale(1.08); }
-                }
-            `;
-            document.head.appendChild(style);
-        }
+        // Remove any leftover legacy standalone box from older sessions.
+        const legacy = document.getElementById('bombTimer');
+        if (legacy) legacy.remove();
     }
-    
+
     hideBombTimerUI() {
-        const timerDisplay = document.getElementById('bombTimer');
-        if (timerDisplay) {
-            timerDisplay.style.display = 'none';
+        const legacy = document.getElementById('bombTimer');
+        if (legacy) legacy.remove();
+        const game = window.gameInstance;
+        if (game && typeof game.updateRoundDisplay === 'function') {
+            game.updateRoundDisplay();
         }
     }
 

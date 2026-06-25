@@ -200,7 +200,7 @@ export class NetworkClient {
         case 'build_phase_end':
             console.log('Build phase ended');
             if (this.onBuildPhaseEndCallback) {
-                this.onBuildPhaseEndCallback();
+                this.onBuildPhaseEndCallback(message.round_time);
             }
             break;
             

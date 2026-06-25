@@ -185,24 +185,31 @@ export class Game {
             this.network.onRoundEndCallback = (message) => {
                 this.orangeScore = message.orange_score;
                 this.redScore = message.red_score;
+                // Round is over — stop the Playing-phase countdown so it doesn't
+                // bleed into the next round / build phase.
+                this.stopRoundTimer();
                 this.updateRoundDisplay();
                 console.log(`Round ended! Winner: ${message.winner}, Reason: ${message.reason}`);
                 console.log(`Scores updated - Orange: ${this.orangeScore}, Red: ${this.redScore}`);
                 this.handleRoundEndMessage(message);
             };
 
-            this.network.onBuildPhaseEndCallback = () => {
+            this.network.onBuildPhaseEndCallback = (roundTime) => {
                 this.isInBuildPhase = false;
                 this.buildPhaseTimer = null;
                 this.updateRoundDisplay();
-                
+
                 // Auto-exit build mode when phase ends
                 if (this.isBuildMode) {
                     this.isBuildMode = false;
                     this.exitBuildMode();
                     console.log('Exiting build mode - build phase ended');
                 }
-                
+
+                // Start the Playing-phase round countdown (server is authoritative;
+                // this is the visual timer, defaulting to 100s if not provided).
+                this.startRoundTimer(roundTime || 100);
+
                 console.log('Build phase ended! Combat phase started!');
             };
             
@@ -1658,6 +1665,15 @@ export class Game {
     }
 
     handlePlayerRespawned(message) {
+        // A respawn means the next round's players are arriving. Cancel any pending
+        // post-round cleanup timer NOW so it can't fire later and wipe a freshly
+        // respawned mesh (the race that left both players invisible after a
+        // timeout round end, where nobody dies so no kill cam gates the cleanup).
+        if (this._postRoundCleanupTimer) {
+            clearTimeout(this._postRoundCleanupTimer);
+            this._postRoundCleanupTimer = null;
+        }
+
         if (message.player.id === this.network.playerId &&
             this.replayRecorder && this.replayRecorder.isPlaying) {
             const elapsed = performance.now() / 1000 - this.replayRecorder.replayWallStart;
@@ -1893,6 +1909,10 @@ export class Game {
             title = `${winnerName} team wins`;
             subtitle = 'Enemy eliminated';
             break;
+        case 'Time Up':
+            title = `${winnerName} defenders win`;
+            subtitle = 'Time ran out';
+            break;
         default:
             break;
         }
@@ -2103,6 +2123,28 @@ export class Game {
         `;
     }
 
+    // Team mark — matches the team-selection screen, which identifies teams by
+    // their bold NAME in the team color (ORANGE in orange, NAVY in navy). Used in
+    // the round box and the round-end "X won" banner so they read consistently.
+    // `team` is the internal id ('orange' or 'red'); 'red' is the NAVY team.
+    _teamMark(team, fontSize = 13) {
+        const isNavy = team === 'red' || team === 'navy';
+        const color = isNavy ? '#9fb0d8' : '#ef4e23';
+        const label = isNavy ? 'NAVY' : 'ORANGE';
+        return `<span style="font-weight: 800; letter-spacing: 2px; color: ${color}; font-size: ${fontSize}px;">${label}</span>`;
+    }
+
+    // Small colored dot + name, for the scoreboard rows in the round box.
+    _teamLogo(team) {
+        const isNavy = team === 'red' || team === 'navy';
+        const color = isNavy ? '#9fb0d8' : '#ef4e23';
+        return `
+            <div style="display:flex; align-items:center; gap:6px;">
+                <span style="width:9px; height:9px; border-radius:2px; background:${color}; display:inline-block;"></span>
+                ${this._teamMark(team, 12)}
+            </div>`;
+    }
+
     updateRoundDisplay() {
         let roundContainer = document.getElementById('roundContainer');
         if (!roundContainer) {
@@ -2125,39 +2167,72 @@ export class Game {
             document.body.appendChild(roundContainer);
         }
         
-        let content = `
-            <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.6; margin-bottom: 8px;">
+        const ORANGE = '#ef4e23', NAVY = '#1a2447', RED = '#ff4444';
+
+        // === ONE UNIFIED TIMER ===  picks ONE of three modes, in priority order:
+        //   1. Bomb planted → 40s bomb countdown (RED, pulsing)
+        //   2. Build phase  → build countdown
+        //   3. Playing      → round countdown (M:SS, turns red when low)
+        const bombTicking = this.bombSystem && this.bombSystem.bombPlanted &&
+            typeof this.bombSystem.bombTimer === 'number' && this.bombSystem.bombTimer > 0;
+
+        let timeLabel, timeValue, timeColor, timePulse = false;
+        if (bombTicking) {
+            timeLabel = '⚠ Bomb Planted';
+            timeValue = `0:${String(Math.max(0, this.bombSystem.bombTimer)).padStart(2, '0')}`;
+            timeColor = RED;
+            timePulse = true;
+        } else if (this.isInBuildPhase && this.buildPhaseTimer) {
+            timeLabel = 'Build Phase';
+            timeValue = this.formatClock(this.buildPhaseTimer);
+            timeColor = ORANGE;
+        } else if (typeof this.roundTimer === 'number') {
+            const low = this.roundTimer <= 15;
+            timeLabel = 'Round Time';
+            timeValue = this.formatClock(this.roundTimer);
+            timeColor = low ? RED : ORANGE;
+            timePulse = low;
+        } else {
+            // Fallback so the timer row never just vanishes mid-round.
+            timeLabel = 'Round Time';
+            timeValue = '—';
+            timeColor = ORANGE;
+        }
+
+        const content = `
+            <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.55; margin-bottom: 12px;">
                 Round ${this.roundNumber}
             </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <div style="display: flex; align-items: center;">
-                    <div style="width: 8px; height: 8px; background: #ef4e23; border-radius: 50%; margin-right: 8px;"></div>
-                    <span style="font-size: 24px; font-weight: 600;">${this.orangeScore}</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 14px;">
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1;">
+                    ${this._teamLogo('orange')}
+                    <span style="font-size: 26px; font-weight: 700; color: ${ORANGE}; line-height: 1; font-variant-numeric: tabular-nums;">${this.orangeScore}</span>
                 </div>
-                <div style="font-size: 14px; opacity: 0.4;">VS</div>
-                <div style="display: flex; align-items: center;">
-                    <span style="font-size: 24px; font-weight: 600;">${this.redScore}</span>
-                    <div style="width: 8px; height: 8px; background: transparent; border: 2px solid #ef4e23; border-radius: 50%; margin-left: 8px; box-sizing: border-box;"></div>
+                <div style="font-size: 12px; opacity: 0.35; font-weight: 600;">VS</div>
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1;">
+                    ${this._teamLogo('red')}
+                    <span style="font-size: 26px; font-weight: 700; color: #9fb0d8; line-height: 1; font-variant-numeric: tabular-nums;">${this.redScore}</span>
                 </div>
             </div>
-        `;
-        
-        if (this.isInBuildPhase && this.buildPhaseTimer) {
-            content += `
-                <div style="border-top: 1px solid rgba(239, 78, 35, 0.12); padding-top: 12px; margin-top: 12px;">
-                    <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.6; margin-bottom: 4px;">
-                        Build Phase
-                    </div>
-                    <div style="font-size: 28px; font-weight: 300; color: #ef4e23;">
-                        ${this.buildPhaseTimer}
-                    </div>
-                    <div style="font-size: 11px; opacity: 0.4; margin-top: 4px;">
-                        Press B for build menu
-                    </div>
+            <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px; text-align: center;">
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 4px; color: ${timeColor}; opacity: 0.85;${timePulse ? ' animation: rsgoBombPulse 1s infinite;' : ''}">
+                    ${timeLabel}
                 </div>
-            `;
+                <div style="font-size: 34px; font-weight: 700; color: ${timeColor}; line-height: 1; font-variant-numeric: tabular-nums;${timePulse ? ' animation: rsgoBombPulse 1s infinite;' : ''}">
+                    ${timeValue}
+                </div>
+                ${bombTicking ? '<div style="font-size: 10px; color: rgba(255,68,68,0.6); margin-top: 5px;">Defuse to win — hold E</div>' : ''}
+            </div>
+        `;
+
+        // Inject the pulse keyframes once (used by the urgent timer styling).
+        if (!document.getElementById('rsgoBombPulseStyle')) {
+            const styleEl = document.createElement('style');
+            styleEl.id = 'rsgoBombPulseStyle';
+            styleEl.textContent = '@keyframes rsgoBombPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }';
+            document.head.appendChild(styleEl);
         }
-        
+
         roundContainer.innerHTML = content;
 
         if (typeof this.refreshBuildBanner === 'function') {
@@ -2166,20 +2241,63 @@ export class Game {
     }
 
     startBuildPhaseTimer(seconds) {
+        // New round begins in build phase — clear any leftover round countdown so
+        // the unified timer shows "Build Phase" first, then "Round Time".
+        this.stopRoundTimer();
         this.isInBuildPhase = true;
         this.buildPhaseTimer = seconds;
-        
+
         const interval = setInterval(() => {
             this.buildPhaseTimer--;
             this.updateRoundDisplay();
-            
+
             if (this.buildPhaseTimer <= 0) {
                 clearInterval(interval);
                 this.isInBuildPhase = false;
                 this.buildPhaseTimer = null;
+                // Safety net: if the server's build_phase_end is slow/missed, start
+                // the round timer here so the Playing countdown always appears.
+                if (typeof this.roundTimer !== 'number') {
+                    this.startRoundTimer(100);
+                }
                 this.updateRoundDisplay();
             }
         }, 1000);
+    }
+
+    // Playing-phase round countdown. The server is authoritative (it actually ends
+    // the round at 0); this is the visual timer shown in the round box. Counting
+    // freezes when the bomb is planted — the bomb timer takes over the same slot.
+    startRoundTimer(seconds) {
+        this.stopRoundTimer();
+        this.roundTimer = seconds;
+        this.updateRoundDisplay();
+        this.roundTimerInterval = setInterval(() => {
+            // Freeze while the bomb is ticking — BombSystem drives the slot then.
+            if (this.bombSystem && this.bombSystem.bombPlanted) return;
+            this.roundTimer--;
+            this.updateRoundDisplay();
+            if (this.roundTimer <= 0) {
+                this.stopRoundTimer();
+            }
+        }, 1000);
+    }
+
+    stopRoundTimer() {
+        if (this.roundTimerInterval) {
+            clearInterval(this.roundTimerInterval);
+            this.roundTimerInterval = null;
+        }
+        this.roundTimer = null;
+        this.updateRoundDisplay();
+    }
+
+    // Format seconds as M:SS for the HUD.
+    formatClock(totalSeconds) {
+        const s = Math.max(0, Math.floor(totalSeconds));
+        const m = Math.floor(s / 60);
+        const ss = String(s % 60).padStart(2, '0');
+        return `${m}:${ss}`;
     }
     
     updateHealthDisplay() {
