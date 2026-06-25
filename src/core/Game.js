@@ -2743,17 +2743,24 @@ export class Game {
         const players = this.playerManager && this.playerManager.otherPlayers
             ? this.playerManager.otherPlayers.size : 0;
 
+        // Worst frame in the current window = the stutter you actually feel.
+        const worstMs = Math.max(...this._perfSamples);
+        const lowFps = Math.round(1000 / worstMs);
+
         const fpsColor = fps >= 55 ? '#a6e3a1' : fps >= 30 ? '#f9e2af' : '#f38ba8';
         const trisStr = tris > 1000 ? `${(tris / 1000).toFixed(1)}k` : String(tris);
 
+        // The four numbers that actually tell us what's going on:
+        //   fps        — overall smoothness
+        //   1% low     — worst frame (reveals stutter on weak hardware)
+        //   ms/frame   — budget (16.6ms = 60fps ceiling)
+        //   draws      — the #1 GPU cost; if FPS tanks and draws are high → GPU-bound
         el.innerHTML = `
             <div style="font-size:10px; letter-spacing:1.5px; opacity:0.5; text-transform:uppercase; margin-bottom:6px;">Performance · F8</div>
-            <div style="color:${fpsColor}; font-weight:700; font-size:18px;">${fps} fps</div>
-            <div style="opacity:0.85;">${avgMs.toFixed(1)} ms / frame</div>
-            <div style="opacity:0.6; margin-top:6px;">draws: ${calls}</div>
-            <div style="opacity:0.6;">tris: ${trisStr}</div>
-            <div style="opacity:0.6;">geo: ${geos} · tex: ${texs}</div>
-            <div style="opacity:0.6;">remote players: ${players}</div>
+            <div style="color:${fpsColor}; font-weight:700; font-size:20px;">${fps} <span style="font-size:11px;opacity:0.6;">fps</span></div>
+            <div style="opacity:0.85; margin-top:2px;">low: ${lowFps} fps · ${avgMs.toFixed(1)} ms</div>
+            <div style="opacity:0.7; margin-top:6px;">draws: ${calls} · tris: ${trisStr}</div>
+            <div style="opacity:0.5; margin-top:4px; font-size:11px;">players: ${players}</div>
         `;
     }
 
