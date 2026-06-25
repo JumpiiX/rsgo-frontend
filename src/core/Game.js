@@ -2617,14 +2617,18 @@ export class Game {
         requestAnimationFrame(() => this.animate());
 
         if (this.gameStarted) {
-            const deltaTime = 0.016;
-
-            // Real wall-clock frame time, used for remote-player animation +
-            // interpolation so they stay smooth regardless of display refresh
-            // rate (the fixed 0.016 above desyncs animation on non-60Hz screens).
+            // REAL wall-clock frame time (seconds), clamped so a hitch/tab-out
+            // can't teleport the player. Everything physics/motion-related uses this
+            // so movement speed is FRAME-RATE INDEPENDENT: at 30fps each frame moves
+            // twice as far as at 60fps, so real distance-per-second is identical.
+            // (Was a hardcoded 0.016, which made the player literally move at HALF
+            // speed at 30fps — the slowdown bug.)
             const nowMs = performance.now();
             const realDelta = this._lastFrameMs ? Math.min(0.1, (nowMs - this._lastFrameMs) / 1000) : 0.016;
             this._lastFrameMs = nowMs;
+
+            // Movement, recoil, weapon, bomb all run on real elapsed time.
+            const deltaTime = realDelta;
 
             
             if (this.replayRecorder && !this.replayRecorder.isPlaying) {
