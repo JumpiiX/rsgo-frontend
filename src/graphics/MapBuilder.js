@@ -236,11 +236,11 @@ export class MapBuilder {
         this.createBombSiteMarker(this.siteAX, this.siteZ, 'A');
         this.createBombSiteMarker(this.siteBX, this.siteZ, 'B');
 
-        // Spawn markers so you can tell at a glance which side is which:
-        // attacker spawn (z = -300) = RED, defender spawn (z = +300) = BLUE.
-        // These match the server's team-role spawns in spawn_system.rs.
-        this.createSpawnMarker(0, this.bottomSpawnZ, 0xff0000); // attacker = red
-        this.createSpawnMarker(0, this.topSpawnZ, 0x0000ff);    // defender = blue
+        // Spawn markers — minimalist labeled rings so you can tell the sides apart
+        // at a glance: attacker spawn (z = -300) and defender spawn (z = +300).
+        // Matches the server's team-role spawns in spawn_system.rs.
+        this.createSpawnMarker(0, this.bottomSpawnZ, 'attacker');
+        this.createSpawnMarker(0, this.topSpawnZ, 'defender');
 
         const diagonals = [
             { sx: 0, sz: this.bottomSpawnZ, ex: this.siteAX, ez: this.siteZ },
@@ -303,35 +303,90 @@ export class MapBuilder {
         this.scene.add(marker);
     }
 
-    createSpawnMarker(x, z, color) {
-        // A filled disc with a brighter ring outline, laid flat on the floor.
-        const radius = 50;
+    // Minimalist spawn marker: a thin outline ring with a small role icon + label
+    // baked into a canvas texture, laid flat on the floor. `role` is 'attacker' or
+    // 'defender'. Attacker = orange + chevrons (aggressive); Defender = soft blue +
+    // shield (protective). Subtle, on-brand — no bright debug fill.
+    createSpawnMarker(x, z, role) {
+        const radius = 52;
+        const isAttacker = role === 'attacker';
+        // Brand-aligned: attacker orange, defender a calm steel-blue.
+        const hex = isAttacker ? '#ef4e23' : '#5b7bb4';
 
-        const discGeometry = new THREE.CircleGeometry(radius, 48);
-        const discMaterial = new THREE.MeshBasicMaterial({
-            color: color,
-            transparent: true,
-            opacity: 0.35,
-            side: THREE.DoubleSide,
-        });
-        const disc = new THREE.Mesh(discGeometry, discMaterial);
-        disc.rotation.x = -Math.PI / 2;
-        disc.position.set(x, 0.2, z);
-        disc.name = 'spawnMarker';
-        this.scene.add(disc);
+        // --- Canvas: faint disc tint, thin ring, role icon + label ---
+        const S = 512;
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = S;
+        const ctx = canvas.getContext('2d');
+        const c = S / 2;
 
-        const ringGeometry = new THREE.RingGeometry(radius * 0.9, radius, 48);
-        const ringMaterial = new THREE.MeshBasicMaterial({
-            color: color,
-            transparent: true,
-            opacity: 0.9,
-            side: THREE.DoubleSide,
-        });
-        const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-        ring.rotation.x = -Math.PI / 2;
-        ring.position.set(x, 0.25, z);
-        ring.name = 'spawnMarkerRing';
-        this.scene.add(ring);
+        // Very faint fill so the floor still reads through.
+        ctx.fillStyle = isAttacker ? 'rgba(239,78,35,0.10)' : 'rgba(91,123,180,0.12)';
+        ctx.beginPath();
+        ctx.arc(c, c, S * 0.46, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Thin outline ring.
+        ctx.strokeStyle = hex;
+        ctx.lineWidth = S * 0.012;
+        ctx.beginPath();
+        ctx.arc(c, c, S * 0.45, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = hex;
+        ctx.strokeStyle = hex;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+
+        if (isAttacker) {
+            // Two stacked chevrons pointing "forward" (toward the map) = assault.
+            ctx.lineWidth = S * 0.03;
+            const drawChevron = (cy) => {
+                ctx.beginPath();
+                ctx.moveTo(c - S * 0.12, cy + S * 0.05);
+                ctx.lineTo(c, cy - S * 0.05);
+                ctx.lineTo(c + S * 0.12, cy + S * 0.05);
+                ctx.stroke();
+            };
+            drawChevron(c - S * 0.10);
+            drawChevron(c + S * 0.02);
+        } else {
+            // A simple shield outline = defend/hold.
+            ctx.lineWidth = S * 0.028;
+            const w = S * 0.13, top = c - S * 0.13, bot = c + S * 0.15;
+            ctx.beginPath();
+            ctx.moveTo(c - w, top);
+            ctx.lineTo(c + w, top);
+            ctx.lineTo(c + w, c + S * 0.02);
+            ctx.quadraticCurveTo(c + w, bot, c, bot);
+            ctx.quadraticCurveTo(c - w, bot, c - w, c + S * 0.02);
+            ctx.closePath();
+            ctx.stroke();
+        }
+
+        // Label below the icon.
+        ctx.font = `bold ${Math.round(S * 0.11)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(isAttacker ? 'ATTACK' : 'DEFEND', c, c + S * 0.30);
+
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.anisotropy = 16;
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+
+        const marker = new THREE.Mesh(
+            new THREE.PlaneGeometry(radius * 2, radius * 2),
+            new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.85, depthWrite: false })
+        );
+        marker.rotation.x = -Math.PI / 2;
+        // Orient the label/chevrons to read from that spawn looking into the map.
+        // Flipped: bottom spawn (z<0) faces -z, top spawn (z>0) faces +z, since the
+        // player reads the marker from behind it at the spawn.
+        marker.rotation.z = z < 0 ? Math.PI : 0;
+        marker.position.set(x, 0.2, z);
+        marker.name = 'spawnMarker';
+        this.scene.add(marker);
     }
 
     createSimpleWalls() {
