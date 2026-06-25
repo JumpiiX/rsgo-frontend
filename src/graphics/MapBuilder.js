@@ -1,4 +1,5 @@
 import { MaterialManager } from '../utils/MaterialManager.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // RSGO navy palette for the map (replaces the old greys for a modern look).
 // Base navy is the brand #1a2447; floors/walls are lighter navy tints so the
@@ -54,6 +55,160 @@ export class MapBuilder {
         
         // 3. Create simple walls
         this.createSimpleWalls();
+
+        // 4. Outer decoration — a distant monolith "city" ring around the arena.
+        this.createOuterDecoration();
+    }
+
+    // Deterministic 0..1 hash (no Math.random — stable across reloads). Shared by
+    // the decoration builders below.
+    _deco_hash(n) {
+        const s = Math.sin(n * 12.9898) * 43758.5453;
+        return s - Math.floor(s);
+    }
+
+    // Build a canvas texture of a NAVY tower face speckled with lit ORANGE windows
+    // (a grid; most lit, some dark for a real night-skyline look). Returned as a
+    // THREE.CanvasTexture used as BOTH the map and emissiveMap so the windows glow.
+    // `seed` varies the lit/dark pattern per tower; cols/rows set the window grid.
+    _makeWindowTexture(seed, cols, rows) {
+        const cell = 16;                       // px per window cell
+        const canvas = document.createElement('canvas');
+        canvas.width = cols * cell;
+        canvas.height = rows * cell;
+        const ctx = canvas.getContext('2d');
+
+        // Navy facade.
+        ctx.fillStyle = '#1a2447';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Orange window grid. Each window is a small rounded rect; ~70% lit bright
+        // orange, the rest a dim orange so the building reads as occupied at night.
+        const pad = 4, wW = cell - pad * 2, wH = cell - pad * 2;
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                const lit = this._deco_hash(seed * 7.1 + r * 31.7 + c * 13.3) > 0.30;
+                ctx.fillStyle = lit ? '#ef4e23' : 'rgba(239,78,35,0.18)';
+                ctx.fillRect(c * cell + pad, r * cell + pad, wW, wH);
+            }
+        }
+
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+        tex.magFilter = THREE.NearestFilter;   // crisp window edges
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
+        return tex;
+    }
+
+    // Outer decoration — a distant NEW-YORK-style skyline ring around the arena:
+    // navy towers with glowing orange windows, plus a few big PURE-ORANGE billboard
+    // planes between towers for pop. All OUTSIDE the play area (~±425 at the corners)
+    // — purely decorative, NO colliders, never blocks a spawn/tunnel/sightline. The
+    // scene fog fades the ring into the navy so there's no hard map edge.
+    createOuterDecoration() {
+        const group = new THREE.Group();
+        group.name = 'outerDecoration';
+
+        // Two concentric tower rings at radii safely beyond the arena. The back
+        // ring is taller so the skyline layers into depth.
+        const rings = [
+            { radius: 720, count: 26, baseH: 120, varH: 160, w: 40, d: 40 },
+            { radius: 920, count: 34, baseH: 220, varH: 300, w: 54, d: 54 },
+        ];
+
+        let idx = 0;
+        for (const ring of rings) {
+            for (let i = 0; i < ring.count; i++) {
+                const a = (i / ring.count) * Math.PI * 2;
+                const rJit = (this._deco_hash(idx) - 0.5) * 130;
+                const aJit = (this._deco_hash(idx + 99) - 0.5) * (Math.PI / ring.count);
+                const r = ring.radius + rJit;
+                const ang = a + aJit;
+                const x = Math.cos(ang) * r;
+                const z = Math.sin(ang) * r;
+
+                const h = ring.baseH + this._deco_hash(idx + 7) * ring.varH;
+                const wj = ring.w * (0.7 + this._deco_hash(idx + 3) * 0.8);
+                const dj = ring.d * (0.7 + this._deco_hash(idx + 5) * 0.8);
+
+                // Window grid scales with the tower size.
+                const cols = Math.max(3, Math.round(wj / 14));
+                const rows = Math.max(6, Math.round(h / 22));
+                const tex = this._makeWindowTexture(idx + 1, cols, rows);
+
+                const mat = new THREE.MeshLambertMaterial({
+                    map: tex,
+                    emissive: 0xffffff,        // emissiveMap carries the orange glow
+                    emissiveMap: tex,
+                    emissiveIntensity: 0.9,
+                });
+                const tower = new THREE.Mesh(new THREE.BoxGeometry(wj, h, dj), mat);
+                tower.position.set(x, h / 2, z);
+                // Face the tower roughly toward the arena center so windows show.
+                tower.rotation.y = -ang + Math.PI / 2;
+                tower.castShadow = false;
+                tower.receiveShadow = false;
+                group.add(tower);
+                idx++;
+            }
+        }
+
+        this.scene.add(group);
+        this.outerDecoration = group;
+
+        // ONE static airbus airplane (GLB) floating in the air between two towers,
+        // recolored brand orange so it pops against the navy skyline. Loaded async;
+        // added once ready. Purely decorative — no colliders.
+        this.createDecorationAirplane(group);
+    }
+
+    // Load the airbus GLB, recolor it solid brand-orange, and park it floating in
+    // the air between two towers. Static (no animation), no colliders.
+    createDecorationAirplane(group) {
+        const ORANGE = 0xef4e23;
+        const loader = new GLTFLoader();
+        loader.load(
+            '/models/airbus.glb',
+            (gltf) => {
+                const plane = gltf.scene;
+
+                // Recolor every mesh to flat brand orange (fog off so it pops).
+                plane.traverse((child) => {
+                    if (child.isMesh) {
+                        child.material = new THREE.MeshLambertMaterial({
+                            color: ORANGE,
+                            emissive: ORANGE,
+                            emissiveIntensity: 0.25,
+                            fog: false,
+                        });
+                        child.castShadow = false;
+                        child.receiveShadow = false;
+                    }
+                });
+
+                // Normalize size: scale so the longest dimension is ~140 units
+                // (roughly a tower's width — a believable distant jet, not huge).
+                const box = new THREE.Box3().setFromObject(plane);
+                const size = box.getSize(new THREE.Vector3());
+                const longest = Math.max(size.x, size.y, size.z) || 1;
+                const scale = 140 / longest;
+                plane.scale.setScalar(scale);
+
+                // Float it in the diagonal gap between front-ring towers.
+                const ang = Math.PI * 0.25;
+                const r = 640;
+                plane.position.set(Math.cos(ang) * r, 200, Math.sin(ang) * r);
+                // Bank/heading so it looks like it's cruising across the skyline,
+                // roughly tangent to the ring rather than facing the player flat.
+                plane.rotation.y = -ang;
+                plane.rotation.z = 0.12; // slight bank
+
+                group.add(plane);
+                console.log('Decoration airbus loaded (orange).');
+            },
+            undefined,
+            (err) => console.error('Failed to load decoration airbus:', err)
+        );
     }
     
     createMinimalistGround() {
