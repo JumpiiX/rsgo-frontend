@@ -194,6 +194,11 @@ export class Game {
                 this.handleRoundEndMessage(message);
             };
 
+            this.network.onMatchEndCallback = (message) => {
+                console.log('🏆 Match ended! Winner:', message.winner);
+                this.handleMatchEnd(message);
+            };
+
             this.network.onBuildPhaseEndCallback = (roundTime) => {
                 this.isInBuildPhase = false;
                 this.buildPhaseTimer = null;
@@ -287,6 +292,12 @@ export class Game {
 
         
         document.getElementById('gameContainer').appendChild(this.renderer.getRenderer().domElement);
+
+        // F8 toggles the live performance overlay (FPS / frame time / draw calls).
+        // Handy while CPU/GPU-throttling in DevTools to simulate a weak laptop.
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'F8') { e.preventDefault(); this.togglePerfOverlay(); }
+        });
 
         this.setupSystems();
         this.animate();
@@ -561,10 +572,16 @@ export class Game {
                     this.network.onRoundEndCallback = (message) => {
                         this.orangeScore = message.orange_score;
                         this.redScore = message.red_score;
+                        this.stopRoundTimer();
                         this.updateRoundDisplay();
                         console.log(`Round ended! Winner: ${message.winner}, Reason: ${message.reason}`);
                         console.log(`Scores updated - Orange: ${this.orangeScore}, Red: ${this.redScore}`);
                         this.handleRoundEndMessage(message);
+                    };
+
+                    this.network.onMatchEndCallback = (message) => {
+                        console.log('🏆 Match ended! Winner:', message.winner);
+                        this.handleMatchEnd(message);
                     };
 
                     this.network.onBuildPhaseEndCallback = () => {
@@ -1942,6 +1959,92 @@ export class Game {
         }, 6000); // long enough for the ~3s death animation + a beat lying down
     }
 
+    // Match over (a team reached 7 wins). Show a big full-screen winner animation
+    // for every player, then send everyone back to the landing page. `message.winner`
+    // is 'orange' or 'red' (red = the NAVY team).
+    handleMatchEnd(message) {
+        if (this._matchEndShown) return; // guard against duplicate broadcasts
+        this._matchEndShown = true;
+
+        // Freeze the round: stop timers, release pointer lock, hide HUD timers.
+        this.stopRoundTimer();
+        if (this.input) this.input.isPointerLocked = false;
+        if (document.exitPointerLock) document.exitPointerLock();
+
+        const isNavy = message.winner === 'red' || message.winner === 'navy';
+        const color = isNavy ? '#5b7bb4' : '#ef4e23';
+        const teamName = isNavy ? 'NAVY' : 'ORANGE';
+        const score = `${this.orangeScore} : ${this.redScore}`;
+
+        // Keyframes for the cinematic (injected once).
+        if (!document.getElementById('matchEndStyles')) {
+            const st = document.createElement('style');
+            st.id = 'matchEndStyles';
+            st.textContent = `
+                @keyframes meSweep { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+                @keyframes meRise  { 0% { opacity: 0; transform: translateY(40px) scale(0.92); }
+                                     100% { opacity: 1; transform: translateY(0) scale(1); } }
+                @keyframes mePulse { 0%,100% { text-shadow: 0 0 30px currentColor; }
+                                     50% { text-shadow: 0 0 70px currentColor; } }
+                @keyframes meBarGrow { from { width: 0; } to { width: var(--meW); } }
+                @keyframes meFadeIn { from { opacity: 0; } to { opacity: 1; } }
+            `;
+            document.head.appendChild(st);
+        }
+
+        const overlay = document.createElement('div');
+        overlay.id = 'matchEndOverlay';
+        overlay.style.cssText = `
+            position: fixed; inset: 0; z-index: 100000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: #fff; overflow: hidden;
+        `;
+
+        // Full-screen color sweep wiping up from the bottom in the winner's color.
+        overlay.innerHTML = `
+            <div style="position:absolute; inset:0; background:rgba(13,19,38,0.96); animation: meFadeIn 0.4s ease both;"></div>
+            <div style="position:absolute; inset:0; transform-origin: bottom;
+                        background: radial-gradient(circle at 50% 60%, ${color}22 0%, rgba(13,19,38,0) 60%);
+                        animation: meSweep 0.8s cubic-bezier(.2,.8,.2,1) both;"></div>
+
+            <div style="position:relative; text-align:center; animation: meRise 0.9s 0.25s cubic-bezier(.2,.8,.2,1) both;">
+                <div style="font-size: 13px; letter-spacing: 8px; text-transform: uppercase; opacity: 0.5; margin-bottom: 18px;">
+                    Match Over
+                </div>
+                <div style="font-size: clamp(48px, 11vw, 150px); font-weight: 900; letter-spacing: 6px; color: ${color}; line-height: 1; animation: mePulse 2.2s ease-in-out infinite;">
+                    ${teamName}
+                </div>
+                <div style="font-size: clamp(20px, 3vw, 36px); font-weight: 300; letter-spacing: 10px; text-transform: uppercase; opacity: 0.85; margin-top: 10px;">
+                    Wins
+                </div>
+                <div style="margin-top: 34px; font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 4px; color: rgba(255,255,255,0.9);">
+                    ${score}
+                </div>
+                <div style="display:flex; justify-content:center; gap:18px; margin-top:8px; font-size:11px; letter-spacing:2px; text-transform:uppercase; opacity:0.45;">
+                    <span style="color:#ef4e23;">Orange</span><span>·</span><span style="color:#5b7bb4;">Navy</span>
+                </div>
+                <div id="matchEndReturn" style="margin-top: 46px; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; opacity: 0; animation: meFadeIn 0.6s 2.4s ease forwards;">
+                    Returning to lobby…
+                </div>
+            </div>
+
+            <!-- thin animated accent bars top & bottom -->
+            <div style="position:absolute; top:0; left:0; height:4px; background:${color}; --meW:100%; width:0; animation: meBarGrow 1.2s 0.3s ease both;"></div>
+            <div style="position:absolute; bottom:0; right:0; height:4px; background:${color}; --meW:100%; width:0; animation: meBarGrow 1.2s 0.3s ease both;"></div>
+        `;
+        document.body.appendChild(overlay);
+
+        // After the cinematic, send everyone back to the landing page. A full reload
+        // is the cleanest reset (drops the WS, clears all game state, returns to the
+        // name/landing screen) — matches "move every player to the landing page".
+        setTimeout(() => {
+            try { if (this.network && this.network.ws) this.network.ws.close(); } catch (e) {}
+            // Send everyone back to the LANDING page (site root), not the game page.
+            window.location.href = window.location.origin + '/';
+        }, 6500);
+    }
+
     cleanupForRoundTransition() {
         // Called on round_end. The hard part: a round usually ends the instant
         // the local player dies (team eliminated), so the kill cam replay of
@@ -2589,11 +2692,79 @@ export class Game {
             
             this.renderer.render(this.scene.getScene(), this.camera.getCamera());
 
-            
+
             if (this.miniMap && !this.isBuildMode) {
                 this.miniMap.render();
             }
+
+            // Live performance overlay (toggle with F8). Reads real frame time and
+            // the renderer's draw-call / triangle counters so you can SEE perf while
+            // CPU/GPU-throttling in DevTools to simulate a weaker laptop.
+            this.updatePerfOverlay(realDelta);
         }
+    }
+
+    // Update (and lazily create) the perf HUD. Hidden until toggled with F8.
+    updatePerfOverlay(realDelta) {
+        if (!this._perfVisible) return;
+
+        // Rolling average FPS over the last ~30 frames for a stable readout.
+        if (!this._perfSamples) this._perfSamples = [];
+        const ms = Math.max(0.0001, realDelta) * 1000;
+        this._perfSamples.push(ms);
+        if (this._perfSamples.length > 30) this._perfSamples.shift();
+        const avgMs = this._perfSamples.reduce((a, b) => a + b, 0) / this._perfSamples.length;
+        const fps = Math.round(1000 / avgMs);
+
+        // Throttle the DOM write to ~5/sec so the overlay itself is cheap.
+        const now = performance.now();
+        if (this._perfLastWrite && now - this._perfLastWrite < 200) return;
+        this._perfLastWrite = now;
+
+        let el = document.getElementById('perfOverlay');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'perfOverlay';
+            el.style.cssText = `
+                position: fixed; top: 20px; right: 20px; z-index: 100001;
+                background: rgba(13,19,38,0.88); border: 1px solid rgba(255,255,255,0.12);
+                border-radius: 10px; padding: 12px 14px; min-width: 150px;
+                font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px;
+                color: #cdd6f4; backdrop-filter: blur(8px); line-height: 1.7; pointer-events: none;`;
+            document.body.appendChild(el);
+        }
+
+        const info = this.renderer && this.renderer.getRenderer
+            ? this.renderer.getRenderer().info : null;
+        const calls = info ? info.render.calls : '?';
+        const tris = info ? info.render.triangles : 0;
+        const geos = info ? info.memory.geometries : '?';
+        const texs = info ? info.memory.textures : '?';
+        const players = this.playerManager && this.playerManager.otherPlayers
+            ? this.playerManager.otherPlayers.size : 0;
+
+        const fpsColor = fps >= 55 ? '#a6e3a1' : fps >= 30 ? '#f9e2af' : '#f38ba8';
+        const trisStr = tris > 1000 ? `${(tris / 1000).toFixed(1)}k` : String(tris);
+
+        el.innerHTML = `
+            <div style="font-size:10px; letter-spacing:1.5px; opacity:0.5; text-transform:uppercase; margin-bottom:6px;">Performance · F8</div>
+            <div style="color:${fpsColor}; font-weight:700; font-size:18px;">${fps} fps</div>
+            <div style="opacity:0.85;">${avgMs.toFixed(1)} ms / frame</div>
+            <div style="opacity:0.6; margin-top:6px;">draws: ${calls}</div>
+            <div style="opacity:0.6;">tris: ${trisStr}</div>
+            <div style="opacity:0.6;">geo: ${geos} · tex: ${texs}</div>
+            <div style="opacity:0.6;">remote players: ${players}</div>
+        `;
+    }
+
+    togglePerfOverlay() {
+        this._perfVisible = !this._perfVisible;
+        if (!this._perfVisible) {
+            const el = document.getElementById('perfOverlay');
+            if (el) el.remove();
+            this._perfSamples = [];
+        }
+        console.log('Perf overlay:', this._perfVisible ? 'ON' : 'OFF');
     }
 
     handleScoreboard(show) {
