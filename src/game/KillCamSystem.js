@@ -75,19 +75,34 @@ export class KillCamSystem {
 
     onLocalPlayerDied(killerId) {
         this.replayTargetId = killerId;
-        if (this.recorder.startPlayback(this.replayDuration)) {
-            this.state = 'replaying';
-            if (this.weaponSystem && typeof this.weaponSystem.show === 'function') {
-                this.weaponSystem.show();
-            }
-            this.showUI();
-            this.updateUIForReplay();
-        } else {
-            this.startSpectating();
-        }
 
+        // Release the cursor immediately so the player isn't locked while we wait.
         if (this.input) this.input.isPointerLocked = false;
         if (document.pointerLockElement) document.exitPointerLock();
+
+        // IMPORTANT: the KILLING shot's `player_shot` network message often arrives
+        // a frame or two AFTER `player_died`. If we start the replay instantly, the
+        // recorder freezes its buffer before that shot is recorded → the killing
+        // shot is missing from the kill cam. So wait a short beat first — the
+        // recorder keeps capturing during this delay, so the fatal shot lands in a
+        // real snapshot and gets replayed.
+        const START_DELAY_MS = 220;
+        if (this._startTimer) clearTimeout(this._startTimer);
+        this._startTimer = setTimeout(() => {
+            this._startTimer = null;
+            // If we already respawned / left the dead state in the meantime, bail.
+            if (this.state !== 'idle') return;
+            if (this.recorder.startPlayback(this.replayDuration)) {
+                this.state = 'replaying';
+                if (this.weaponSystem && typeof this.weaponSystem.show === 'function') {
+                    this.weaponSystem.show();
+                }
+                this.showUI();
+                this.updateUIForReplay();
+            } else {
+                this.startSpectating();
+            }
+        }, START_DELAY_MS);
     }
 
     updateUIForReplay() {
@@ -123,6 +138,8 @@ export class KillCamSystem {
     }
 
     onLocalPlayerRespawned() {
+        // Cancel a pending replay-start (if we respawned during the post-death delay).
+        if (this._startTimer) { clearTimeout(this._startTimer); this._startTimer = null; }
         if (this.recorder.isPlaying) this.recorder.stopPlayback();
         this.state = 'idle';
         this.replayTargetId = null;
@@ -232,7 +249,9 @@ export class KillCamSystem {
     }
 
     isActive() {
-        return this.state === 'replaying' || this.state === 'spectating';
+        // Also true while the post-death start is pending, so round cleanup defers
+        // and doesn't cut the kill cam before it begins.
+        return this.state === 'replaying' || this.state === 'spectating' || !!this._startTimer;
     }
 
     destroy() {
