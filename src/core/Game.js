@@ -924,6 +924,7 @@ export class Game {
 
     finishIntroCinematic() {
         this._introPlaying = false;
+        this._introDone = true; // the build prompt may appear from now on
         // Snap to the exact first-person spawn pose so control resumes seamlessly.
         const cam = this.camera.getCamera();
         cam.position.copy(this._introSpawnPos);
@@ -933,6 +934,9 @@ export class Game {
         cam.quaternion.copy(q);
         cam.updateMatrixWorld();
         this._setHudVisibleForIntro(true);
+        // Now that the cinematic is over, show the "press B to build" prompt if the
+        // build phase is still running (it was suppressed during the intro).
+        this.updateBuildPrompt();
         // Hide the intro-only decor now that we're in first-person play.
         if (this.mapBuilder && this.mapBuilder.introDecor) this.mapBuilder.introDecor.visible = false;
         // free the temp objects
@@ -2445,6 +2449,71 @@ export class Game {
         if (typeof this.refreshBuildBanner === 'function') {
             this.refreshBuildBanner();
         }
+
+        // Show/hide the big "press B to build" call-to-action.
+        this.updateBuildPrompt();
+    }
+
+    // A prominent center-screen prompt during the build phase telling players to
+    // press B to open build mode. Players didn't know how to enter it. Shows only
+    // while in the build phase AND not already in build mode; hidden otherwise.
+    updateBuildPrompt() {
+        // Suppress the prompt around the spawn intro cinematic. The intro plays once
+        // on the first spawn; it can start a moment AFTER the build phase begins, so
+        // we also hide the prompt BEFORE it has played (while it's still pending) to
+        // avoid a brief flash. Allowed only once the intro is over (_introDone), or
+        // in any later round where no intro plays.
+        const introPendingOrPlaying = this._introPlaying || (!this._introDone && this.gameStarted);
+        const shouldShow = this.gameMode === 'team' && this.isInBuildPhase &&
+            !this.isBuildMode && !introPendingOrPlaying;
+        let el = document.getElementById('buildPrompt');
+
+        if (!shouldShow) {
+            if (el) el.style.display = 'none';
+            return;
+        }
+
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'buildPrompt';
+            el.style.cssText = `
+                position: fixed; top: 16%; left: 50%; transform: translateX(-50%);
+                z-index: 1500; pointer-events: none; text-align: center;
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            `;
+            el.innerHTML = `
+                <div style="
+                    display: inline-flex; flex-direction: column; align-items: center; gap: 10px;
+                    background: rgba(19,26,54,0.92); border: 1px solid rgba(239,78,35,0.35);
+                    border-radius: 14px; padding: 18px 26px; backdrop-filter: blur(10px);
+                    box-shadow: 0 8px 30px rgba(0,0,0,0.4);">
+                    <div style="font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: #9fb0d8;">
+                        Build Phase
+                    </div>
+                    <div style="display:flex; align-items:center; gap:14px;">
+                        <kbd style="
+                            display:inline-flex; align-items:center; justify-content:center;
+                            min-width: 46px; height: 46px; padding: 0 12px;
+                            background: #ef4e23; color: #131a36; border-radius: 10px;
+                            font-size: 24px; font-weight: 800; line-height: 1;
+                            box-shadow: 0 3px 0 rgba(0,0,0,0.35); animation: rsgoKeyPulse 1.4s ease-in-out infinite;">B</kbd>
+                        <div style="text-align:left;">
+                            <div style="font-size: 19px; font-weight: 700; color: #e8edff; line-height:1.2;">Press B to build</div>
+                            <div style="font-size: 13px; color: #9fb0d8; margin-top:2px;">Place walls before the round starts</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(el);
+
+            if (!document.getElementById('rsgoKeyPulseStyle')) {
+                const st = document.createElement('style');
+                st.id = 'rsgoKeyPulseStyle';
+                st.textContent = '@keyframes rsgoKeyPulse { 0%,100% { transform: scale(1); box-shadow:0 3px 0 rgba(0,0,0,0.35),0 0 0 0 rgba(239,78,35,0.5); } 50% { transform: scale(1.08); box-shadow:0 3px 0 rgba(0,0,0,0.35),0 0 0 10px rgba(239,78,35,0); } }';
+                document.head.appendChild(st);
+            }
+        }
+        el.style.display = 'block';
     }
 
     startBuildPhaseTimer(seconds) {
@@ -2453,6 +2522,10 @@ export class Game {
         this.stopRoundTimer();
         this.isInBuildPhase = true;
         this.buildPhaseTimer = seconds;
+        // The intro only plays on the very first spawn. For later rounds (or modes
+        // with no intro), mark it done so the "press B" prompt isn't suppressed.
+        if (this._introHasPlayed && !this._introPlaying) this._introDone = true;
+        this.updateRoundDisplay(); // show timer + "press B" prompt immediately
 
         const interval = setInterval(() => {
             this.buildPhaseTimer--;
@@ -3099,17 +3172,19 @@ export class Game {
         if (this.isBuildMode) {
             this.isBuildMode = false;
             this.exitBuildMode();
+            this.updateBuildPrompt(); // re-show the "press B" prompt if still in build phase
             return;
         }
-        
+
         // Only allow entering build mode during build phase in team games
         if (this.gameMode === 'team' && !this.isInBuildPhase) {
             console.log('⚠️ Build mode only available during build phase');
             return;
         }
-        
+
         this.isBuildMode = true;
         this.enterBuildMode();
+        this.updateBuildPrompt(); // hide the prompt now that they're in build mode
     }
     
     enterBuildMode() {
