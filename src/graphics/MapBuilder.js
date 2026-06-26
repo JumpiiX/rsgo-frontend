@@ -1,5 +1,6 @@
 import { MaterialManager } from '../utils/MaterialManager.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 
 // RSGO navy palette for the map (replaces the old greys for a modern look).
 // Base navy is the brand #1a2447; floors/walls are lighter navy tints so the
@@ -53,8 +54,11 @@ export class MapBuilder {
         // 2. Create clean floor areas
         this.createCleanFloorLayout();
         
-        // 3. Create simple walls
+        // 3. Create simple walls (collected, then merged into one mesh below)
         this.createSimpleWalls();
+
+        // 3b. Merge all static wall segments into ONE mesh (one draw call).
+        this.finalizeStaticWalls();
 
         // 4. Outer decoration — a distant monolith "city" ring around the arena.
         this.createOuterDecoration();
@@ -116,6 +120,32 @@ export class MapBuilder {
             { radius: 920, count: 34, baseH: 220, varH: 300, w: 54, d: 54 },
         ];
 
+        // PERF: all towers are ONE InstancedMesh — 1 draw call + 1 geometry + 1
+        // texture for the whole skyline, instead of 64 separate meshes (which were a
+        // big chunk of the per-frame draw-call/CPU cost). A unit 1×1×1 box is scaled
+        // per instance to each tower's size. One shared window texture (the windows
+        // read the same through fog at that distance, so the lost per-tower variety
+        // is invisible).
+        const totalTowers = rings.reduce((n, r) => n + r.count, 0);
+        const sharedWindowTex = this._makeWindowTexture(1, 6, 14);
+        const towerMat = new THREE.MeshLambertMaterial({
+            map: sharedWindowTex,
+            emissive: 0xffffff,            // emissiveMap carries the orange glow
+            emissiveMap: sharedWindowTex,
+            emissiveIntensity: 0.9,
+        });
+        const unitBox = new THREE.BoxGeometry(1, 1, 1);
+        const towers = new THREE.InstancedMesh(unitBox, towerMat, totalTowers);
+        towers.castShadow = false;
+        towers.receiveShadow = false;
+        towers.frustumCulled = false; // it's one big object surrounding the arena
+
+        const m4 = new THREE.Matrix4();
+        const quat = new THREE.Quaternion();
+        const up = new THREE.Vector3(0, 1, 0);
+        const pos = new THREE.Vector3();
+        const scl = new THREE.Vector3();
+
         let idx = 0;
         for (const ring of rings) {
             for (let i = 0; i < ring.count; i++) {
@@ -131,27 +161,16 @@ export class MapBuilder {
                 const wj = ring.w * (0.7 + this._deco_hash(idx + 3) * 0.8);
                 const dj = ring.d * (0.7 + this._deco_hash(idx + 5) * 0.8);
 
-                // Window grid scales with the tower size.
-                const cols = Math.max(3, Math.round(wj / 14));
-                const rows = Math.max(6, Math.round(h / 22));
-                const tex = this._makeWindowTexture(idx + 1, cols, rows);
-
-                const mat = new THREE.MeshLambertMaterial({
-                    map: tex,
-                    emissive: 0xffffff,        // emissiveMap carries the orange glow
-                    emissiveMap: tex,
-                    emissiveIntensity: 0.9,
-                });
-                const tower = new THREE.Mesh(new THREE.BoxGeometry(wj, h, dj), mat);
-                tower.position.set(x, h / 2, z);
-                // Face the tower roughly toward the arena center so windows show.
-                tower.rotation.y = -ang + Math.PI / 2;
-                tower.castShadow = false;
-                tower.receiveShadow = false;
-                group.add(tower);
+                pos.set(x, h / 2, z);
+                quat.setFromAxisAngle(up, -ang + Math.PI / 2); // face arena center
+                scl.set(wj, h, dj);
+                m4.compose(pos, quat, scl);
+                towers.setMatrixAt(idx, m4);
                 idx++;
             }
         }
+        towers.instanceMatrix.needsUpdate = true;
+        group.add(towers);
 
         this.scene.add(group);
         this.outerDecoration = group;
@@ -668,20 +687,14 @@ export class MapBuilder {
         }
     }
 
+    // PERF: walls don't each become their own mesh anymore. We bake each wall's
+    // transform into its geometry and collect them; buildMinimalistMap() merges the
+    // whole lot into ONE mesh (1 draw call, 1 material) via finalizeStaticWalls().
+    // The COLLIDERS are still added per-wall exactly as before (gameplay unchanged).
     createWall(x, y, z, width, height, depth) {
-        const wallGeometry = new THREE.BoxGeometry(width, height, depth);
-        const wallMaterial = new THREE.MeshLambertMaterial({
-            color: MAP_COLORS.wall,
-            emissive: MAP_COLORS.wallEmissive,
-            emissiveIntensity: 0.05
-        });
-        
-        const wall = new THREE.Mesh(wallGeometry, wallMaterial);
-        wall.position.set(x, y, z);
-        wall.castShadow = true;
-        wall.receiveShadow = true;
-        wall.userData.isMapWall = true; // so shots can be occlusion-tested against it
-        this.scene.add(wall);
+        const geo = new THREE.BoxGeometry(width, height, depth);
+        geo.translate(x, y, z);
+        (this._wallGeoms || (this._wallGeoms = [])).push(geo);
 
         if (this.collisionSystem) {
             this.collisionSystem.addBoxCollider(
@@ -689,26 +702,15 @@ export class MapBuilder {
                 { x: width, y: height, z: depth }
             );
         }
-
-        return wall;
+        return null;
     }
 
     createAngledWall(x, y, z, width, height, depth, rotation) {
-        const wallGeometry = new THREE.BoxGeometry(width, height, depth);
-        const wallMaterial = new THREE.MeshLambertMaterial({
-            color: MAP_COLORS.wall,
-            emissive: MAP_COLORS.wallEmissive,
-            emissiveIntensity: 0.05
-        });
-        
-        const wall = new THREE.Mesh(wallGeometry, wallMaterial);
-        wall.position.set(x, y, z);
-        wall.rotation.y = rotation;
-        wall.castShadow = true;
-        wall.receiveShadow = true;
-        wall.userData.isMapWall = true; // so shots can be occlusion-tested against it
-        this.scene.add(wall);
-        
+        const geo = new THREE.BoxGeometry(width, height, depth);
+        geo.rotateY(rotation);
+        geo.translate(x, y, z);
+        (this._wallGeoms || (this._wallGeoms = [])).push(geo);
+
         if (this.collisionSystem) {
             // The collider is rotation-aware now, so pass the real rotation and the
             // wall's true extents (no need to inflate to an axis-aligned bounding box).
@@ -719,10 +721,32 @@ export class MapBuilder {
                 rotation
             );
         }
-
-        return wall;
+        return null;
     }
-    
+
+    // Merge all collected wall geometries into ONE mesh = one draw call for the
+    // entire static map perimeter (was dozens of separate wall meshes). Called once
+    // at the end of buildMinimalistMap.
+    finalizeStaticWalls() {
+        if (!this._wallGeoms || this._wallGeoms.length === 0) return;
+        const merged = BufferGeometryUtils.mergeGeometries(this._wallGeoms, false);
+        // Free the per-wall geometries now that they're merged.
+        this._wallGeoms.forEach((g) => g.dispose());
+        this._wallGeoms = null;
+
+        const mat = new THREE.MeshLambertMaterial({
+            color: MAP_COLORS.wall,
+            emissive: MAP_COLORS.wallEmissive,
+            emissiveIntensity: 0.05,
+        });
+        const wallsMesh = new THREE.Mesh(merged, mat);
+        wallsMesh.castShadow = true;
+        wallsMesh.receiveShadow = true;
+        wallsMesh.userData.isMapWall = true; // shots occlusion-test against it
+        wallsMesh.name = 'staticWalls';
+        this.scene.add(wallsMesh);
+    }
+
     createFloor(x, z, width, depth, color = MAP_COLORS.floor) {
         const floorGeometry = new THREE.PlaneGeometry(width, depth);
         const floorMaterial = new THREE.MeshLambertMaterial({

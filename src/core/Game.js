@@ -2754,6 +2754,7 @@ export class Game {
         const fpsColor = fps >= 55 ? '#a6e3a1' : fps >= 30 ? '#f9e2af' : '#f38ba8';
         const trisStr = tris > 1000 ? `${(tris / 1000).toFixed(1)}k` : String(tris);
 
+
         // The four numbers that actually tell us what's going on:
         //   fps        — overall smoothness
         //   1% low     — worst frame (reveals stutter on weak hardware)

@@ -26,8 +26,11 @@ export class LightingSystem {
         const moonLight = new THREE.DirectionalLight(0xffffff, 3.0);
         moonLight.position.set(-100, 300, 50);
         moonLight.castShadow = true;
-        moonLight.shadow.mapSize.width = 4096;
-        moonLight.shadow.mapSize.height = 4096;
+        // 2048² shadow map: a 4096² map is a 16-megapixel texture re-rendered every
+        // frame — the heaviest single GPU cost. 2048 looks nearly identical here and
+        // is 4× cheaper. (Drop to 1024 if weak laptops still struggle.)
+        moonLight.shadow.mapSize.width = 2048;
+        moonLight.shadow.mapSize.height = 2048;
         moonLight.shadow.camera.left = -300;
         moonLight.shadow.camera.right = 300;
         moonLight.shadow.camera.top = 300;
