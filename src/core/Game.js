@@ -1106,7 +1106,7 @@ export class Game {
 
                 const hitPlayer = this.checkHit(target);
                 if (hitPlayer) {
-                    this.showHitmarker();
+                    this.showHitmarker(hitPlayer.killed);
                 }
                 this.network.sendShoot(startPos, target);
 
@@ -3141,38 +3141,66 @@ export class Game {
         animate();
     }
 
-    showHitmarker() {
-        let hm = document.getElementById('hitmarker');
-        if (!hm) {
-            hm = document.createElement('div');
-            hm.id = 'hitmarker';
-            hm.style.cssText = `
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                width: 18px;
-                height: 18px;
-                transform: translate(-50%, -50%);
-                pointer-events: none;
-                z-index: 200;
-                opacity: 0;
-                transition: opacity 0.06s linear;
-            `;
-            hm.innerHTML = `
-                <svg width="18" height="18" viewBox="0 0 18 18">
-                    <line x1="2" y1="2" x2="7" y2="7" stroke="#ef4e23" stroke-width="2.5" stroke-linecap="round"/>
-                    <line x1="16" y1="2" x2="11" y2="7" stroke="#ef4e23" stroke-width="2.5" stroke-linecap="round"/>
-                    <line x1="2" y1="16" x2="7" y2="11" stroke="#ef4e23" stroke-width="2.5" stroke-linecap="round"/>
-                    <line x1="16" y1="16" x2="11" y2="11" stroke="#ef4e23" stroke-width="2.5" stroke-linecap="round"/>
-                </svg>
-            `;
-            document.body.appendChild(hm);
-        }
-        hm.style.opacity = '1';
+    // Hitmarker = the crosshair logo ITSELF reacts (no separate element on top):
+    // on a hit it spins + pops bigger + flashes a colored glow, then springs back to
+    // normal. Normal hit = ORANGE; KILL = bigger spin + RED so kills feel distinct.
+    showHitmarker(killed = false) {
+        const cx = document.getElementById('crosshair');
+        if (!cx) return;
+
+        // Kill = stronger: bigger pop, full spin, red glow. Normal = orange, half spin.
+        const glow = killed ? '#ff3b3b' : '#ef4e23';
+        const peak = killed ? 1.9 : 1.5;
+        const spin = killed ? 360 : 180;
+
+        const base = 'translate(-50%, -50%)';
+
+        // Snap to the "hit" pose instantly (no transition), then spring back.
+        cx.style.transition = 'none';
+        cx.style.transform = `${base} scale(${peak}) rotate(${spin}deg)`;
+        cx.style.filter = `drop-shadow(0 0 5px ${glow}) drop-shadow(0 0 10px ${glow}) brightness(1.7)`;
+
+        // Next frame: ease back to the resting crosshair (snappy spring).
+        requestAnimationFrame(() => {
+            cx.style.transition = 'transform 0.26s cubic-bezier(.2,.9,.25,1), filter 0.26s ease';
+            cx.style.transform = base;
+            cx.style.filter = 'none';
+        });
+
+        // Safety: ensure it's fully reset after the animation.
         if (this._hitmarkerTimeout) clearTimeout(this._hitmarkerTimeout);
         this._hitmarkerTimeout = setTimeout(() => {
-            hm.style.opacity = '0';
-        }, 140);
+            cx.style.transition = 'none';
+            cx.style.transform = base;
+            cx.style.filter = 'none';
+        }, 320);
+
+        // KILL ONLY: an extra red ring bursts outward from the crosshair and fades —
+        // a distinct flourish the normal hit doesn't have, so a kill is unmistakable.
+        if (killed) this._killBurst();
+    }
+
+    // A red ring that expands out from the center and fades — the kill flourish.
+    _killBurst() {
+        if (!document.getElementById('killBurstStyle')) {
+            const st = document.createElement('style');
+            st.id = 'killBurstStyle';
+            st.textContent = `@keyframes rsgoKillBurst {
+                0%   { transform: translate(-50%,-50%) scale(0.3); opacity: 0.9; }
+                100% { transform: translate(-50%,-50%) scale(2.6); opacity: 0; }
+            }`;
+            document.head.appendChild(st);
+        }
+        const ring = document.createElement('div');
+        ring.style.cssText = `
+            position: fixed; top: 50%; left: 50%;
+            width: 54px; height: 54px; border-radius: 50%;
+            border: 3px solid #ff3b3b; box-shadow: 0 0 14px rgba(255,59,59,0.7);
+            pointer-events: none; z-index: 201;
+            animation: rsgoKillBurst 0.42s cubic-bezier(.2,.7,.3,1) forwards;
+        `;
+        document.body.appendChild(ring);
+        setTimeout(() => ring.remove(), 480);
     }
 
     checkForDirectMapAccess() {

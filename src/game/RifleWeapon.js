@@ -59,10 +59,10 @@ export class RifleWeapon {
 
         // === VIEWMODEL PLACEMENT (tuned live in-game) ===
         // Where the gun sits relative to the camera: +x right, +y up, -z forward.
-        this.initialPositionOffset = new THREE.Vector3(0.02, -0.22, -0.04);
+        this.initialPositionOffset = new THREE.Vector3(-0.040, -0.225, -0.040);
         // Orientation of the (recentered) model.
-        this.modelRotation = new THREE.Euler(0.12, 3.35, 0.20);
-        this.modelScale = 0.28;
+        this.modelRotation = new THREE.Euler(0.090, 3.150, 0.250);
+        this.modelScale = 0.280;
 
         // Animation
         this.mixer = null;
