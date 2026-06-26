@@ -854,6 +854,96 @@ export class Game {
         }
     }
 
+    // ===== SPAWN INTRO CINEMATIC =====
+    // A ~6s fly-through that plays once on the first spawn of the match: high
+    // bird's-eye over the whole map → orbit showing the skyline → swoop down to the
+    // player's spawn, then hand off to first-person. Camera-only eye-candy; input is
+    // suspended (see the _introPlaying gate in animate()), no gameplay/server impact.
+    startIntroCinematic(spawnPos, spawnYaw) {
+        const cam = this.camera.getCamera();
+
+        // Facing direction at the spawn (where first-person will look) = toward map
+        // center. The camera should arrive looking that way for a seamless handoff.
+        const lookDir = new THREE.Vector3(-Math.sin(spawnYaw), 0, -Math.cos(spawnYaw));
+
+        // Path keyframes (camera positions). Catmull-Rom smooths them into a curve.
+        //  A: high above map center (bird's-eye establishing shot)
+        //  B: descend toward the player's side, off to one side (orbit feel)
+        //  C: closer, swinging in behind the spawn
+        //  D: the exact spawn position (eye height) — seamless first-person handoff
+        const side = Math.sign(spawnPos.z) || -1; // player's half
+        const A = new THREE.Vector3(0, 620, 40);
+        const B = new THREE.Vector3(side * -260, 380, side * 120);
+        const C = new THREE.Vector3(spawnPos.x - lookDir.x * 220, 150, spawnPos.z - lookDir.z * 220);
+        const D = spawnPos.clone();
+        this._introCurve = new THREE.CatmullRomCurve3([A, B, C, D], false, 'catmullrom', 0.5);
+
+        // Look-at targets per phase: start gazing at the map center, end looking the
+        // same way first-person will (so the final frame matches the handoff exactly).
+        this._introLookStart = new THREE.Vector3(0, 0, 0);
+        this._introLookEnd = spawnPos.clone().add(lookDir.clone().multiplyScalar(60));
+        this._introLookEnd.y = spawnPos.y; // level gaze at the end
+
+        this._introDuration = 6000; // ms
+        this._introStartMs = performance.now();
+        this._introSpawnPos = spawnPos.clone();
+        this._introSpawnYaw = spawnYaw;
+        this._introPlaying = true;
+
+        // Hide the HUD during the cinematic so it reads as a clean fly-through.
+        this._setHudVisibleForIntro(false);
+
+        // Place the camera at the very start so there's no first-frame pop.
+        cam.position.copy(A);
+        cam.lookAt(this._introLookStart);
+    }
+
+    updateIntroCinematic() {
+        const cam = this.camera.getCamera();
+        const t = Math.min(1, (performance.now() - this._introStartMs) / this._introDuration);
+
+        // Ease in-out so it accelerates off the establishing shot and gently lands.
+        const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+        // Position along the curve.
+        const p = this._introCurve.getPoint(e);
+        cam.position.copy(p);
+
+        // Blend the look-at target from map-center to the spawn-forward target,
+        // weighted toward the end so the last second settles into the play view.
+        const lookT = Math.min(1, e * 1.15);
+        const look = this._introLookStart.clone().lerp(this._introLookEnd, lookT);
+        cam.lookAt(look);
+
+        if (t >= 1) this.finishIntroCinematic();
+    }
+
+    finishIntroCinematic() {
+        this._introPlaying = false;
+        // Snap to the exact first-person spawn pose so control resumes seamlessly.
+        const cam = this.camera.getCamera();
+        cam.position.copy(this._introSpawnPos);
+        this.input.yaw = this._introSpawnYaw;
+        this.input.pitch = 0;
+        const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.input.yaw);
+        cam.quaternion.copy(q);
+        cam.updateMatrixWorld();
+        this._setHudVisibleForIntro(true);
+        // free the temp objects
+        this._introCurve = null;
+    }
+
+    // Show/hide gameplay HUD elements during the intro for a clean cinematic.
+    _setHudVisibleForIntro(visible) {
+        const disp = visible ? '' : 'none';
+        ['roundContainer', 'healthContainer', 'killCounter'].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = disp;
+        });
+        if (this.ammoDisplay) { visible ? this.ammoDisplay.show() : this.ammoDisplay.hide(); }
+        if (this.weaponSystem) { visible ? this.weaponSystem.show() : this.weaponSystem.hide(); }
+    }
+
     spawnPlayer() {
         const spawnIndex = Math.floor(Math.random() * this.camera.spawnPoints.length);
         const spawnPoint = this.camera.spawnPoints[spawnIndex];
@@ -1752,6 +1842,14 @@ export class Game {
             console.log(`You respawned at position (${message.player.x}, ${message.player.y}, ${message.player.z}), facing map (yaw ${this.input.yaw.toFixed(2)})`);
             this.hideDeathMessage();
 
+            // FIRST spawn of the match → play the cinematic fly-through that ends
+            // exactly at this spawn pose, then hands off to first-person. Only once.
+            if (!this._introHasPlayed) {
+                this._introHasPlayed = true;
+                const cam = this.camera.getCamera();
+                this.startIntroCinematic(cam.position.clone(), this.input.yaw);
+            }
+
             
             const healthContainer = document.getElementById('healthContainer');
             if (healthContainer) {
@@ -2635,7 +2733,10 @@ export class Game {
                 this.replayRecorder.captureFrame();
             }
 
-            if (this.killCam && this.killCam.isActive()) {
+            if (this._introPlaying) {
+                // The spawn-intro cinematic owns the camera; input is suspended.
+                this.updateIntroCinematic();
+            } else if (this.killCam && this.killCam.isActive()) {
                 this.killCam.update();
             } else if (this.isAlive && !this.deathCamActive) {
                 if (this.isBuildMode) {
