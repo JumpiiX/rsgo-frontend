@@ -349,12 +349,16 @@ export class MapBuilder {
     }
     
     createMinimalistGround() {
-        const groundGeometry = new THREE.PlaneGeometry(1200, 1200);
+        // The BRIGHT play-area ground only needs to cover the arena (±360). Keep it
+        // small (±500) so it ends well before the skyline towers (radius ~655+) —
+        // otherwise the towers sit on the bright floor. Everything beyond is the
+        // darker "city district" ground (createOuterDecoration's cityGround).
+        const groundGeometry = new THREE.PlaneGeometry(1000, 1000);
         const groundMaterial = new THREE.MeshLambertMaterial({
             color: MAP_COLORS.ground,
             side: THREE.DoubleSide
         });
-        
+
         const ground = new THREE.Mesh(groundGeometry, groundMaterial);
         ground.rotation.x = -Math.PI / 2;
         ground.position.y = 0;

@@ -885,10 +885,16 @@ export class Game {
         this._introLookEnd.y = spawnPos.y; // level gaze at the end
 
         this._introDuration = 6000; // ms
-        this._introStartMs = performance.now();
+        this._introStartMs = null;   // set on the first update frame (after warm-up)
+        this._introWarmup = 0;
         this._introSpawnPos = spawnPos.clone();
         this._introSpawnYaw = spawnYaw;
         this._introPlaying = true;
+
+        // Defer building remote-player models until the cinematic ends — adding a
+        // skinned character mid-flight is a ~250ms hitch. They're not visible from
+        // the air anyway.
+        if (this.playerManager) this.playerManager.deferAdds = true;
 
         // Hide the HUD during the cinematic so it reads as a clean fly-through.
         this._setHudVisibleForIntro(false);
@@ -897,13 +903,35 @@ export class Game {
         // aerial view looks alive. Hidden again when we land (see finishIntroCinematic).
         if (this.mapBuilder && this.mapBuilder.introDecor) this.mapBuilder.introDecor.visible = true;
 
-        // Place the camera at the very start so there's no first-frame pop.
+        // Place the camera at the very start so there's no first-frame pop. The
+        // timeline clock starts on the first update frame after a short warm-up (see
+        // updateIntroCinematic) so any first-frame render hitch happens before the
+        // flight begins, not during it.
         cam.position.copy(A);
         cam.lookAt(this._introLookStart);
     }
 
     updateIntroCinematic() {
         const cam = this.camera.getCamera();
+
+        // Re-assert the HUD-hidden state every frame: various per-frame update
+        // functions (ammo, health, bomb indicator) re-show their elements, so a
+        // one-time hide isn't enough — keep them hidden for the whole cinematic.
+        this._setHudVisibleForIntro(false);
+
+        // Warm-up: hold on the very first frames so any first-frame hitch (shader
+        // compile / texture upload that happens when these objects first render)
+        // occurs BEFORE the timeline starts — then the flight itself is smooth.
+        if (this._introStartMs === null) {
+            this._introWarmup = (this._introWarmup || 0) + 1;
+            // Keep the camera parked at the start; render a few frames first.
+            cam.position.copy(this._introCurve.getPoint(0));
+            cam.lookAt(this._introLookStart);
+            if (this._introWarmup < 3) return;   // ~3 frames of warm-up
+            this._introStartMs = performance.now(); // NOW start the clock
+            this._introWarmup = 0;
+        }
+
         const t = Math.min(1, (performance.now() - this._introStartMs) / this._introDuration);
 
         // Ease in-out so it accelerates off the establishing shot and gently lands.
@@ -934,6 +962,11 @@ export class Game {
         cam.quaternion.copy(q);
         cam.updateMatrixWorld();
         this._setHudVisibleForIntro(true);
+        this._hudPrevDisplay = null; // reset for any future use
+        // Build any remote players that were deferred during the cinematic (the
+        // ~250ms character-build hitch now happens in first-person, where a brief
+        // hiccup right at spawn is far less noticeable than during the smooth flight).
+        if (this.playerManager) this.playerManager.flushDeferredPlayers();
         // Now that the cinematic is over, show the "press B to build" prompt if the
         // build phase is still running (it was suppressed during the intro).
         this.updateBuildPrompt();
@@ -945,10 +978,39 @@ export class Game {
 
     // Show/hide gameplay HUD elements during the intro for a clean cinematic.
     _setHudVisibleForIntro(visible) {
-        const disp = visible ? '' : 'none';
-        ['roundContainer', 'healthContainer', 'killCounter'].forEach((id) => {
+        // The full HUD — everything hidden for a clean cinematic. We remember each
+        // element's ORIGINAL display value so showing it again restores flex/grid/etc.
+        // (a blanket display='' would turn a flex container into block).
+        const ids = [
+            'roundContainer',         // round / score / timer box
+            'healthContainer',        // health + shield bars
+            'killCounter',            // kill count pill
+            'crosshair',              // reticle
+            'simple-minimap',         // minimap box
+            'minimap-player-arrow',   // minimap player arrow (separate fixed element)
+            'compass-container',      // compass strip
+            'compass-center-line',    // compass middle line (separate fixed element)
+            'compass-left-fade',      // compass edge fades (separate)
+            'compass-right-fade',
+            'compass-degree-display', // compass heading number (e.g. "0°")
+            'ammoContainer',          // ammo display
+            'bombIndicator',          // bomb-carrier box
+            'bombDropPrompt',         // bomb drop prompt
+            'notifColumn',            // notifications + kill feed column
+        ];
+        if (!this._hudPrevDisplay) this._hudPrevDisplay = {};
+        ids.forEach((id) => {
             const el = document.getElementById(id);
-            if (el) el.style.display = disp;
+            if (!el) return;
+            if (visible) {
+                // restore what it was before we hid it (default '' if unknown)
+                el.style.display = (id in this._hudPrevDisplay) ? this._hudPrevDisplay[id] : '';
+            } else {
+                // Record the ORIGINAL display only the FIRST time we hide it (this
+                // runs every intro frame; don't overwrite the saved value with 'none').
+                if (!(id in this._hudPrevDisplay)) this._hudPrevDisplay[id] = el.style.display;
+                el.style.display = 'none';
+            }
         });
         if (this.ammoDisplay) { visible ? this.ammoDisplay.show() : this.ammoDisplay.hide(); }
         if (this.weaponSystem) { visible ? this.weaponSystem.show() : this.weaponSystem.hide(); }
@@ -2847,27 +2909,22 @@ export class Game {
 
             if (this.weaponSystem) {
                 this.weaponSystem.update(deltaTime);
-                // Update ammo display during reload or when ammo changes
-                this.updateAmmoDisplay();
+                // Update ammo display during reload or when ammo changes (but NOT
+                // during the intro cinematic — it would re-show the hidden HUD).
+                if (!this._introPlaying) this.updateAmmoDisplay();
             }
-            
+
             // Update bomb system
             if (this.bombSystem) {
                 this.bombSystem.update(deltaTime);
             }
 
-            
-            if (this.miniMap) {
+            // Minimap + compass: skip entirely during the intro cinematic (HUD hidden).
+            if (this.miniMap && !this.isBuildMode && !this._introPlaying) {
                 const playerPos = this.camera.getPosition();
-                
                 const cameraRotation = this.input.yaw;
-
-                // Only update minimap and compass if not in build mode
-
-                if (!this.isBuildMode) {
-                    this.miniMap.update(playerPos, cameraRotation);
-                    this.compass.update(cameraRotation);
-                }
+                this.miniMap.update(playerPos, cameraRotation);
+                this.compass.update(cameraRotation);
             }
 
             
@@ -2877,7 +2934,7 @@ export class Game {
             this.renderer.render(this.scene.getScene(), this.camera.getCamera());
 
 
-            if (this.miniMap && !this.isBuildMode) {
+            if (this.miniMap && !this.isBuildMode && !this._introPlaying) {
                 this.miniMap.render();
             }
 

@@ -172,6 +172,15 @@ export class PlayerManager {
         pending.forEach((p) => this.addPlayer(p));
     }
 
+    // Build any players queued while adds were deferred (see addPlayer/deferAdds).
+    // Called by Game when the spawn intro cinematic ends.
+    flushDeferredPlayers() {
+        this.deferAdds = false;
+        const pending = this.pendingPlayers;
+        this.pendingPlayers = [];
+        pending.forEach((p) => this.addPlayer(p));
+    }
+
     // Pick which character a given player uses — DETERMINISTICALLY from their id
     // (hash), so EVERY client picks the same character for the same player. This
     // is what makes the kill cam (and all clients) show a player's correct,
@@ -205,6 +214,15 @@ export class PlayerManager {
 
         // Models still loading: queue and bail; onAllLoaded() replays the queue.
         if (!this.loaded && !this.loadFailed) {
+            this.pendingPlayers.push(player);
+            return;
+        }
+
+        // Deferred (e.g. during the spawn intro cinematic): building a skinned
+        // character is a ~250ms synchronous hitch (geometry upload + shader compile),
+        // which would stutter the fly-through. Queue it; flushDeferredPlayers()
+        // builds them once the cinematic ends. They aren't visible during the intro.
+        if (this.deferAdds) {
             this.pendingPlayers.push(player);
             return;
         }
