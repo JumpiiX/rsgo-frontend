@@ -62,6 +62,111 @@ export class MapBuilder {
 
         // 4. Outer decoration — a distant monolith "city" ring around the arena.
         this.createOuterDecoration();
+
+        // 5. Intro-only decor (trees, ground markings, props, glow strips). Hidden
+        // during play; shown ONLY for the spawn fly-through to dress up the aerial
+        // view. Toggled by Game's intro cinematic.
+        this.createIntroDecor();
+    }
+
+    // Decorations that exist ONLY for the starting fly-through (hidden in normal
+    // first-person play, so they never clutter gameplay or sightlines). Adds trees,
+    // ground markings, scattered props and glowing accent strips around/over the map
+    // so it looks alive and built from the air. All in one group, NO colliders.
+    createIntroDecor() {
+        const group = new THREE.Group();
+        group.name = 'introDecor';
+        group.visible = false;
+
+        const ORANGE = 0xef4e23, NAVY = 0x1a2447, LEAF = 0x2f6f4a, TRUNK = 0x4a3520;
+        const H = (n) => this._deco_hash(n);
+
+        // Keep decor OUT of the playable footprint (spawns ±300, sites ±250, lanes).
+        // Helper: is (x,z) clear of the play geometry? (loose padding).
+        const onPlayArea = (x, z) => {
+            if (Math.abs(z) <= 90 && (Math.abs(x - 250) <= 110 || Math.abs(x + 250) <= 110)) return true; // sites
+            if (Math.abs(x) <= 90 && Math.abs(Math.abs(z) - 300) <= 90) return true; // spawns
+            // rough lane corridors spawn(0,±300)->site(±250,0) and mid
+            const lane = (sx, sz, ex, ez) => {
+                const dx = ex - sx, dz = ez - sz, len = Math.hypot(dx, dz);
+                const ux = dx / len, uz = dz / len, px = -uz, pz = ux;
+                const lx = x - sx, lz = z - sz;
+                const al = lx * ux + lz * uz, pe = lx * px + lz * pz;
+                return al >= 0 && al <= len && Math.abs(pe) <= 70;
+            };
+            if (lane(0, -300, -250, 0) || lane(0, -300, 250, 0) ||
+                lane(0, 300, -250, 0) || lane(0, 300, 250, 0) || lane(-250, 0, 250, 0)) return true;
+            return false;
+        };
+
+        // ---- 1. Trees — kept VISIBLE in first-person too (they look good on the
+        // ground), so they go in their OWN always-visible group, not the intro group.
+        const treeGroup = new THREE.Group();
+        treeGroup.name = 'mapTrees';
+        const trunkGeo = new THREE.CylinderGeometry(2.2, 3, 16, 6);
+        const leafGeo = new THREE.ConeGeometry(11, 26, 7);
+        const trunkMat = new THREE.MeshLambertMaterial({ color: TRUNK });
+        const leafMat = new THREE.MeshLambertMaterial({ color: LEAF, emissive: 0x12351f, emissiveIntensity: 0.2 });
+        // Trees must stay OUTSIDE the whole play area with a generous margin, so none
+        // clip into the perimeter walls. The arena (sites ±250, spawns ±300, walls)
+        // fits within ~x∈±360, z∈±400; keep trees at least this far out.
+        const KEEPOUT_X = 430, KEEPOUT_Z = 470;
+        const nearArena = (x, z) => Math.abs(x) < KEEPOUT_X && Math.abs(z) < KEEPOUT_Z;
+
+        let placed = 0;
+        for (let i = 0; i < 800 && placed < 90; i++) {
+            // Spread trees in the OUTER ring (between the arena and the skyline), so
+            // they never touch the play geometry. Radius ~480–880 from center.
+            const ang = H(i * 1.3) * Math.PI * 2;
+            const rad = 480 + H(i * 2.7 + 4) * 400;
+            const x = Math.cos(ang) * rad;
+            const z = Math.sin(ang) * rad;
+            if (nearArena(x, z) || onPlayArea(x, z)) continue;
+            const s = 0.7 + H(i * 3.9) * 0.9;
+            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+            trunk.position.set(x, 8 * s, z); trunk.scale.setScalar(s);
+            const leaf = new THREE.Mesh(leafGeo, leafMat);
+            leaf.position.set(x, (16 + 13) * s, z); leaf.scale.setScalar(s);
+            treeGroup.add(trunk); treeGroup.add(leaf);
+            placed++;
+        }
+        this.scene.add(treeGroup);
+        this.mapTrees = treeGroup;
+
+        // ---- 3. Props: small navy crates + glowing orange light posts on edges ----
+        const crateGeo = new THREE.BoxGeometry(10, 10, 10);
+        const crateMat = new THREE.MeshLambertMaterial({ color: NAVY, emissive: 0x0d1326, emissiveIntensity: 0.1 });
+        const postGeo = new THREE.CylinderGeometry(1, 1, 26, 6);
+        const postMat = new THREE.MeshLambertMaterial({ color: 0x2a3a63 });
+        const bulbGeo = new THREE.SphereGeometry(2.6, 8, 8);
+        const bulbMat = new THREE.MeshBasicMaterial({ color: ORANGE });
+        let props = 0;
+        for (let i = 0; i < 400 && props < 60; i++) {
+            const x = (H(i * 5.1 + 1) - 0.5) * 780;
+            const z = (H(i * 6.3 + 7) - 0.5) * 780;
+            if (onPlayArea(x, z)) continue;
+            if (H(i * 7.7) > 0.5) {
+                const crate = new THREE.Mesh(crateGeo, crateMat);
+                crate.position.set(x, 5, z); crate.rotation.y = H(i) * Math.PI;
+                group.add(crate);
+            } else {
+                const post = new THREE.Mesh(postGeo, postMat); post.position.set(x, 13, z);
+                const bulb = new THREE.Mesh(bulbGeo, bulbMat); bulb.position.set(x, 27, z);
+                group.add(post); group.add(bulb);
+            }
+            props++;
+        }
+
+        // ---- 4. Glowing orange accent strips outlining the bomb sites (tron look) --
+        const glowMat = new THREE.MeshBasicMaterial({ color: ORANGE, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+        [-250, 250].forEach((sx) => {
+            const outline = new THREE.Mesh(new THREE.RingGeometry(95, 100, 48), glowMat);
+            outline.rotation.x = -Math.PI / 2; outline.position.set(sx, 0.4, 0);
+            group.add(outline);
+        });
+
+        this.scene.add(group);
+        this.introDecor = group;
     }
 
     // Deterministic 0..1 hash (no Math.random — stable across reloads). Shared by
@@ -171,6 +276,19 @@ export class MapBuilder {
         }
         towers.instanceMatrix.needsUpdate = true;
         group.add(towers);
+
+        // A BIG ground plane UNDER the skyline so the towers never float over the
+        // void. Towers reach ~±1050, so make it far wider (±2000) to be safe. A
+        // distinctly DIFFERENT, darker blue-violet than the nearby map floor so the
+        // outer "city district" reads as separate ground, not the playfield.
+        const cityGround = new THREE.Mesh(
+            new THREE.PlaneGeometry(7000, 7000),
+            new THREE.MeshLambertMaterial({ color: 0x161e3e })
+        );
+        cityGround.rotation.x = -Math.PI / 2;
+        cityGround.position.y = -0.5; // just under the main ground to avoid z-fight
+        cityGround.receiveShadow = false;
+        group.add(cityGround);
 
         this.scene.add(group);
         this.outerDecoration = group;

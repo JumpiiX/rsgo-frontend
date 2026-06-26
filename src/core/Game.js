@@ -893,6 +893,10 @@ export class Game {
         // Hide the HUD during the cinematic so it reads as a clean fly-through.
         this._setHudVisibleForIntro(false);
 
+        // Show the intro-only decor (trees / markings / props / glow strips) so the
+        // aerial view looks alive. Hidden again when we land (see finishIntroCinematic).
+        if (this.mapBuilder && this.mapBuilder.introDecor) this.mapBuilder.introDecor.visible = true;
+
         // Place the camera at the very start so there's no first-frame pop.
         cam.position.copy(A);
         cam.lookAt(this._introLookStart);
@@ -929,6 +933,8 @@ export class Game {
         cam.quaternion.copy(q);
         cam.updateMatrixWorld();
         this._setHudVisibleForIntro(true);
+        // Hide the intro-only decor now that we're in first-person play.
+        if (this.mapBuilder && this.mapBuilder.introDecor) this.mapBuilder.introDecor.visible = false;
         // free the temp objects
         this._introCurve = null;
     }
