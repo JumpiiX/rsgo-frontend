@@ -126,45 +126,37 @@ export class PlayerManager {
     // have the "mixamorig:" prefix stripped (common after a Blender export), strip
     // it from the clip too (and vice-versa). Compares against a loaded template; if
     // no template is loaded yet, defers via a flag and tries again at build time.
-    _normalizeDeathClipBones(clip) {
-        const template = this.templates.find(Boolean);
-        if (!template || !template.scene) return; // can't compare yet; leave as-is
+    // Return the death clip RETARGETED to a specific character's bone names. Some
+    // characters were exported with a different Mixamo prefix (e.g. "mixamorig6:"
+    // instead of "mixamorig:"), so the shared clip's tracks won't bind to them. We
+    // remap each track's bone to this character's actual bone, matching by the bone
+    // name WITHOUT the mixamorig[N] prefix (e.g. "Hips", "Spine"). Cached per char.
+    _deathClipForTemplate(template, charIdx) {
+        if (!this._deathClipCache) this._deathClipCache = {};
+        if (this._deathClipCache[charIdx]) return this._deathClipCache[charIdx];
 
-        // Collect the character's bone names.
-        const boneNames = new Set();
-        template.scene.traverse((o) => { if (o.isBone || o.type === 'Bone') boneNames.add(o.name); });
-        if (boneNames.size === 0) return;
+        const src = this.deathClipOverride;
+        // Build: suffix (bone name without the mixorig prefix) -> actual bone name.
+        const stripPrefix = (n) => n.replace(/mixamorig[0-9]*:?/i, '');
+        const bySuffix = new Map();
+        template.scene.traverse((o) => {
+            if (o.isBone || o.type === 'Bone') bySuffix.set(stripPrefix(o.name), o.name);
+        });
 
-        // The track name is "<bone>.<property>". Extract the bone part of a track.
-        const trackBone = (name) => name.replace(/\.[^.]+$/, '');
+        const clip = src.clone();
+        let bound = 0;
+        clip.tracks.forEach((t) => {
+            const dot = t.name.lastIndexOf('.');
+            const boneRaw = dot >= 0 ? t.name.slice(0, dot) : t.name;
+            const prop = dot >= 0 ? t.name.slice(dot) : '';
+            const realBone = bySuffix.get(stripPrefix(boneRaw));
+            if (realBone) { t.name = realBone + prop; bound++; }
+        });
 
-        // How many of the clip's track-bones already match a real character bone?
-        const matchCount = clip.tracks.filter((t) => boneNames.has(trackBone(t.name))).length;
-        if (matchCount > 0) return; // already aligned (the common case) — stay quiet
-
-        // No matches: try stripping a "mixamorig:" prefix, then (if still none)
-        // adding it, and keep whichever yields matches.
-        const tryRename = (fn) => {
-            let hits = 0;
-            const mapped = clip.tracks.map((t) => {
-                const newName = fn(t.name);
-                if (boneNames.has(trackBone(newName))) hits++;
-                return newName;
-            });
-            return { hits, mapped };
-        };
-
-        const strip = tryRename((n) => n.replace(/mixamorig[0-9]*:/i, ''));
-        const add = tryRename((n) => 'mixamorig:' + n);
-        const best = strip.hits >= add.hits ? strip : add;
-
-        if (best.hits > 0) {
-            clip.tracks.forEach((t, i) => { t.name = best.mapped[i]; });
-            console.log(`[death] renamed tracks → ${best.hits}/${clip.tracks.length} now match.`);
-        } else {
-            console.warn('[death] FBX bone names do NOT match the characters — animation will not play. ' +
-                'The death FBX must be exported from the SAME rig as the character GLBs.');
-        }
+        const file = CHARACTER_FILES[charIdx] || `#${charIdx}`;
+        console.log(`[death] retargeted clip for ${file}: ${bound}/${clip.tracks.length} tracks bound`);
+        this._deathClipCache[charIdx] = clip;
+        return clip;
     }
 
     // Load the custom Mixamo death FBX and keep just its animation clip. Players
@@ -187,9 +179,9 @@ export class PlayerManager {
                         clip.tracks = clip.tracks.filter(
                             (t) => !(/hips/i.test(t.name) && /\.position$/i.test(t.name))
                         );
-                        // Bone-name compatibility: align FBX track names to the
-                        // characters' actual bone names (mixamorig prefix handling).
-                        this._normalizeDeathClipBones(clip);
+                        // Keep this clip PRISTINE — it gets cloned + retargeted to each
+                        // character's exact bone names in _deathClipForTemplate (some
+                        // characters use a different prefix like "mixamorig6:").
                         this.deathClipOverride = clip;
                         console.log('Custom death animation loaded (FBX). tracks:', clip.tracks.length, '(hip-position removed)');
                     } else {
@@ -263,9 +255,8 @@ export class PlayerManager {
             this.loaded = true;
             console.log(`Loaded ${ok.length}/${CHARACTER_FILES.length} characters, clips:`,
                 ok[0].clips.map((c) => c.name).join(', '));
-            // If the death FBX loaded BEFORE the characters, align its bone names now
-            // that we have a template to compare against.
-            if (this.deathClipOverride) this._normalizeDeathClipBones(this.deathClipOverride);
+            // The death clip is retargeted per-character on demand (in buildModel via
+            // _deathClipForTemplate), so no global alignment is needed here.
         }
         const pending = this.pendingPlayers;
         this.pendingPlayers = [];
@@ -400,9 +391,11 @@ export class PlayerManager {
         const mixer = new THREE.AnimationMixer(model);
         const actions = {};
         for (const [key, name] of Object.entries(CLIP)) {
-            // Use the custom FBX death clip when available; else the GLB's own clip.
+            // Use the custom FBX death clip when available, RETARGETED to this exact
+            // character's bone names (some characters use a different prefix like
+            // "mixamorig6:" — a shared clip wouldn't bind to them). Else GLB's own clip.
             const clip = (key === 'death' && this.deathClipOverride)
-                ? this.deathClipOverride
+                ? this._deathClipForTemplate(template, charIdx)
                 : THREE.AnimationClip.findByName(template.clips, name);
             if (clip) {
                 actions[key] = mixer.clipAction(clip);
@@ -466,7 +459,7 @@ export class PlayerManager {
         const actions = {};
         for (const [key, name] of Object.entries(CLIP)) {
             const clip = (key === 'death' && this.deathClipOverride)
-                ? this.deathClipOverride
+                ? this._deathClipForTemplate(template, charIdx)
                 : THREE.AnimationClip.findByName(template.clips, name);
             if (clip) actions[key] = mixer.clipAction(clip);
         }
