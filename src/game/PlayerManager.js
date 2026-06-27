@@ -1,6 +1,12 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
+
+// A custom death animation (Mixamo FBX) that overrides the GLB's baked 'Death'
+// clip. Because it's the same Mixamo skeleton as the characters, its bone tracks
+// play directly on them — no retargeting needed. Loaded once, async.
+const DEATH_FBX = '/models/rifle-death.fbx';
 
 // Set true to log animation-state transitions + death lifecycle to the console
 // (for diagnosing stutter / death issues). Off for normal play.
@@ -89,6 +95,12 @@ const TARGET_HEIGHT = 16.5;
 // regardless of model scale. Increase if characters float; decrease if they sink.
 const FEET_BELOW_ORIGIN = 10;
 
+// On death we strip the death clip's hip translation (it flings the body at our
+// large character scale), which leaves the collapsed corpse hovering ~1m above
+// the floor. Drop the whole mesh by this much when death starts so it lies flat.
+// Tune if the body ends slightly above (raise) or sunk into (lower) the ground.
+const DEATH_GROUND_DROP = 6;
+
 export class PlayerManager {
     constructor(scene) {
         this.scene = scene;
@@ -104,7 +116,92 @@ export class PlayerManager {
         this.loadFailed = false;
         this.assignment = new Map(); // playerId -> character index (stable per player)
         this.pendingPlayers = [];
+        this.deathClipOverride = null; // set when the custom death FBX finishes loading
         this.loadModels();
+        this.loadDeathAnimation();
+    }
+
+    // Make the death clip's track names match the characters' actual bone names.
+    // FBX tracks look like "mixamorig:Hips.quaternion"; if the characters' bones
+    // have the "mixamorig:" prefix stripped (common after a Blender export), strip
+    // it from the clip too (and vice-versa). Compares against a loaded template; if
+    // no template is loaded yet, defers via a flag and tries again at build time.
+    _normalizeDeathClipBones(clip) {
+        const template = this.templates.find(Boolean);
+        if (!template || !template.scene) return; // can't compare yet; leave as-is
+
+        // Collect the character's bone names.
+        const boneNames = new Set();
+        template.scene.traverse((o) => { if (o.isBone || o.type === 'Bone') boneNames.add(o.name); });
+        if (boneNames.size === 0) return;
+
+        // The track name is "<bone>.<property>". Extract the bone part of a track.
+        const trackBone = (name) => name.replace(/\.[^.]+$/, '');
+
+        // How many of the clip's track-bones already match a real character bone?
+        const matchCount = clip.tracks.filter((t) => boneNames.has(trackBone(t.name))).length;
+        if (matchCount > 0) return; // already aligned (the common case) — stay quiet
+
+        // No matches: try stripping a "mixamorig:" prefix, then (if still none)
+        // adding it, and keep whichever yields matches.
+        const tryRename = (fn) => {
+            let hits = 0;
+            const mapped = clip.tracks.map((t) => {
+                const newName = fn(t.name);
+                if (boneNames.has(trackBone(newName))) hits++;
+                return newName;
+            });
+            return { hits, mapped };
+        };
+
+        const strip = tryRename((n) => n.replace(/mixamorig[0-9]*:/i, ''));
+        const add = tryRename((n) => 'mixamorig:' + n);
+        const best = strip.hits >= add.hits ? strip : add;
+
+        if (best.hits > 0) {
+            clip.tracks.forEach((t, i) => { t.name = best.mapped[i]; });
+            console.log(`[death] renamed tracks → ${best.hits}/${clip.tracks.length} now match.`);
+        } else {
+            console.warn('[death] FBX bone names do NOT match the characters — animation will not play. ' +
+                'The death FBX must be exported from the SAME rig as the character GLBs.');
+        }
+    }
+
+    // Load the custom Mixamo death FBX and keep just its animation clip. Players
+    // built before it loads use the GLB's 'Death' clip; once it's ready, newly
+    // built players use this. (Same skeleton → no retargeting.)
+    loadDeathAnimation() {
+        try {
+            const loader = new FBXLoader();
+            loader.load(
+                DEATH_FBX,
+                (fbx) => {
+                    const clip = fbx.animations && fbx.animations[0];
+                    if (clip) {
+                        clip.name = 'Death';
+                        // Remove the Hips.position (root-motion) track entirely. At our
+                        // ~8-10× character scale its baked translation is huge and
+                        // launches the body ("flies"). We instead drop the whole body
+                        // to the ground in code during the death (see killPlayer's
+                        // DEATH_GROUND_DROP), which is scale-independent and reliable.
+                        clip.tracks = clip.tracks.filter(
+                            (t) => !(/hips/i.test(t.name) && /\.position$/i.test(t.name))
+                        );
+                        // Bone-name compatibility: align FBX track names to the
+                        // characters' actual bone names (mixamorig prefix handling).
+                        this._normalizeDeathClipBones(clip);
+                        this.deathClipOverride = clip;
+                        console.log('Custom death animation loaded (FBX). tracks:', clip.tracks.length, '(hip-position removed)');
+                    } else {
+                        console.warn('Death FBX had no animation clip; keeping GLB death.');
+                    }
+                },
+                undefined,
+                (err) => console.warn('Failed to load death FBX, keeping GLB death:', err)
+            );
+        } catch (e) {
+            console.warn('Death FBX load error, keeping GLB death:', e);
+        }
     }
 
     loadModels() {
@@ -166,6 +263,9 @@ export class PlayerManager {
             this.loaded = true;
             console.log(`Loaded ${ok.length}/${CHARACTER_FILES.length} characters, clips:`,
                 ok[0].clips.map((c) => c.name).join(', '));
+            // If the death FBX loaded BEFORE the characters, align its bone names now
+            // that we have a template to compare against.
+            if (this.deathClipOverride) this._normalizeDeathClipBones(this.deathClipOverride);
         }
         const pending = this.pendingPlayers;
         this.pendingPlayers = [];
@@ -300,7 +400,10 @@ export class PlayerManager {
         const mixer = new THREE.AnimationMixer(model);
         const actions = {};
         for (const [key, name] of Object.entries(CLIP)) {
-            const clip = THREE.AnimationClip.findByName(template.clips, name);
+            // Use the custom FBX death clip when available; else the GLB's own clip.
+            const clip = (key === 'death' && this.deathClipOverride)
+                ? this.deathClipOverride
+                : THREE.AnimationClip.findByName(template.clips, name);
             if (clip) {
                 actions[key] = mixer.clipAction(clip);
             }
@@ -362,7 +465,9 @@ export class PlayerManager {
         const mixer = new THREE.AnimationMixer(model);
         const actions = {};
         for (const [key, name] of Object.entries(CLIP)) {
-            const clip = THREE.AnimationClip.findByName(template.clips, name);
+            const clip = (key === 'death' && this.deathClipOverride)
+                ? this.deathClipOverride
+                : THREE.AnimationClip.findByName(template.clips, name);
             if (clip) actions[key] = mixer.clipAction(clip);
         }
         ['shoot', 'jump', 'jumpBackward', 'jumpStand', 'death'].forEach((k) => {
@@ -406,6 +511,9 @@ export class PlayerManager {
     updatePlayer(message) {
         const player = this.otherPlayers.get(message.player_id);
         if (!player) return;
+        // Ignore movement updates for a dead player — the death animation owns the
+        // body; stale in-flight messages must not drag it or re-orient it.
+        if (player.dead) return;
 
         const newX = message.x, newY = message.y, newZ = message.z;
         const yaw = message.rotation_y;
@@ -580,6 +688,18 @@ export class PlayerManager {
 
             if (!player.isModel) return;
 
+            // DEAD: the death animation owns the body. Don't lerp position or smooth
+            // the yaw — that fought the fall. The mixer keeps running (above) so the
+            // death pose plays. Ramp the ground-drop from 0 (standing → feet on floor)
+            // to full DEATH_GROUND_DROP (lying flat) so the body settles cleanly.
+            if (player.dead) {
+                if (typeof player._deathBaseY === 'number' && player._deathDuration > 0) {
+                    const tDeath = Math.min(1, Math.max(0, (this.clock - player._deathStartClock) / player._deathDuration));
+                    player.mesh.position.y = player._deathBaseY - DEATH_GROUND_DROP * tDeath;
+                }
+                return;
+            }
+
             // Smoothly glide the mesh toward the latest network target each frame.
             // Frame-rate independent so it stays smooth at any refresh rate.
             const t = 1 - Math.pow(1 - POSITION_LERP, deltaTime * 60);
@@ -691,14 +811,25 @@ export class PlayerManager {
             if (player.isModel && player.actions.death) {
                 player.dead = true;
                 const death = player.actions.death;
-                const prev = player.actions[player.current];
+                // Ground-settle: the body collapses from STANDING (start, feet on the
+                // floor) to LYING FLAT (end). Because we stripped the hip translation,
+                // the flat body would float ~1m, but an instant drop sinks the feet at
+                // the start. So ramp the drop in over the clip (see update()).
+                player._deathBaseY = player.mesh.position.y;
+                player._deathStartClock = this.clock || 0;
+                player._deathDuration = (death.getClip().duration || 1);
+                // Stop ALL other actions hard so nothing blends into the death pose
+                // (a crossfade from run/shoot could fight the fall and look like a
+                // "flip"). The death clip alone drives the skeleton.
+                Object.values(player.actions).forEach((a) => {
+                    if (a && a !== death) { a.stop(); a.setEffectiveWeight(0); a.enabled = false; }
+                });
                 death.reset();
                 death.setLoop(THREE.LoopOnce);
                 death.clampWhenFinished = true;
                 death.enabled = true;
                 death.setEffectiveWeight(1);
                 death.play();
-                if (prev && prev !== death) death.crossFadeFrom(prev, 0.15, false);
                 player.current = 'death';
 
                 if (ANIM_DEBUG) console.log(`[death] start ${playerId} dur=${death.getClip().duration.toFixed(2)}s prev=${player.current}`);
