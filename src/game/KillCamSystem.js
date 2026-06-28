@@ -19,44 +19,61 @@ export class KillCamSystem {
     }
 
     createUI() {
+        // Keyframes for the cinematic letterbox + fades (injected once).
+        if (!document.getElementById('killcamStyles')) {
+            const st = document.createElement('style');
+            st.id = 'killcamStyles';
+            st.textContent = `
+                @keyframes kcFadeIn { from { opacity: 0; } to { opacity: 1; } }
+                @keyframes kcBarIn  { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+                @keyframes kcRise   { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+            `;
+            document.head.appendChild(st);
+        }
+
+        // Root container holds all killcam chrome. Hidden by default.
         const ui = document.createElement('div');
         ui.id = 'killcamUI';
         ui.style.cssText = `
-            position: fixed;
-            top: 24px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 12px 22px;
-            background: rgba(0, 0, 0, 0.85);
-            border: 1px solid rgba(255, 255, 255, 0.10);
-            border-radius: 12px;
-            color: #fff;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            font-size: 13px;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-            z-index: 500;
-            display: none;
-            text-align: center;
-            backdrop-filter: blur(10px);
+            position: fixed; inset: 0; z-index: 500; display: none;
             pointer-events: none;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: #e8edff;
         `;
         ui.innerHTML = `
-            <div id="killcamLabel" style="font-weight: 600; color: #ff8c1a;">Kill Cam</div>
-            <div id="killcamSubtitle" style="margin-top: 4px; font-size: 11px; color: rgba(255,255,255,0.7); letter-spacing: 0.5px; text-transform: none;"></div>
-            <div id="killcamHint" style="margin-top: 8px; font-size: 10px; color: rgba(255,255,255,0.45); letter-spacing: 0.5px; text-transform: none; display: none;">
-                <span style="display:inline-flex;gap:6px;align-items:center;">
-                    <kbd style="padding:2px 6px;border:1px solid rgba(255,255,255,0.2);border-radius:3px;font-family:inherit;">◀</kbd>
-                    <kbd style="padding:2px 6px;border:1px solid rgba(255,255,255,0.2);border-radius:3px;font-family:inherit;">▶</kbd>
-                    cycle teammates
-                </span>
+            <!-- Cinematic letterbox bars (top + bottom) -->
+            <div style="position:absolute; top:0; left:0; right:0; height:70px;
+                        background:linear-gradient(180deg, rgba(13,19,38,0.92) 0%, rgba(13,19,38,0) 100%);
+                        transform-origin:top; animation:kcBarIn 0.4s ease both;"></div>
+            <div style="position:absolute; bottom:0; left:0; right:0; height:110px;
+                        background:linear-gradient(0deg, rgba(13,19,38,0.92) 0%, rgba(13,19,38,0) 100%);
+                        transform-origin:bottom; animation:kcBarIn 0.4s ease both;"></div>
+
+            <!-- TOP: big KILL CAM header + replay countdown -->
+            <div style="position:absolute; top:18px; left:50%; transform:translateX(-50%); text-align:center; animation:kcRise 0.45s 0.1s ease both;">
+                <div id="killcamLabel" style="font-size:22px; font-weight:800; letter-spacing:6px; text-transform:uppercase; color:#ef4e23; text-shadow:0 0 18px rgba(239,78,35,0.5);">Kill Cam</div>
+                <div id="killcamTimer" style="margin-top:4px; font-size:13px; font-weight:600; letter-spacing:2px; color:rgba(232,237,255,0.75);"></div>
+            </div>
+
+            <!-- BOTTOM: 'Killed by XX' banner -->
+            <div id="killcamBottom" style="position:absolute; bottom:30px; left:50%; transform:translateX(-50%); text-align:center; animation:kcRise 0.45s 0.18s ease both;">
+                <div id="killcamSubtitle" style="font-size:18px; font-weight:700; letter-spacing:1px;"></div>
+                <div id="killcamHint" style="margin-top:8px; font-size:11px; color:rgba(232,237,255,0.5); letter-spacing:0.5px; display:none;">
+                    <span style="display:inline-flex;gap:6px;align-items:center;">
+                        <kbd style="padding:2px 7px;border:1px solid rgba(232,237,255,0.25);border-radius:4px;font-family:inherit;">◀</kbd>
+                        <kbd style="padding:2px 7px;border:1px solid rgba(232,237,255,0.25);border-radius:4px;font-family:inherit;">▶</kbd>
+                        cycle teammates
+                    </span>
+                </div>
             </div>
         `;
         document.body.appendChild(ui);
         this.ui = ui;
         this.labelEl = ui.querySelector('#killcamLabel');
         this.subtitleEl = ui.querySelector('#killcamSubtitle');
+        this.timerEl = ui.querySelector('#killcamTimer');
         this.hintEl = ui.querySelector('#killcamHint');
+        this.bottomEl = ui.querySelector('#killcamBottom');
     }
 
     attachKeys() {
@@ -86,7 +103,7 @@ export class KillCamSystem {
         // shot is missing from the kill cam. So wait a short beat first — the
         // recorder keeps capturing during this delay, so the fatal shot lands in a
         // real snapshot and gets replayed.
-        const START_DELAY_MS = 220;
+        const START_DELAY_MS = 400;
         if (this._startTimer) clearTimeout(this._startTimer);
         this._startTimer = setTimeout(() => {
             this._startTimer = null;
@@ -108,17 +125,35 @@ export class KillCamSystem {
     updateUIForReplay() {
         const killerName = this.getPlayerName(this.replayTargetId);
         this.labelEl.textContent = 'Kill Cam';
-        this.labelEl.style.color = '#ff8c1a';
-        this.subtitleEl.textContent = killerName ? `Killed by ${killerName}` : 'Killed';
+        this.labelEl.style.color = '#ef4e23';
+        this.labelEl.style.textShadow = '0 0 18px rgba(239,78,35,0.5)';
+        // "Killed by NAME" — name highlighted in orange.
+        this.subtitleEl.innerHTML = killerName
+            ? `Killed by <span style="color:#ef4e23;">${killerName}</span>`
+            : 'Killed';
         this.hintEl.style.display = 'none';
+        this.timerEl.style.display = '';
     }
 
     updateUIForSpectate() {
         const name = this.getPlayerName(this.spectateTargetId);
         this.labelEl.textContent = 'Spectating';
-        this.labelEl.style.color = '#6ad26a';
-        this.subtitleEl.textContent = name || 'Teammate';
+        this.labelEl.style.color = '#9fb0d8';
+        this.labelEl.style.textShadow = 'none';
+        this.subtitleEl.innerHTML = name
+            ? `Following <span style="color:#9fb0d8;">${name}</span>`
+            : 'Teammate';
         this.hintEl.style.display = 'block';
+        this.timerEl.style.display = 'none'; // no replay countdown while spectating
+    }
+
+    // Update the replay countdown ("Replay · 3s") while replaying.
+    updateReplayTimer() {
+        if (!this.timerEl || this.state !== 'replaying') return;
+        const now = performance.now() / 1000;
+        const elapsed = now - (this.recorder.replayWallStart || now);
+        const remaining = Math.max(0, (this.recorder.replayDuration || this.replayDuration) - elapsed);
+        this.timerEl.textContent = `Replay · ${Math.ceil(remaining)}s`;
     }
 
     getPlayerName(id) {
@@ -217,6 +252,7 @@ export class KillCamSystem {
 
     update() {
         if (this.state === 'replaying') {
+            this.updateReplayTimer();
             const result = this.recorder.updatePlayback(this.replayTargetId);
             if (!result) return;
             if (result.done) {

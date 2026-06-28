@@ -977,7 +977,11 @@ export class Game {
     }
 
     // Show/hide gameplay HUD elements during the intro for a clean cinematic.
-    _setHudVisibleForIntro(visible) {
+    // Hide/show the gameplay HUD for a cinematic. `keepPovWeapon` (used by the kill
+    // cam) keeps the CROSSHAIR + WEAPON viewmodel visible, since the kill cam shows
+    // the killer's point of view — you want to see "their" gun + reticle. The intro
+    // hides everything (keepPovWeapon = false).
+    _setHudVisibleForIntro(visible, keepPovWeapon = false) {
         // The full HUD — everything hidden for a clean cinematic. We remember each
         // element's ORIGINAL display value so showing it again restores flex/grid/etc.
         // (a blanket display='' would turn a flex container into block).
@@ -985,7 +989,6 @@ export class Game {
             'roundContainer',         // round / score / timer box
             'healthContainer',        // health + shield bars
             'killCounter',            // kill count pill
-            'crosshair',              // reticle
             'simple-minimap',         // minimap box
             'minimap-player-arrow',   // minimap player arrow (separate fixed element)
             'compass-container',      // compass strip
@@ -998,6 +1001,8 @@ export class Game {
             'bombDropPrompt',         // bomb drop prompt
             'notifColumn',            // notifications + kill feed column
         ];
+        // The crosshair is hidden for the intro but KEPT for the kill cam POV.
+        if (!keepPovWeapon) ids.push('crosshair');
         if (!this._hudPrevDisplay) this._hudPrevDisplay = {};
         ids.forEach((id) => {
             const el = document.getElementById(id);
@@ -1007,13 +1012,23 @@ export class Game {
                 el.style.display = (id in this._hudPrevDisplay) ? this._hudPrevDisplay[id] : '';
             } else {
                 // Record the ORIGINAL display only the FIRST time we hide it (this
-                // runs every intro frame; don't overwrite the saved value with 'none').
+                // runs every frame; don't overwrite the saved value with 'none').
                 if (!(id in this._hudPrevDisplay)) this._hudPrevDisplay[id] = el.style.display;
                 el.style.display = 'none';
             }
         });
         if (this.ammoDisplay) { visible ? this.ammoDisplay.show() : this.ammoDisplay.hide(); }
-        if (this.weaponSystem) { visible ? this.weaponSystem.show() : this.weaponSystem.hide(); }
+        // Weapon viewmodel: shown normally, AND kept during the kill cam (POV gun).
+        if (this.weaponSystem) {
+            if (visible || keepPovWeapon) this.weaponSystem.show();
+            else this.weaponSystem.hide();
+        }
+        // Make sure the crosshair is actually visible during the kill cam (it may
+        // have been hidden by an earlier full-hide).
+        if (keepPovWeapon && !visible) {
+            const cx = document.getElementById('crosshair');
+            if (cx) cx.style.display = '';
+        }
     }
 
     spawnPlayer() {
@@ -2526,8 +2541,11 @@ export class Game {
         // avoid a brief flash. Allowed only once the intro is over (_introDone), or
         // in any later round where no intro plays.
         const introPendingOrPlaying = this._introPlaying || (!this._introDone && this.gameStarted);
+        // Don't pop the prompt the instant the kill cam ends — give a short beat.
+        const kcActive = !!(this.killCam && this.killCam.isActive && this.killCam.isActive());
+        const promptDelayed = kcActive || (this._buildPromptDelayUntil && performance.now() < this._buildPromptDelayUntil);
         const shouldShow = this.gameMode === 'team' && this.isInBuildPhase &&
-            !this.isBuildMode && !introPendingOrPlaying;
+            !this.isBuildMode && !introPendingOrPlaying && !promptDelayed;
         let el = document.getElementById('buildPrompt');
 
         if (!shouldShow) {
@@ -2872,6 +2890,34 @@ export class Game {
             
             if (this.replayRecorder && !this.replayRecorder.isPlaying) {
                 this.replayRecorder.captureFrame();
+            }
+
+            // Hide the gameplay HUD (health/shield, ammo, compass, minimap, crosshair)
+            // while the kill cam is active — it's a cinematic, like the intro. Toggle
+            // only on state CHANGE so we don't fight per-frame HUD updates.
+            const kcActive = !!(this.killCam && this.killCam.isActive && this.killCam.isActive());
+            if (kcActive !== this._kcHudHidden) {
+                this._kcHudHidden = kcActive;
+                // keepPovWeapon=true → keep crosshair + weapon (it's the killer's POV).
+                this._setHudVisibleForIntro(!kcActive, true);
+                // Recolor the POV gun to the KILLER's team while the cam is up, then
+                // restore your own team color when it ends.
+                if (this.weaponSystem && this.weaponSystem.setTeam) {
+                    if (kcActive) {
+                        const killerId = this.killCam.replayTargetId;
+                        const killerTeam = (this.playerTeams && this.playerTeams[killerId]) || this.playerTeam;
+                        this.weaponSystem.setTeam(killerTeam);
+                    } else {
+                        this.weaponSystem.setTeam(this.playerTeam);
+                    }
+                }
+            }
+            // While the kill cam is active, keep re-asserting the hidden state (some
+            // per-frame updaters re-show health/ammo) and hold the "press B" prompt
+            // for ~1.2s AFTER it ends so it doesn't pop the instant the cam closes.
+            if (kcActive) {
+                this._setHudVisibleForIntro(false, true);
+                this._buildPromptDelayUntil = performance.now() + 1200;
             }
 
             if (this._introPlaying) {

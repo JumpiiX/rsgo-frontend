@@ -72,6 +72,18 @@ export class RifleWeapon {
         this.loadRifle();
     }
 
+    // Re-color the whole viewmodel to a team at runtime (used by the kill cam to
+    // show the KILLER's team color on the POV gun, then restore yours after).
+    setTeam(team) {
+        this.materialColors = materialColorsForTeam(team);
+        if (!this.weapon) return;
+        this.weapon.traverse((child) => {
+            if ((child.isMesh || child.isSkinnedMesh) && child.material) {
+                this.recolorMaterial(child.material);
+            }
+        });
+    }
+
     // Recolor a material to the brand palette by its name (gun body -> orange,
     // accents + sleeves -> navy). Hands are left untouched.
     recolorMaterial(material) {
