@@ -10,7 +10,13 @@ export class Renderer {
         // loses precision at that range and the floor / bomb sites / walls
         // z-fight (shimmer) when the build-mode top camera moves. A log depth
         // buffer distributes precision so distant coplanar surfaces stay stable.
-        this.renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
+        try {
+            this.renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
+        } catch (e) {
+            // Analytics: this browser/GPU can't do WebGL — the game won't run at all.
+            try { window.umami && window.umami.track('webgl-unsupported'); } catch (_) {}
+            throw e;
+        }
         // CAP pixel ratio at 1.5. On a retina Mac devicePixelRatio is 2.0, which
         // renders 4× the pixels (2×w · 2×h) — the single biggest FPS drain on
         // high-DPI screens. 1.5 looks nearly identical and is ~1.8× cheaper.

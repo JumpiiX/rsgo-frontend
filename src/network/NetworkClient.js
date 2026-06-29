@@ -41,6 +41,12 @@ export class NetworkClient {
 
         this.ws.onopen = () => {
             this.connected = true;
+            // Analytics: count the first successful connect as "joined the lobby"
+            // (don't re-fire on the 3s auto-reconnect loop).
+            if (!this._joinedTracked) {
+                this._joinedTracked = true;
+                try { window.game && window.game._track && window.game._track('lobby-joined'); } catch (e) {}
+            }
             const n = (this._pendingSends && this._pendingSends.length) || 0;
             console.log('[WS] OPEN — flushing', n, 'queued message(s)');
             // Flush any messages queued while the socket was still connecting.
@@ -62,6 +68,16 @@ export class NetworkClient {
         this.ws.onclose = (ev) => {
             this.connected = false;
             console.warn('[WS] CLOSED code=', ev.code, 'reason=', ev.reason, 'wasClean=', ev.wasClean);
+            // Analytics: connection dropped. If a match was in progress, count it as
+            // abandoned (rage-quit / crash signal); always log the raw disconnect.
+            try {
+                if (window.game && window.game._track) {
+                    window.game._track('ws-disconnected', { code: ev.code });
+                    if (window.game.isAlive !== undefined && window.game.gameStarted) {
+                        window.game._track('match-abandoned', { code: ev.code });
+                    }
+                }
+            } catch (e) {}
             setTimeout(() => this.connect(), 3000);
         };
 

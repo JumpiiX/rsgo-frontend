@@ -259,6 +259,7 @@ export class Game {
                     }
                 }
                 this.notify('Bomb planted', 'Site under attack');
+                this._track('bomb-planted', { is_local: message.player_id === this.network.playerId });
             };
 
             this.network.onBombDefusedCallback = (message) => {
@@ -267,6 +268,7 @@ export class Game {
                     this.bombSystem.onBombDefused();
                 }
                 this.notify('Bomb defused', 'Site secured');
+                this._track('bomb-defused', { is_local: message.player_id === this.network.playerId });
             };
 
             this.network.onBombExplodedCallback = () => {
@@ -275,6 +277,7 @@ export class Game {
                     this.bombSystem.onBombExploded();
                 }
                 this.notify('Bomb detonated');
+                this._track('bomb-exploded');
             };
 
             this.network.onMapResetCallback = () => {
@@ -505,6 +508,7 @@ export class Game {
             const name = nameInput.value.trim();
             if (name) {
                 this.playerName = name;
+                this._track('name-entered');
                 const yn = document.getElementById('yourName'); if (yn) yn.textContent = name;
                 // Smoothly transition name -> animated loader -> team select.
                 this.transitionScreen('nameScreen', 'loadingScreen');
@@ -1834,12 +1838,14 @@ export class Game {
             this.deathCamActive = true;
             this.input.isPointerLocked = false;
             document.exitPointerLock();
+            this._track('died');
             const healthContainer = document.getElementById('healthContainer');
             if (healthContainer) healthContainer.style.display = 'none';
             if (this.ammoDisplay) this.ammoDisplay.hide();
 
             if (this.killCam) {
                 this.killCam.onLocalPlayerDied(message.killer_id);
+                this._track('killcam-shown');
             }
 
             console.log(`You were killed by ${killerName}`);
@@ -2093,6 +2099,7 @@ export class Game {
     // player died this round a kill-cam replay is already running, so cleanup is
     // deferred by that path instead and we don't double-schedule.
     handleRoundEndMessage(message) {
+        this._track('round-won', { winner: message.winner, reason: message.reason });
         // Build a clean banner: big title + small-caps reason, team-colored accent.
         const winnerName = message.winner === 'orange' ? 'Orange'
             : message.winner === 'red' ? 'Navy'
@@ -2155,6 +2162,32 @@ export class Game {
     // (blocked / not yet configured) so it never affects gameplay.
     _track(eventName, data) {
         try { window.umami && window.umami.track(eventName, data); } catch (e) {}
+    }
+
+    // Lightweight always-on FPS watchdog for analytics. Keeps a short rolling
+    // average and, if FPS stays below LOW_FPS_THRESHOLD for LOW_FPS_WINDOW_MS of
+    // actual gameplay, fires a single 'low-fps' event (once per session). Cheap:
+    // just array push/shift, no DOM writes.
+    _sampleLowFps(realDelta) {
+        if (this._lowFpsTracked || !this.gameStarted) return; // once per session, only in-game
+        const LOW_FPS_THRESHOLD = 25;
+        const LOW_FPS_WINDOW_MS = 3000;
+        const ms = Math.max(0.0001, realDelta) * 1000;
+        if (!this._lowFpsSamples) this._lowFpsSamples = [];
+        this._lowFpsSamples.push(ms);
+        if (this._lowFpsSamples.length > 90) this._lowFpsSamples.shift();
+        const avgMs = this._lowFpsSamples.reduce((a, b) => a + b, 0) / this._lowFpsSamples.length;
+        const fps = 1000 / avgMs;
+        const now = performance.now();
+        if (fps < LOW_FPS_THRESHOLD) {
+            if (!this._lowFpsSince) this._lowFpsSince = now;
+            else if (now - this._lowFpsSince >= LOW_FPS_WINDOW_MS) {
+                this._lowFpsTracked = true;
+                this._track('low-fps', { fps: Math.round(fps) });
+            }
+        } else {
+            this._lowFpsSince = null; // recovered — reset the timer
+        }
     }
 
     handleMatchEnd(message) {
@@ -2613,6 +2646,7 @@ export class Game {
         this.stopRoundTimer();
         this.isInBuildPhase = true;
         this.buildPhaseTimer = seconds;
+        this._track('build-phase-started');
         // The intro only plays on the very first spawn. For later rounds (or modes
         // with no intro), mark it done so the "press B" prompt isn't suppressed.
         if (this._introHasPlayed && !this._introPlaying) this._introDone = true;
@@ -2999,6 +3033,11 @@ export class Game {
             // the renderer's draw-call / triangle counters so you can SEE perf while
             // CPU/GPU-throttling in DevTools to simulate a weaker laptop.
             this.updatePerfOverlay(realDelta);
+
+            // Analytics: detect sustained low FPS (always on, independent of the F8
+            // overlay). Fire 'low-fps' once per session if the rolling average stays
+            // below 25 FPS for ~3s of actual play — flags users on weak hardware.
+            this._sampleLowFps(realDelta);
         }
     }
 
@@ -4769,6 +4808,7 @@ export class Game {
         if (this.network && this.network.isConnected()) {
             console.log(`Sending building placement: ${this.selectedWallType} at (${position.x}, ${position.z}) rotation: ${rotation}`);
             this.network.sendPlaceBuilding(position, rotation, this.selectedWallType);
+            this._track('structure-placed', { type: this.selectedWallType });
         } else {
             console.log('Network not connected, building placement not sent');
         }
