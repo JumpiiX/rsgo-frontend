@@ -21,14 +21,18 @@ rsgo.io, www.rsgo.io {
 	@ws path /ws /ws/*
 	reverse_proxy @ws rsgo-backend:6969
 
-	# Self-hosted Umami analytics under /analytics. The umami container runs with
-	# BASE_PATH=/analytics, so it serves itself at that path — no path-strip needed.
-	# Dashboard: https://rsgo.io/analytics  ·  script: /analytics/script.js
-	@analytics path /analytics /analytics/*
-	reverse_proxy @analytics rsgo-umami:3000
-
 	# Everything else -> the static frontend.
 	reverse_proxy rsgo-frontend:80
 
+	encode gzip
+}
+
+# Self-hosted Umami analytics on its OWN subdomain, served at the root (no
+# BASE_PATH / path-strip → reliable, unlike the /analytics subpath). Caddy
+# auto-obtains a TLS cert for it. REQUIRES a DNS A record:
+#   analytics.rsgo.io  ->  this server's IP (188.34.160.197)
+# Dashboard: https://analytics.rsgo.io   ·   script: https://analytics.rsgo.io/script.js
+analytics.rsgo.io {
+	reverse_proxy rsgo-umami:3000
 	encode gzip
 }

@@ -1,14 +1,15 @@
 # Self-hosted Umami analytics for rsgo.io — runs alongside the existing
 # frontend/backend/caddy containers on the shared docker network.
 #
-# Served under a SUBPATH: https://rsgo.io/analytics  (BASE_PATH=/analytics).
-# Caddy forwards /analytics* -> umami:3000 (see the Caddyfile block).
+# Served on its own SUBDOMAIN: https://analytics.rsgo.io  (Caddy proxies to
+# rsgo-umami:3000; Umami runs at root, no BASE_PATH). Needs a DNS A record:
+#   analytics.rsgo.io -> the server IP.
 #
 # DON'T run this directly — use `bash deploy-umami.sh`, which generates the
 # secrets (UMAMI_DB_PASSWORD / UMAMI_APP_SECRET into umami.env), exports them,
 # brings this up, and reloads Caddy. Re-running is safe (the DB volume persists).
 #
-# Then: open https://rsgo.io/analytics, log in (default admin / umami — CHANGE IT),
+# Then: open https://analytics.rsgo.io, log in (default admin / umami — CHANGE IT),
 # add a website for "rsgo.io", copy its website-id into index.html's tracking tag.
 
 services:
@@ -22,8 +23,8 @@ services:
       DATABASE_URL: postgresql://umami:${UMAMI_DB_PASSWORD}@umami-db:5432/umami
       DATABASE_TYPE: postgresql
       APP_SECRET: ${UMAMI_APP_SECRET}
-      # Serve the app under /analytics (so Caddy can proxy rsgo.io/analytics).
-      BASE_PATH: /analytics
+      # Served at the ROOT of its own subdomain (analytics.rsgo.io) via Caddy,
+      # so no BASE_PATH — avoids the subpath routing issues.
     depends_on:
       umami-db:
         condition: service_healthy
