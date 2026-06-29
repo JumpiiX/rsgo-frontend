@@ -10,6 +10,13 @@
     <link rel="icon" type="image/png" href="models/logo.png">
     <link rel="apple-touch-icon" href="models/logo.png">
 
+    <!-- Self-hosted Umami analytics (privacy-friendly, data on our server).
+         Tracks pageviews automatically + custom events via window.umami.track(...).
+         TODO: replace data-website-id with the ID from the Umami dashboard
+         (rsgo.io/analytics → add website "rsgo.io" → copy its ID). -->
+    <script defer src="/analytics/script.js"
+            data-website-id="REPLACE_WITH_UMAMI_WEBSITE_ID"></script>
+
     <!-- Open Graph (Discord, Facebook, WhatsApp, LinkedIn, Slack…) -->
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="RSGO">
@@ -1042,6 +1049,14 @@
                         const t = document.querySelector(id);
                         if (t) { e.preventDefault(); lenis ? lenis.scrollTo(t, { offset: -10 }) : t.scrollIntoView({ behavior: 'smooth' }); }
                     }
+                });
+            });
+
+            // Analytics: count "Play" clicks (any link into the game). Safe no-op if
+            // the umami script hasn't loaded (blocked, offline, not yet configured).
+            document.querySelectorAll('a[href="game.html"]').forEach((a) => {
+                a.addEventListener('click', () => {
+                    try { window.umami && window.umami.track('play-clicked'); } catch (e) {}
                 });
             });
 

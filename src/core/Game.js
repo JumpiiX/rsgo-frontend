@@ -129,6 +129,8 @@ export class Game {
                 this.orangeScore = message.orange_score;
                 this.redScore = message.red_score;
                 this.attackingTeam = message.attacking_team;
+                // Analytics: a new MATCH begins at round 1.
+                if (message.round_number === 1) this._track('match-started');
                 this.startBuildPhaseTimer(message.buy_time);
                 this.updateRoundDisplay();
                 console.log(`Round ${this.roundNumber} started! Build phase: ${message.buy_time}s`);
@@ -519,6 +521,8 @@ export class Game {
                         this.orangeScore = message.orange_score;
                         this.redScore = message.red_score;
                         this.attackingTeam = message.attacking_team;
+                        // Analytics: a new MATCH begins at round 1.
+                        if (message.round_number === 1) this._track('match-started');
                         this.startBuildPhaseTimer(message.buy_time);
                         this.updateRoundDisplay();
                         console.log(`Round ${this.roundNumber} started! Build phase: ${message.buy_time}s`);
@@ -2147,9 +2151,16 @@ export class Game {
     // Match over (a team reached 7 wins). Show a big full-screen winner animation
     // for every player, then send everyone back to the landing page. `message.winner`
     // is 'orange' or 'red' (red = the NAVY team).
+    // Fire a custom analytics event (Umami). Safe no-op if the script isn't loaded
+    // (blocked / not yet configured) so it never affects gameplay.
+    _track(eventName, data) {
+        try { window.umami && window.umami.track(eventName, data); } catch (e) {}
+    }
+
     handleMatchEnd(message) {
         if (this._matchEndShown) return; // guard against duplicate broadcasts
         this._matchEndShown = true;
+        this._track('match-finished', { winner: message.winner });
 
         // Freeze the round: stop timers, release pointer lock, hide HUD timers.
         this.stopRoundTimer();

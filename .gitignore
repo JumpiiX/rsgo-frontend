@@ -1,0 +1,9 @@
+# Analytics secrets — generated on the server by deploy-umami.sh. NEVER commit.
+umami.env
+
+# Editor / OS
+.idea/
+.DS_Store
+
+# Node (if ever used)
+node_modules/
