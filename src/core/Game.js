@@ -3863,9 +3863,9 @@ export class Game {
                 pointer-events: auto;
                 box-shadow: 0 8px 24px rgba(0,0,0,0.4);
             ">
-                ${slotInner('1', 'Barrier', 100, 'barrier')}
-                ${slotInner('2', 'Large Wall', 200, 'large')}
-                ${slotInner('3', 'Destructible', 50, 'destructible')}
+                ${slotInner('1', 'Barrier', 400, 'barrier')}
+                ${slotInner('2', 'Large Wall', 800, 'large')}
+                ${slotInner('3', 'Destructible', 600, 'destructible')}
             </div>
 
             <!-- HINT BELOW HOTBAR -->
@@ -4783,16 +4783,16 @@ export class Game {
         if (this.selectedWallType === 'large') {
             height = 20; // Full height
             yPos = 10;
-            cost = 200;
+            cost = 800;
         } else if (this.selectedWallType === 'destructible') {
             height = 20; // Full height
             yPos = 10;
-            cost = 50;
+            cost = 600;
         } else {
             // Barrier - same length, half height
             height = 10; // Half height
             yPos = 5;
-            cost = 100;
+            cost = 400;
         }
         
         const width = wallLength;
