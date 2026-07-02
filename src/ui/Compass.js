@@ -8,7 +8,7 @@ export class Compass {
     }
 
     createCompassUI() {
-        
+
         const compassContainer = document.createElement('div');
         compassContainer.id = 'compass-container';
         compassContainer.style.cssText = `
@@ -29,7 +29,6 @@ export class Compass {
         `;
         document.body.appendChild(compassContainer);
 
-        
         this.compassStrip = document.createElement('div');
         this.compassStrip.id = 'compass-strip';
         this.compassStrip.style.cssText = `
@@ -41,7 +40,6 @@ export class Compass {
         `;
         compassContainer.appendChild(this.compassStrip);
 
-        
         const createCompassTape = () => {
             const tape = document.createElement('div');
             tape.id = 'compass-tape';
@@ -53,7 +51,6 @@ export class Compass {
                 font-family: 'Arial', sans-serif;
             `;
 
-            
             for (let deg = 0; deg < 1080; deg += 5) {
                 const actualDeg = deg % 360;
                 let label = '';
@@ -62,7 +59,6 @@ export class Compass {
                 let fontWeight = 'normal';
                 const width = '30px';
 
-                // Cardinals = bright orange; N a touch brighter.
                 if (actualDeg === 0) {
                     label = 'N'; fontSize = '18px'; color = HUD.orange; fontWeight = '700';
                 } else if (actualDeg === 90) {
@@ -100,7 +96,6 @@ export class Compass {
 
         this.compassStrip.appendChild(createCompassTape());
 
-        
         const leftFade = document.createElement('div');
         leftFade.id = 'compass-left-fade';
         leftFade.style.cssText = `
@@ -129,7 +124,6 @@ export class Compass {
         `;
         document.body.appendChild(rightFade);
 
-        
         const centerLine = document.createElement('div');
         centerLine.id = 'compass-center-line';
         centerLine.style.cssText = `
@@ -146,7 +140,6 @@ export class Compass {
         `;
         document.body.appendChild(centerLine);
 
-        
         this.degreeDisplay = document.createElement('div');
         this.degreeDisplay.id = 'compass-degree-display';
         this.degreeDisplay.style.cssText = `
@@ -166,28 +159,21 @@ export class Compass {
     }
 
     update(yawRadians) {
-        
-        
+
         let degrees = (-yawRadians * 180 / Math.PI);
 
-        
         degrees = degrees % 360;
         if (degrees < 0) degrees += 360;
 
-        
-        
         const pixelsPerDegree = 1;
-        const middleOffset = 360; 
+        const middleOffset = 360;
         const offset = degrees + middleOffset;
 
-        
-        const centerOffset = 150; 
+        const centerOffset = 150;
         const stripPosition = centerOffset - offset;
 
-        
         this.compassStrip.style.transform = `translateX(${stripPosition}px)`;
 
-        
         this.degreeDisplay.textContent = `${Math.round(degrees)}°`;
     }
 }

@@ -19,7 +19,7 @@ export class KillCamSystem {
     }
 
     createUI() {
-        // Keyframes for the cinematic letterbox + fades (injected once).
+
         if (!document.getElementById('killcamStyles')) {
             const st = document.createElement('style');
             st.id = 'killcamStyles';
@@ -31,7 +31,6 @@ export class KillCamSystem {
             document.head.appendChild(st);
         }
 
-        // Root container holds all killcam chrome. Hidden by default.
         const ui = document.createElement('div');
         ui.id = 'killcamUI';
         ui.style.cssText = `
@@ -93,21 +92,14 @@ export class KillCamSystem {
     onLocalPlayerDied(killerId) {
         this.replayTargetId = killerId;
 
-        // Release the cursor immediately so the player isn't locked while we wait.
         if (this.input) this.input.isPointerLocked = false;
         if (document.pointerLockElement) document.exitPointerLock();
 
-        // IMPORTANT: the KILLING shot's `player_shot` network message often arrives
-        // a frame or two AFTER `player_died`. If we start the replay instantly, the
-        // recorder freezes its buffer before that shot is recorded → the killing
-        // shot is missing from the kill cam. So wait a short beat first — the
-        // recorder keeps capturing during this delay, so the fatal shot lands in a
-        // real snapshot and gets replayed.
         const START_DELAY_MS = 400;
         if (this._startTimer) clearTimeout(this._startTimer);
         this._startTimer = setTimeout(() => {
             this._startTimer = null;
-            // If we already respawned / left the dead state in the meantime, bail.
+
             if (this.state !== 'idle') return;
             if (this.recorder.startPlayback(this.replayDuration)) {
                 this.state = 'replaying';
@@ -127,7 +119,7 @@ export class KillCamSystem {
         this.labelEl.textContent = 'Kill Cam';
         this.labelEl.style.color = '#ef4e23';
         this.labelEl.style.textShadow = '0 0 18px rgba(239,78,35,0.5)';
-        // "Killed by NAME" — name highlighted in orange.
+
         this.subtitleEl.innerHTML = killerName
             ? `Killed by <span style="color:#ef4e23;">${killerName}</span>`
             : 'Killed';
@@ -144,10 +136,9 @@ export class KillCamSystem {
             ? `Following <span style="color:#9fb0d8;">${name}</span>`
             : 'Teammate';
         this.hintEl.style.display = 'block';
-        this.timerEl.style.display = 'none'; // no replay countdown while spectating
+        this.timerEl.style.display = 'none';
     }
 
-    // Update the replay countdown ("Replay · 3s") while replaying.
     updateReplayTimer() {
         if (!this.timerEl || this.state !== 'replaying') return;
         const now = performance.now() / 1000;
@@ -173,7 +164,7 @@ export class KillCamSystem {
     }
 
     onLocalPlayerRespawned() {
-        // Cancel a pending replay-start (if we respawned during the post-death delay).
+
         if (this._startTimer) { clearTimeout(this._startTimer); this._startTimer = null; }
         if (this.recorder.isPlaying) this.recorder.stopPlayback();
         this.state = 'idle';
@@ -285,8 +276,7 @@ export class KillCamSystem {
     }
 
     isActive() {
-        // Also true while the post-death start is pending, so round cleanup defers
-        // and doesn't cut the kill cam before it begins.
+
         return this.state === 'replaying' || this.state === 'spectating' || !!this._startTimer;
     }
 

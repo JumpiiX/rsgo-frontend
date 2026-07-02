@@ -1,20 +1,3 @@
-# Caddy reverse proxy for RSGO (separate-repos setup).
-# Caddy auto-obtains + renews a Let's Encrypt TLS cert, terminates HTTPS on :443,
-# and routes by container name on the shared docker network:
-#   /ws*  -> rsgo-backend:6969   (plain ws; TLS terminated here -> wss works)
-#   /     -> rsgo-frontend:80    (static site)
-#
-# Run ONCE on the server (it survives frontend/backend redeploys):
-#   docker network create rsgo-shared-network 2>/dev/null || true
-#   docker run -d --name rsgo-caddy --restart unless-stopped \
-#     --network rsgo-shared-network \
-#     -p 80:80 -p 443:443 \
-#     -v /root/Caddyfile:/etc/caddy/Caddyfile:ro \
-#     -v caddy_data:/data -v caddy_config:/config \
-#     caddy:2
-#
-# Requirements: rsgo.io must point (A record) to this server, ports 80+443 open.
-
 rsgo.io, www.rsgo.io {
 	# Secure WebSocket: terminate TLS here, forward as plain ws to the backend.
 	# Frontend connects to wss://rsgo.io/ws on https pages.
@@ -27,11 +10,6 @@ rsgo.io, www.rsgo.io {
 	encode gzip
 }
 
-# Self-hosted Umami analytics on its OWN subdomain, served at the root (no
-# BASE_PATH / path-strip → reliable, unlike the /analytics subpath). Caddy
-# auto-obtains a TLS cert for it. REQUIRES a DNS A record:
-#   analytics.rsgo.io  ->  this server's IP (188.34.160.197)
-# Dashboard: https://analytics.rsgo.io   ·   script: https://analytics.rsgo.io/script.js
 analytics.rsgo.io {
 	reverse_proxy rsgo-umami:3000
 	encode gzip

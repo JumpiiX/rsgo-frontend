@@ -27,7 +27,6 @@ export class Scoreboard {
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
         `;
 
-        // Header
         const header = document.createElement('div');
         header.style.cssText = `
             text-align: center;
@@ -43,7 +42,6 @@ export class Scoreboard {
         header.textContent = 'Scoreboard';
         this.scoreboardElement.appendChild(header);
 
-        // Players container
         this.playersContainer = document.createElement('div');
         this.playersContainer.id = 'playersContainer';
         this.playersContainer.style.cssText = `
@@ -53,7 +51,6 @@ export class Scoreboard {
         `;
         this.scoreboardElement.appendChild(this.playersContainer);
 
-        // Footer instruction
         const footer = document.createElement('div');
         footer.style.cssText = `
             text-align: center;
@@ -120,7 +117,6 @@ export class Scoreboard {
                 transition: all 0.2s ease;
             `;
 
-            // Rank
             const rank = document.createElement('div');
             rank.style.cssText = `
                 font-size: 13px;
@@ -131,7 +127,6 @@ export class Scoreboard {
             `;
             rank.textContent = `${index + 1}`;
 
-            // Player name
             const name = document.createElement('div');
             name.style.cssText = `
                 flex: 1;
@@ -142,7 +137,6 @@ export class Scoreboard {
             `;
             name.textContent = player.name;
 
-            // Kills
             const kills = document.createElement('div');
             kills.style.cssText = `
                 font-size: 14px;
@@ -157,7 +151,6 @@ export class Scoreboard {
             playerRow.appendChild(name);
             playerRow.appendChild(kills);
 
-            // Hover effect
             playerRow.addEventListener('mouseenter', () => {
                 if (index !== 0) playerRow.style.background = 'rgba(239, 78, 35, 0.06)';
             });
@@ -169,7 +162,6 @@ export class Scoreboard {
             this.playersContainer.appendChild(playerRow);
         });
 
-        // Update total players count
         const totalPlayers = document.createElement('div');
         totalPlayers.style.cssText = `
             text-align: center;

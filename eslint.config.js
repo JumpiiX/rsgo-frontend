@@ -5,7 +5,7 @@ export default [
             ecmaVersion: "latest",
             sourceType: "module",
             globals: {
-                // Browser globals
+
                 window: "readonly",
                 document: "readonly",
                 console: "readonly",
@@ -21,15 +21,14 @@ export default [
                 navigator: "readonly",
                 Image: "readonly",
                 Audio: "readonly",
-                
-                // Three.js
+
                 THREE: "readonly"
             }
         },
         rules: {
             "no-unused-vars": ["warn", { "args": "none", "varsIgnorePattern": "^_" }],
             "no-undef": "error",
-            "no-console": "off",  // Allow console for game debugging
+            "no-console": "off",
             "semi": ["error", "always"],
             "quotes": ["warn", "single", { "allowTemplateLiterals": true }],
             "indent": ["warn", 4],

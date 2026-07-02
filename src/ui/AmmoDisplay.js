@@ -24,8 +24,6 @@ export class AmmoDisplay {
             document.head.appendChild(style);
         }
 
-        // Compact ammo readout: just a big current number, a small "/ max", and a
-        // thin reload progress bar underneath. No more 30 pip-bars hogging space.
         this.ammoContainer = document.createElement('div');
         this.ammoContainer.id = 'ammoContainer';
         this.ammoContainer.style.cssText = `
@@ -142,18 +140,17 @@ export class AmmoDisplay {
         this.currentEl.textContent = this.currentAmmo;
         if (this.maxEl) this.maxEl.textContent = this.maxAmmo;
 
-        // Always orange; just pulse when fully empty.
         this.currentEl.style.color = '#ef4e23';
         this.currentEl.style.animation = this.currentAmmo === 0 ? 'ammoPulse 0.9s infinite' : 'none';
 
         if (this.isReloading) {
-            // Bar fills left-to-right with reload progress.
+
             if (this.barFillEl) this.barFillEl.style.width = `${Math.round(this.reloadProgress * 100)}%`;
             this.currentEl.style.opacity = '0.7';
             this.reloadHintEl.style.display = 'none';
             this.reloadingLabelEl.style.display = 'block';
         } else {
-            // Bar shows magazine fullness.
+
             if (this.barFillEl) {
                 const frac = this.maxAmmo > 0 ? this.currentAmmo / this.maxAmmo : 0;
                 this.barFillEl.style.width = `${Math.round(frac * 100)}%`;

@@ -12,23 +12,20 @@ export class LightingSystem {
     }
 
     createAmbientLighting() {
-        
+
         const ambientLight = new THREE.AmbientLight(0xffffff, 2.5);
         this.scene.add(ambientLight);
 
-        
         const hemiLight = new THREE.HemisphereLight(0x9fb8ff, 0x1a2447, 1.5);
         this.scene.add(hemiLight);
     }
 
     createMoonlight() {
-        
+
         const moonLight = new THREE.DirectionalLight(0xffffff, 3.0);
         moonLight.position.set(-100, 300, 50);
         moonLight.castShadow = true;
-        // 2048² shadow map: a 4096² map is a 16-megapixel texture re-rendered every
-        // frame — the heaviest single GPU cost. 2048 looks nearly identical here and
-        // is 4× cheaper. (Drop to 1024 if weak laptops still struggle.)
+
         moonLight.shadow.mapSize.width = 2048;
         moonLight.shadow.mapSize.height = 2048;
         moonLight.shadow.camera.left = -300;
@@ -39,7 +36,6 @@ export class LightingSystem {
         moonLight.shadow.camera.far = 600;
         this.scene.add(moonLight);
 
-        
         const moonGeometry = new THREE.SphereGeometry(15, 16, 16);
         const moonMaterial = new THREE.MeshBasicMaterial({
             color: 0xffffee,
@@ -50,33 +46,30 @@ export class LightingSystem {
         moon.position.set(-150, 250, 80);
         this.scene.add(moon);
 
-        
         const moonGlow = new THREE.PointLight(0xffffdd, 2.5, 500);
         moonGlow.position.set(-150, 250, 80);
         this.scene.add(moonGlow);
 
-        
         const fillLight = new THREE.DirectionalLight(0xbbc5dd, 1.5);
         fillLight.position.set(100, 200, -50);
         this.scene.add(fillLight);
 
-        
         const overheadLight = new THREE.DirectionalLight(0xddddff, 1.0);
         overheadLight.position.set(0, 400, 0);
         this.scene.add(overheadLight);
     }
 
     createStarfield() {
-        
+
         const starGeometry = new THREE.BufferGeometry();
         const starCount = 1000;
         const positions = new Float32Array(starCount * 3);
 
         for (let i = 0; i < starCount * 3; i += 3) {
-            
-            positions[i] = (Math.random() - 0.5) * 2000; 
-            positions[i + 1] = Math.random() * 200 + 150; 
-            positions[i + 2] = (Math.random() - 0.5) * 2000; 
+
+            positions[i] = (Math.random() - 0.5) * 2000;
+            positions[i + 1] = Math.random() * 200 + 150;
+            positions[i + 2] = (Math.random() - 0.5) * 2000;
         }
 
         starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -90,11 +83,10 @@ export class LightingSystem {
 
         this.stars = new THREE.Points(starGeometry, starMaterial);
         this.stars.name = 'stars';
-        // Put stars on layer 1 (main camera will see layers 0 and 1, minimap only layer 0)
+
         this.stars.layers.set(1);
         this.scene.add(this.stars);
 
-        
         const brightStars = [
             [-200, 180, -200], [200, 200, 200], [-150, 190, 150],
             [180, 170, -180], [-180, 185, -150], [150, 195, 180],
@@ -106,7 +98,7 @@ export class LightingSystem {
             const starLight = new THREE.PointLight(0xffffff, 0.8, 200);
             starLight.position.set(...pos);
             starLight.name = 'starLight';
-            // Put star lights on layer 1
+
             starLight.layers.set(1);
             this.scene.add(starLight);
             this.brightStarLights.push(starLight);
@@ -114,7 +106,7 @@ export class LightingSystem {
     }
 
     createStreetLights() {
-        // No street light poles for clean map - keeping just the lighting
+
         const streetLightPositions = [
             [-60, 25, -80], [60, 25, 80], [-100, 25, 40],
             [100, 25, -40], [0, 25, 120], [0, 25, -120]
@@ -126,18 +118,11 @@ export class LightingSystem {
             streetLight.castShadow = true;
             this.scene.add(streetLight);
 
-            // DISABLED: No more black poles!
-            // const poleGeometry = new THREE.CylinderGeometry(0.5, 0.5, 25);
-            // const poleMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
-            // const pole = new THREE.Mesh(poleGeometry, poleMaterial);
-            // pole.position.set(pos[0], 12.5, pos[2]);
-            // pole.castShadow = true;
-            // this.scene.add(pole);
         });
     }
 
     createWindowLights() {
-        
+
         const windowLights = [
             [0, 15, 0], [-80, 12, -60], [80, 12, 60],
             [-150, 12, -150], [150, 12, 150]

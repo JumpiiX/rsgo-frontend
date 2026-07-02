@@ -2,51 +2,45 @@ export class MiniMap {
     constructor(scene, playerCamera, renderer) {
         console.log('MiniMap: Initializing...', scene, playerCamera, renderer);
         this.scene = scene;
-        this.playerCamera = playerCamera; 
+        this.playerCamera = playerCamera;
         this.renderer = renderer;
 
-        
-        const mapSize = 200; 
-        const viewSize = 1000; // Increase view size to capture more of the map 
+        const mapSize = 200;
+        const viewSize = 1000;
         this.mapCamera = new THREE.OrthographicCamera(
             -viewSize / 2, viewSize / 2,
             viewSize / 2, -viewSize / 2,
             0.1, 1000
         );
 
-        
         this.mapCamera.position.set(0, 400, 0);
         this.mapCamera.lookAt(0, 0, 0);
 
-        
         this.setupMinimapMaterials();
 
-        
         this.createPlayerArrow();
 
-        
         this.createMapBorder();
 
         this.mapSize = mapSize;
     }
 
     setupMinimapMaterials() {
-        
+
         this.originalMaterials = new Map();
 
-        
         this.minimapMaterials = {
-            wall: new THREE.MeshBasicMaterial({ color: 0x1a1a1a }), // Even darker gray walls
-            ground: new THREE.MeshBasicMaterial({ color: 0x050505 }), // Almost black ground
-            building: new THREE.MeshBasicMaterial({ color: 0x0f0f0f }), // Very dark buildings
-            obstacle: new THREE.MeshBasicMaterial({ color: 0x222222 }), // Darker gray obstacles
-            player: new THREE.MeshBasicMaterial({ color: 0xff8c00 }), // Orange player
-            tree: new THREE.MeshBasicMaterial({ color: 0x0f1a0f }), // Very dark green trees
+            wall: new THREE.MeshBasicMaterial({ color: 0x1a1a1a }),
+            ground: new THREE.MeshBasicMaterial({ color: 0x050505 }),
+            building: new THREE.MeshBasicMaterial({ color: 0x0f0f0f }),
+            obstacle: new THREE.MeshBasicMaterial({ color: 0x222222 }),
+            player: new THREE.MeshBasicMaterial({ color: 0xff8c00 }),
+            tree: new THREE.MeshBasicMaterial({ color: 0x0f1a0f }),
         };
     }
 
     createPlayerArrow() {
-        
+
         const arrow = document.createElement('div');
         arrow.id = 'minimap-player-arrow';
         arrow.style.cssText = `
@@ -67,7 +61,7 @@ export class MiniMap {
     }
 
     createMapBorder() {
-        // Create modern dark container like other UI elements
+
         const minimapContainer = document.createElement('div');
         minimapContainer.id = 'minimap-modern-container';
         minimapContainer.style.cssText = `
@@ -91,7 +85,6 @@ export class MiniMap {
         `;
         document.body.appendChild(minimapContainer);
 
-        // Add title and inner container
         const titleDiv = document.createElement('div');
         titleDiv.style.cssText = `
             position: absolute;
@@ -109,8 +102,7 @@ export class MiniMap {
         `;
         titleDiv.textContent = 'Map';
         minimapContainer.appendChild(titleDiv);
-        
-        // Create inner border for the map area
+
         const mapInner = document.createElement('div');
         mapInner.id = 'minimap-inner-border';
         mapInner.style.cssText = `
@@ -126,50 +118,37 @@ export class MiniMap {
     }
 
     update(playerPosition, playerRotation) {
-        
+
         this.mapCamera.position.x = playerPosition.x;
         this.mapCamera.position.z = playerPosition.z;
-        this.mapCamera.position.y = 400; 
+        this.mapCamera.position.y = 400;
 
-        
         this.mapCamera.lookAt(playerPosition.x, 0, playerPosition.z);
 
-        
-        // Reset camera rotation to ensure it's always pointing straight down
-        this.mapCamera.rotation.x = -Math.PI / 2; // Point straight down
+        this.mapCamera.rotation.x = -Math.PI / 2;
         this.mapCamera.rotation.y = 0;
         this.mapCamera.rotation.z = 0;
 
-        
     }
 
     render() {
-        
+
         const autoClear = this.renderer.autoClear;
         const clearAlpha = this.renderer.getClearAlpha();
         const clearColor = new THREE.Color();
         this.renderer.getClearColor(clearColor);
 
-        
         const width = window.innerWidth;
         const height = window.innerHeight;
 
-        
         const mapWidth = this.mapSize;
-        const mapHeight = this.mapSize - 20; // Reduced by 20px for title
+        const mapHeight = this.mapSize - 20;
 
-        
         this.renderer.autoClear = false;
 
-        
-        // Simple positioning: match the CSS container exactly
-        // Container CSS: top: 20px, right: 240px, size: 220x220, padding: 10px
-        // Inner map area starts at: top: 50px (20 + 20 title + 10 padding), right: 250px (240 + 10 padding)
-        const containerX = width - 240 - 10 - mapWidth; // right: 240px + 10px padding from right edge
-        const containerY = height - (20 + 20 + 10) - mapHeight; // WebGL Y from bottom: screen height - (top + title + padding + map height)
-        
-        // Debug: containerX should be around 688 for 1138 screen width
-        
+        const containerX = width - 240 - 10 - mapWidth;
+        const containerY = height - (20 + 20 + 10) - mapHeight;
+
         this.renderer.setScissorTest(true);
         this.renderer.setScissor(
             containerX,
@@ -185,26 +164,21 @@ export class MiniMap {
             mapHeight
         );
 
-        
-        this.renderer.setClearColor(0x000000, 1); // Pure black background
+        this.renderer.setClearColor(0x000000, 1);
         this.renderer.setClearAlpha(1);
         this.renderer.clear(true, true, false);
 
-        
         this.applyMinimapColors();
 
-        // Debug: Check if we have objects to render
         const visibleObjects = this.scene.children.filter(obj => obj.visible).length;
         if (visibleObjects === 0) {
             console.log('⚠️ Minimap: No visible objects in scene');
         }
-        
+
         this.renderer.render(this.scene, this.mapCamera);
 
-        
         this.restoreOriginalColors();
 
-        
         this.renderer.setScissorTest(false);
         this.renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
         this.renderer.autoClear = autoClear;
@@ -213,50 +187,48 @@ export class MiniMap {
     }
 
     applyMinimapColors() {
-        
+
         this.originalStates = [];
 
-        
-        const wallMaterial = new THREE.MeshBasicMaterial({ color: 0x8B5A2B }); 
-        const buildingMaterial = new THREE.MeshBasicMaterial({ color: 0x654321 }); 
-        const groundMaterial = new THREE.MeshBasicMaterial({ color: 0x2d2416 }); 
-        const obstacleMaterial = new THREE.MeshBasicMaterial({ color: 0xA0522D }); 
+        const wallMaterial = new THREE.MeshBasicMaterial({ color: 0x8B5A2B });
+        const buildingMaterial = new THREE.MeshBasicMaterial({ color: 0x654321 });
+        const groundMaterial = new THREE.MeshBasicMaterial({ color: 0x2d2416 });
+        const obstacleMaterial = new THREE.MeshBasicMaterial({ color: 0xA0522D });
 
         this.scene.traverse((object) => {
             if (object.isMesh) {
-                
+
                 this.originalStates.push({
                     object: object,
                     material: object.material,
                     visible: object.visible
                 });
 
-                
                 if (object.position.y > 100) {
                     object.visible = false;
                 }
-                
+
                 else if (object.geometry && object.geometry.type === 'PlaneGeometry') {
-                    
+
                     object.material = groundMaterial;
                 }
                 else if (object.geometry && object.geometry.type === 'BoxGeometry') {
-                    
+
                     const size = object.geometry.parameters;
                     if (size && (size.width > 50 || size.height > 30 || size.depth > 50)) {
-                        
+
                         object.material = buildingMaterial;
                     } else {
-                        
+
                         object.material = wallMaterial;
                     }
                 }
                 else {
-                    
+
                     object.material = obstacleMaterial;
                 }
             }
-            
+
             else if (object.isPoints || object.isSprite || object.isLight) {
                 this.originalStates.push({
                     object: object,
@@ -268,7 +240,7 @@ export class MiniMap {
     }
 
     restoreOriginalColors() {
-        
+
         if (this.originalStates) {
             this.originalStates.forEach(state => {
                 if (state.material) {

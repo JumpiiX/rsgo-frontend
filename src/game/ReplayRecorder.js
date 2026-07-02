@@ -74,9 +74,6 @@ export class ReplayRecorder {
     ensureLocalBodyMesh() {
         if (this.localBodyMesh) return this.localBodyMesh;
 
-        // Show the dead local player as their REAL character (the player who got
-        // killed should appear with their own skin in the kill cam, not a red
-        // capsule). Falls back to a capsule if the model can't be built.
         let mesh = null;
         try {
             const localId = this.getLocalPlayerId && this.getLocalPlayerId();
@@ -153,11 +150,6 @@ export class ReplayRecorder {
         if (this.snapshots.length === 0) return false;
         const now = performance.now() / 1000;
 
-        // Flush any pending shots (the KILLING shot is fired right before death
-        // and would otherwise sit unflushed in pendingShots → never replayed,
-        // which is why the last shot was missing from the kill cam). Append a
-        // final snapshot at the current positions so the killing blow is in the
-        // replay window.
         if (this.pendingShots.length > 0) {
             const players = [];
             const lid = this.getLocalPlayerId && this.getLocalPlayerId();
@@ -176,9 +168,7 @@ export class ReplayRecorder {
         this.replayWallStart = now;
         this.replayDuration = replayDuration;
         const oldest = this.snapshots[0].t;
-        // End the sampled window a bit BEFORE the moment of death, so the killing
-        // shot + its hitmarker land with ~1.2s of replay still to watch instead
-        // of flashing in the very last frame (or getting cut off).
+
         const END_PAD = 1.2;
         this.replaySampleStart = Math.max(oldest, now - (replayDuration - END_PAD));
         this.replayedShotIndex = 0;
@@ -202,7 +192,7 @@ export class ReplayRecorder {
         this.isPlaying = false;
         this.suppressLiveShots = false;
         if (this.localBodyMesh) this.localBodyMesh.visible = false;
-        // Re-show any player mesh we hid during the replay (the watched killer).
+
         this.playerManager.otherPlayers.forEach((p) => {
             if (p && p.mesh) p.mesh.visible = true;
         });
@@ -219,10 +209,6 @@ export class ReplayRecorder {
         }
     }
 
-    // Hard reset for round transitions: stop any replay WITHOUT restoring the
-    // frozen kill-spot positions (the meshes are about to be cleared/respawned
-    // anyway), and fully remove the local body ghost so no red capsule lingers
-    // at the kill spot during the next build phase.
     resetForRound() {
         this.isPlaying = false;
         this.suppressLiveShots = false;
@@ -231,8 +217,7 @@ export class ReplayRecorder {
         this.pendingShots = [];
         if (this.localBodyMesh) {
             this.scene.remove(this.localBodyMesh);
-            // The body may be a capsule mesh OR a character model group; dispose
-            // geometry/materials across the whole subtree.
+
             this.localBodyMesh.traverse((c) => {
                 if (c.geometry) c.geometry.dispose();
                 if (c.material) {
@@ -250,8 +235,6 @@ export class ReplayRecorder {
         const now = performance.now() / 1000;
         const elapsed = now - this.replayWallStart;
 
-        // Advance the local body's animation so it shows the idle pose, not a
-        // frozen T-pose.
         if (this.localBodyMixer) {
             const dt = this._lastPlaybackTime ? Math.min(0.1, now - this._lastPlaybackTime) : 0.016;
             this.localBodyMixer.update(dt);
@@ -283,9 +266,7 @@ export class ReplayRecorder {
                     remote.mesh.position.set(interp.x, interp.y, interp.z);
                     remote.mesh.rotation.y = interp.yaw;
                     remote.pitch = interp.pitch;
-                    // Hide the killer we're watching — the camera sits at their
-                    // position, so their body blocks the view of the shots. Keep
-                    // every other player visible.
+
                     remote.mesh.visible = (p.id !== targetPlayerId);
                 }
             }
@@ -318,19 +299,14 @@ export class ReplayRecorder {
         return { done: false, targetTransform: targetInterp, hitmarker: hitmarkerThisFrame };
     }
 
-    // Does the shot ray (start->target) pass within the victim's BODY capsule?
-    // The body is a vertical segment from feet to head with the character's
-    // radius, so torso/leg hits register — not just shots near the origin point.
-    // This is what fixes "only some hitmarkers show" in the kill cam.
     rayHitsBody(start, target, victim, victimId) {
         const dims = (this.playerManager.getPlayerDims && this.playerManager.getPlayerDims(victimId)) || null;
         const height = dims ? dims.height : 11;
-        const radius = dims ? Math.max(2, dims.radius * 1.3) : 4; // a touch generous
+        const radius = dims ? Math.max(2, dims.radius * 1.3) : 4;
 
-        // victim origin is at ~eye height; body spans from feet to head.
-        const feetY = victim.y - 10;       // FEET_BELOW_ORIGIN
+        const feetY = victim.y - 10;
         const headY = feetY + height;
-        // Body segment B0->B1 (vertical), shot segment S0->S1.
+
         const S0 = start, S1 = target;
         const B0 = { x: victim.x, y: feetY, z: victim.z };
         const B1 = { x: victim.x, y: headY, z: victim.z };
@@ -338,7 +314,6 @@ export class ReplayRecorder {
         return dist <= radius;
     }
 
-    // Shortest distance between two 3D segments p1->q1 and p2->q2.
     segmentSegmentDistance(p1, q1, p2, q2) {
         const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
         const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;

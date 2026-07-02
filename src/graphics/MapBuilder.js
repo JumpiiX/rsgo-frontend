@@ -2,13 +2,10 @@ import { MaterialManager } from '../utils/MaterialManager.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 
-// RSGO navy palette for the map (replaces the old greys for a modern look).
-// Base navy is the brand #1a2447; floors/walls are lighter navy tints so the
-// layout still reads with depth — all in the same navy family.
 const MAP_COLORS = {
-    ground: 0x121a36, // deep navy base plane
-    floor:  0x2a3a63, // walkable areas / paths — mid navy, clearly above ground
-    wall:   0x3b4f82, // walls — lighter navy so they clearly stand out
+    ground: 0x121a36,
+    floor:  0x2a3a63,
+    wall:   0x3b4f82,
     wallEmissive: 0x0d1326,
 };
 
@@ -26,53 +23,39 @@ export class MapBuilder {
             this.buildMinimalistMap();
         }
     }
-    
+
     buildOrangePlanetMap() {
         this.buildMinimalistMap();
     }
-    
+
     buildMinimalistMap() {
         console.log('Building Minimalist Competitive Map...');
-        
-        // Map parameters
+
         this.wallHeight = 25;
         this.wallThickness = 4;
         this.pathWidth = 100;
         this.spawnSize = 120;
         this.bombSiteSize = 180;
-        
-        // Key positions
+
         this.bottomSpawnZ = -300;
         this.topSpawnZ = 300;
         this.siteAX = -250;
         this.siteBX = 250;
         this.siteZ = 0;
-        
-        // 1. Create ground
+
         this.createMinimalistGround();
-        
-        // 2. Create clean floor areas
+
         this.createCleanFloorLayout();
-        
-        // 3. Create simple walls (collected, then merged into one mesh below)
+
         this.createSimpleWalls();
 
-        // 3b. Merge all static wall segments into ONE mesh (one draw call).
         this.finalizeStaticWalls();
 
-        // 4. Outer decoration — a distant monolith "city" ring around the arena.
         this.createOuterDecoration();
 
-        // 5. Intro-only decor (trees, ground markings, props, glow strips). Hidden
-        // during play; shown ONLY for the spawn fly-through to dress up the aerial
-        // view. Toggled by Game's intro cinematic.
         this.createIntroDecor();
     }
 
-    // Decorations that exist ONLY for the starting fly-through (hidden in normal
-    // first-person play, so they never clutter gameplay or sightlines). Adds trees,
-    // ground markings, scattered props and glowing accent strips around/over the map
-    // so it looks alive and built from the air. All in one group, NO colliders.
     createIntroDecor() {
         const group = new THREE.Group();
         group.name = 'introDecor';
@@ -81,12 +64,10 @@ export class MapBuilder {
         const ORANGE = 0xef4e23, NAVY = 0x1a2447, LEAF = 0x2f6f4a, TRUNK = 0x4a3520;
         const H = (n) => this._deco_hash(n);
 
-        // Keep decor OUT of the playable footprint (spawns ±300, sites ±250, lanes).
-        // Helper: is (x,z) clear of the play geometry? (loose padding).
         const onPlayArea = (x, z) => {
-            if (Math.abs(z) <= 90 && (Math.abs(x - 250) <= 110 || Math.abs(x + 250) <= 110)) return true; // sites
-            if (Math.abs(x) <= 90 && Math.abs(Math.abs(z) - 300) <= 90) return true; // spawns
-            // rough lane corridors spawn(0,±300)->site(±250,0) and mid
+            if (Math.abs(z) <= 90 && (Math.abs(x - 250) <= 110 || Math.abs(x + 250) <= 110)) return true;
+            if (Math.abs(x) <= 90 && Math.abs(Math.abs(z) - 300) <= 90) return true;
+
             const lane = (sx, sz, ex, ez) => {
                 const dx = ex - sx, dz = ez - sz, len = Math.hypot(dx, dz);
                 const ux = dx / len, uz = dz / len, px = -uz, pz = ux;
@@ -99,24 +80,19 @@ export class MapBuilder {
             return false;
         };
 
-        // ---- 1. Trees — kept VISIBLE in first-person too (they look good on the
-        // ground), so they go in their OWN always-visible group, not the intro group.
         const treeGroup = new THREE.Group();
         treeGroup.name = 'mapTrees';
         const trunkGeo = new THREE.CylinderGeometry(2.2, 3, 16, 6);
         const leafGeo = new THREE.ConeGeometry(11, 26, 7);
         const trunkMat = new THREE.MeshLambertMaterial({ color: TRUNK });
         const leafMat = new THREE.MeshLambertMaterial({ color: LEAF, emissive: 0x12351f, emissiveIntensity: 0.2 });
-        // Trees must stay OUTSIDE the whole play area with a generous margin, so none
-        // clip into the perimeter walls. The arena (sites ±250, spawns ±300, walls)
-        // fits within ~x∈±360, z∈±400; keep trees at least this far out.
+
         const KEEPOUT_X = 430, KEEPOUT_Z = 470;
         const nearArena = (x, z) => Math.abs(x) < KEEPOUT_X && Math.abs(z) < KEEPOUT_Z;
 
         let placed = 0;
         for (let i = 0; i < 800 && placed < 90; i++) {
-            // Spread trees in the OUTER ring (between the arena and the skyline), so
-            // they never touch the play geometry. Radius ~480–880 from center.
+
             const ang = H(i * 1.3) * Math.PI * 2;
             const rad = 480 + H(i * 2.7 + 4) * 400;
             const x = Math.cos(ang) * rad;
@@ -133,7 +109,6 @@ export class MapBuilder {
         this.scene.add(treeGroup);
         this.mapTrees = treeGroup;
 
-        // ---- 3. Props: small navy crates + glowing orange light posts on edges ----
         const crateGeo = new THREE.BoxGeometry(10, 10, 10);
         const crateMat = new THREE.MeshLambertMaterial({ color: NAVY, emissive: 0x0d1326, emissiveIntensity: 0.1 });
         const postGeo = new THREE.CylinderGeometry(1, 1, 26, 6);
@@ -157,7 +132,6 @@ export class MapBuilder {
             props++;
         }
 
-        // ---- 4. Glowing orange accent strips outlining the bomb sites (tron look) --
         const glowMat = new THREE.MeshBasicMaterial({ color: ORANGE, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
         [-250, 250].forEach((sx) => {
             const outline = new THREE.Mesh(new THREE.RingGeometry(95, 100, 48), glowMat);
@@ -169,30 +143,21 @@ export class MapBuilder {
         this.introDecor = group;
     }
 
-    // Deterministic 0..1 hash (no Math.random — stable across reloads). Shared by
-    // the decoration builders below.
     _deco_hash(n) {
         const s = Math.sin(n * 12.9898) * 43758.5453;
         return s - Math.floor(s);
     }
 
-    // Build a canvas texture of a NAVY tower face speckled with lit ORANGE windows
-    // (a grid; most lit, some dark for a real night-skyline look). Returned as a
-    // THREE.CanvasTexture used as BOTH the map and emissiveMap so the windows glow.
-    // `seed` varies the lit/dark pattern per tower; cols/rows set the window grid.
     _makeWindowTexture(seed, cols, rows) {
-        const cell = 16;                       // px per window cell
+        const cell = 16;
         const canvas = document.createElement('canvas');
         canvas.width = cols * cell;
         canvas.height = rows * cell;
         const ctx = canvas.getContext('2d');
 
-        // Navy facade.
         ctx.fillStyle = '#1a2447';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Orange window grid. Each window is a small rounded rect; ~70% lit bright
-        // orange, the rest a dim orange so the building reads as occupied at night.
         const pad = 4, wW = cell - pad * 2, wH = cell - pad * 2;
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
@@ -204,38 +169,25 @@ export class MapBuilder {
 
         const tex = new THREE.CanvasTexture(canvas);
         tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
-        tex.magFilter = THREE.NearestFilter;   // crisp window edges
+        tex.magFilter = THREE.NearestFilter;
         tex.minFilter = THREE.LinearMipmapLinearFilter;
         return tex;
     }
 
-    // Outer decoration — a distant NEW-YORK-style skyline ring around the arena:
-    // navy towers with glowing orange windows, plus a few big PURE-ORANGE billboard
-    // planes between towers for pop. All OUTSIDE the play area (~±425 at the corners)
-    // — purely decorative, NO colliders, never blocks a spawn/tunnel/sightline. The
-    // scene fog fades the ring into the navy so there's no hard map edge.
     createOuterDecoration() {
         const group = new THREE.Group();
         group.name = 'outerDecoration';
 
-        // Two concentric tower rings at radii safely beyond the arena. The back
-        // ring is taller so the skyline layers into depth.
         const rings = [
             { radius: 720, count: 26, baseH: 120, varH: 160, w: 40, d: 40 },
             { radius: 920, count: 34, baseH: 220, varH: 300, w: 54, d: 54 },
         ];
 
-        // PERF: all towers are ONE InstancedMesh — 1 draw call + 1 geometry + 1
-        // texture for the whole skyline, instead of 64 separate meshes (which were a
-        // big chunk of the per-frame draw-call/CPU cost). A unit 1×1×1 box is scaled
-        // per instance to each tower's size. One shared window texture (the windows
-        // read the same through fog at that distance, so the lost per-tower variety
-        // is invisible).
         const totalTowers = rings.reduce((n, r) => n + r.count, 0);
         const sharedWindowTex = this._makeWindowTexture(1, 6, 14);
         const towerMat = new THREE.MeshLambertMaterial({
             map: sharedWindowTex,
-            emissive: 0xffffff,            // emissiveMap carries the orange glow
+            emissive: 0xffffff,
             emissiveMap: sharedWindowTex,
             emissiveIntensity: 0.9,
         });
@@ -243,7 +195,7 @@ export class MapBuilder {
         const towers = new THREE.InstancedMesh(unitBox, towerMat, totalTowers);
         towers.castShadow = false;
         towers.receiveShadow = false;
-        towers.frustumCulled = false; // it's one big object surrounding the arena
+        towers.frustumCulled = false;
 
         const m4 = new THREE.Matrix4();
         const quat = new THREE.Quaternion();
@@ -267,7 +219,7 @@ export class MapBuilder {
                 const dj = ring.d * (0.7 + this._deco_hash(idx + 5) * 0.8);
 
                 pos.set(x, h / 2, z);
-                quat.setFromAxisAngle(up, -ang + Math.PI / 2); // face arena center
+                quat.setFromAxisAngle(up, -ang + Math.PI / 2);
                 scl.set(wj, h, dj);
                 m4.compose(pos, quat, scl);
                 towers.setMatrixAt(idx, m4);
@@ -277,30 +229,21 @@ export class MapBuilder {
         towers.instanceMatrix.needsUpdate = true;
         group.add(towers);
 
-        // A BIG ground plane UNDER the skyline so the towers never float over the
-        // void. Towers reach ~±1050, so make it far wider (±2000) to be safe. A
-        // distinctly DIFFERENT, darker blue-violet than the nearby map floor so the
-        // outer "city district" reads as separate ground, not the playfield.
         const cityGround = new THREE.Mesh(
             new THREE.PlaneGeometry(7000, 7000),
             new THREE.MeshLambertMaterial({ color: 0x161e3e })
         );
         cityGround.rotation.x = -Math.PI / 2;
-        cityGround.position.y = -0.5; // just under the main ground to avoid z-fight
+        cityGround.position.y = -0.5;
         cityGround.receiveShadow = false;
         group.add(cityGround);
 
         this.scene.add(group);
         this.outerDecoration = group;
 
-        // ONE static airbus airplane (GLB) floating in the air between two towers,
-        // recolored brand orange so it pops against the navy skyline. Loaded async;
-        // added once ready. Purely decorative — no colliders.
         this.createDecorationAirplane(group);
     }
 
-    // Load the airbus GLB, recolor it solid brand-orange, and park it floating in
-    // the air between two towers. Static (no animation), no colliders.
     createDecorationAirplane(group) {
         const ORANGE = 0xef4e23;
         const loader = new GLTFLoader();
@@ -309,7 +252,6 @@ export class MapBuilder {
             (gltf) => {
                 const plane = gltf.scene;
 
-                // Recolor every mesh to flat brand orange (fog off so it pops).
                 plane.traverse((child) => {
                     if (child.isMesh) {
                         child.material = new THREE.MeshLambertMaterial({
@@ -323,22 +265,18 @@ export class MapBuilder {
                     }
                 });
 
-                // Normalize size: scale so the longest dimension is ~140 units
-                // (roughly a tower's width — a believable distant jet, not huge).
                 const box = new THREE.Box3().setFromObject(plane);
                 const size = box.getSize(new THREE.Vector3());
                 const longest = Math.max(size.x, size.y, size.z) || 1;
                 const scale = 140 / longest;
                 plane.scale.setScalar(scale);
 
-                // Float it in the diagonal gap between front-ring towers.
                 const ang = Math.PI * 0.25;
                 const r = 640;
                 plane.position.set(Math.cos(ang) * r, 200, Math.sin(ang) * r);
-                // Bank/heading so it looks like it's cruising across the skyline,
-                // roughly tangent to the ring rather than facing the player flat.
+
                 plane.rotation.y = -ang;
-                plane.rotation.z = 0.12; // slight bank
+                plane.rotation.z = 0.12;
 
                 group.add(plane);
                 console.log('Decoration airbus loaded (orange).');
@@ -347,12 +285,9 @@ export class MapBuilder {
             (err) => console.error('Failed to load decoration airbus:', err)
         );
     }
-    
+
     createMinimalistGround() {
-        // The BRIGHT play-area ground only needs to cover the arena (±360). Keep it
-        // small (±500) so it ends well before the skyline towers (radius ~655+) —
-        // otherwise the towers sit on the bright floor. Everything beyond is the
-        // darker "city district" ground (createOuterDecoration's cityGround).
+
         const groundGeometry = new THREE.PlaneGeometry(1000, 1000);
         const groundMaterial = new THREE.MeshLambertMaterial({
             color: MAP_COLORS.ground,
@@ -365,7 +300,7 @@ export class MapBuilder {
         ground.receiveShadow = true;
         this.scene.add(ground);
     }
-    
+
     createCleanFloorLayout() {
         const floorColor = MAP_COLORS.floor;
 
@@ -377,9 +312,6 @@ export class MapBuilder {
         this.createBombSiteMarker(this.siteAX, this.siteZ, 'A');
         this.createBombSiteMarker(this.siteBX, this.siteZ, 'B');
 
-        // Spawn markers — minimalist labeled rings so you can tell the sides apart
-        // at a glance: attacker spawn (z = -300) and defender spawn (z = +300).
-        // Matches the server's team-role spawns in spawn_system.rs.
         this.createSpawnMarker(0, this.bottomSpawnZ, 'attacker');
         this.createSpawnMarker(0, this.topSpawnZ, 'defender');
 
@@ -410,7 +342,6 @@ export class MapBuilder {
         const cx = size / 2;
         const cy = size / 2;
 
-        // Navy disc + thin orange ring + orange letter (brand palette).
         ctx.fillStyle = '#1a2447';
         ctx.beginPath();
         ctx.arc(cx, cy, size * 0.46, 0, Math.PI * 2);
@@ -444,30 +375,23 @@ export class MapBuilder {
         this.scene.add(marker);
     }
 
-    // Minimalist spawn marker: a thin outline ring with a small role icon + label
-    // baked into a canvas texture, laid flat on the floor. `role` is 'attacker' or
-    // 'defender'. Attacker = orange + chevrons (aggressive); Defender = soft blue +
-    // shield (protective). Subtle, on-brand — no bright debug fill.
     createSpawnMarker(x, z, role) {
         const radius = 52;
         const isAttacker = role === 'attacker';
-        // Brand-aligned: attacker orange, defender a calm steel-blue.
+
         const hex = isAttacker ? '#ef4e23' : '#5b7bb4';
 
-        // --- Canvas: faint disc tint, thin ring, role icon + label ---
         const S = 512;
         const canvas = document.createElement('canvas');
         canvas.width = canvas.height = S;
         const ctx = canvas.getContext('2d');
         const c = S / 2;
 
-        // Very faint fill so the floor still reads through.
         ctx.fillStyle = isAttacker ? 'rgba(239,78,35,0.10)' : 'rgba(91,123,180,0.12)';
         ctx.beginPath();
         ctx.arc(c, c, S * 0.46, 0, Math.PI * 2);
         ctx.fill();
 
-        // Thin outline ring.
         ctx.strokeStyle = hex;
         ctx.lineWidth = S * 0.012;
         ctx.beginPath();
@@ -480,7 +404,7 @@ export class MapBuilder {
         ctx.lineCap = 'round';
 
         if (isAttacker) {
-            // Two stacked chevrons pointing "forward" (toward the map) = assault.
+
             ctx.lineWidth = S * 0.03;
             const drawChevron = (cy) => {
                 ctx.beginPath();
@@ -492,7 +416,7 @@ export class MapBuilder {
             drawChevron(c - S * 0.10);
             drawChevron(c + S * 0.02);
         } else {
-            // A simple shield outline = defend/hold.
+
             ctx.lineWidth = S * 0.028;
             const w = S * 0.13, top = c - S * 0.13, bot = c + S * 0.15;
             ctx.beginPath();
@@ -505,7 +429,6 @@ export class MapBuilder {
             ctx.stroke();
         }
 
-        // Label below the icon.
         ctx.font = `bold ${Math.round(S * 0.11)}px sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -521,9 +444,7 @@ export class MapBuilder {
             new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.85, depthWrite: false })
         );
         marker.rotation.x = -Math.PI / 2;
-        // Orient the label/chevrons to read from that spawn looking into the map.
-        // Flipped: bottom spawn (z<0) faces -z, top spawn (z>0) faces +z, since the
-        // player reads the marker from behind it at the spawn.
+
         marker.rotation.z = z < 0 ? Math.PI : 0;
         marker.position.set(x, 0.2, z);
         marker.name = 'spawnMarker';
@@ -809,10 +730,6 @@ export class MapBuilder {
         }
     }
 
-    // PERF: walls don't each become their own mesh anymore. We bake each wall's
-    // transform into its geometry and collect them; buildMinimalistMap() merges the
-    // whole lot into ONE mesh (1 draw call, 1 material) via finalizeStaticWalls().
-    // The COLLIDERS are still added per-wall exactly as before (gameplay unchanged).
     createWall(x, y, z, width, height, depth) {
         const geo = new THREE.BoxGeometry(width, height, depth);
         geo.translate(x, y, z);
@@ -834,8 +751,7 @@ export class MapBuilder {
         (this._wallGeoms || (this._wallGeoms = [])).push(geo);
 
         if (this.collisionSystem) {
-            // The collider is rotation-aware now, so pass the real rotation and the
-            // wall's true extents (no need to inflate to an axis-aligned bounding box).
+
             this.collisionSystem.addBoxCollider(
                 { x, y, z },
                 { x: width, y: height, z: depth },
@@ -846,13 +762,10 @@ export class MapBuilder {
         return null;
     }
 
-    // Merge all collected wall geometries into ONE mesh = one draw call for the
-    // entire static map perimeter (was dozens of separate wall meshes). Called once
-    // at the end of buildMinimalistMap.
     finalizeStaticWalls() {
         if (!this._wallGeoms || this._wallGeoms.length === 0) return;
         const merged = BufferGeometryUtils.mergeGeometries(this._wallGeoms, false);
-        // Free the per-wall geometries now that they're merged.
+
         this._wallGeoms.forEach((g) => g.dispose());
         this._wallGeoms = null;
 
@@ -864,7 +777,7 @@ export class MapBuilder {
         const wallsMesh = new THREE.Mesh(merged, mat);
         wallsMesh.castShadow = true;
         wallsMesh.receiveShadow = true;
-        wallsMesh.userData.isMapWall = true; // shots occlusion-test against it
+        wallsMesh.userData.isMapWall = true;
         wallsMesh.name = 'staticWalls';
         this.scene.add(wallsMesh);
     }
@@ -875,16 +788,16 @@ export class MapBuilder {
             color: color,
             side: THREE.DoubleSide
         });
-        
+
         const floor = new THREE.Mesh(floorGeometry, floorMaterial);
         floor.rotation.x = -Math.PI / 2;
         floor.position.set(x, 0.1, z);
         floor.receiveShadow = true;
         this.scene.add(floor);
-        
+
         return floor;
     }
-    
+
     createAngledFloor(x, z, width, depth, rotation, color = MAP_COLORS.floor) {
         const floorGeometry = new THREE.PlaneGeometry(width, depth);
         const floorMaterial = new THREE.MeshLambertMaterial({

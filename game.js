@@ -27,7 +27,7 @@ class Game {
             { x: -40, y: 10, z: -40 }
         ];
         this.gameStarted = false;
-        
+
         this.setupNameScreen();
     }
 
@@ -41,14 +41,14 @@ class Game {
         this.setupPointerLock();
         this.connectToServer();
         this.animate();
-        
+
         console.log('Game initialized!');
     }
 
     setupRenderer() {
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.setClearColor(0x0a0a0a); // Dark background
+        this.renderer.setClearColor(0x0a0a0a);
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         document.getElementById('gameContainer').appendChild(this.renderer.domElement);
@@ -56,7 +56,7 @@ class Game {
 
     setupScene() {
         this.scene = new THREE.Scene();
-        this.scene.fog = new THREE.Fog(0x1a1a1a, 200, 800); // Dark fog
+        this.scene.fog = new THREE.Fog(0x1a1a1a, 200, 800);
     }
 
     setupCamera() {
@@ -72,13 +72,13 @@ class Game {
     }
 
     createAmbientLighting() {
-        // Ambient moonlight
+
         const ambientLight = new THREE.AmbientLight(0x4d5f8f, 0.4);
         this.scene.add(ambientLight);
     }
 
     createMoonlight() {
-        // Strong moonlight from above
+
         const moonLight = new THREE.DirectionalLight(0xa8b5d1, 0.8);
         moonLight.position.set(-100, 200, 50);
         moonLight.castShadow = true;
@@ -94,9 +94,9 @@ class Game {
     }
 
     createStreetLights() {
-        // Street lamps with warm orange glow
+
         const streetLightPositions = [
-            [-60, 25, -80], [60, 25, 80], [-100, 25, 40], 
+            [-60, 25, -80], [60, 25, 80], [-100, 25, 40],
             [100, 25, -40], [0, 25, 120], [0, 25, -120]
         ];
 
@@ -106,7 +106,6 @@ class Game {
             streetLight.castShadow = true;
             this.scene.add(streetLight);
 
-            // Light pole
             const poleGeometry = new THREE.CylinderGeometry(0.5, 0.5, 25);
             const poleMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
             const pole = new THREE.Mesh(poleGeometry, poleMaterial);
@@ -117,7 +116,7 @@ class Game {
     }
 
     createWindowLights() {
-        // Building window lights (blue/white glow)
+
         const windowLights = [
             [0, 15, 0], [-80, 12, -60], [80, 12, 60],
             [-150, 12, -150], [150, 12, 150]
@@ -179,39 +178,34 @@ class Game {
 
     createCityBlocks() {
         const materials = this.createMaterials();
-        
-        // Main city blocks with alleyways
+
         const cityBlocks = [
-            // Central plaza area
+
             { pos: [0, 8, 0], size: [40, 16, 30], type: 'building' },
-            
-            // Residential blocks (with gaps for streets)
+
             { pos: [-120, 15, -120], size: [60, 30, 40], type: 'darkBuilding' },
             { pos: [120, 15, 120], size: [60, 30, 40], type: 'darkBuilding' },
             { pos: [-120, 12, 80], size: [50, 24, 35], type: 'building' },
             { pos: [120, 12, -80], size: [50, 24, 35], type: 'building' },
-            
-            // Smaller buildings
+
             { pos: [-80, 10, -40], size: [30, 20, 25], type: 'building' },
             { pos: [80, 10, 40], size: [30, 20, 25], type: 'building' },
             { pos: [-40, 8, -100], size: [25, 16, 20], type: 'darkBuilding' },
             { pos: [40, 8, 100], size: [25, 16, 20], type: 'darkBuilding' },
-            
-            // Industrial buildings
+
             { pos: [-160, 18, 0], size: [35, 36, 60], type: 'darkBuilding' },
             { pos: [160, 18, 0], size: [35, 36, 60], type: 'darkBuilding' },
         ];
 
         cityBlocks.forEach(block => {
             const building = new THREE.Mesh(
-                new THREE.BoxGeometry(...block.size), 
+                new THREE.BoxGeometry(...block.size),
                 materials[block.type]
             );
             building.position.set(...block.pos);
             building.castShadow = true;
             this.scene.add(building);
 
-            // Add windows to taller buildings
             if (block.size[1] > 15) {
                 this.addWindows(block.pos, block.size, materials);
             }
@@ -224,7 +218,7 @@ class Game {
 
         for (let floor = 1; floor < floors; floor++) {
             for (let win = 0; win < windowsPerFloor; win++) {
-                // Front windows
+
                 const windowFront = new THREE.Mesh(
                     new THREE.BoxGeometry(2, 2, 0.2),
                     materials.window
@@ -241,15 +235,14 @@ class Game {
 
     createStreets() {
         const materials = this.createMaterials();
-        
-        // Main cross streets
+
         const streets = [
-            { pos: [0, 0.1, 0], size: [400, 0.2, 15] }, // Main horizontal street
-            { pos: [0, 0.1, 0], size: [15, 0.2, 400] }, // Main vertical street
-            { pos: [-120, 0.1, 0], size: [10, 0.2, 200] }, // Side street
-            { pos: [120, 0.1, 0], size: [10, 0.2, 200] }, // Side street
-            { pos: [0, 0.1, 120], size: [200, 0.2, 10] }, // Cross street
-            { pos: [0, 0.1, -120], size: [200, 0.2, 10] }, // Cross street
+            { pos: [0, 0.1, 0], size: [400, 0.2, 15] },
+            { pos: [0, 0.1, 0], size: [15, 0.2, 400] },
+            { pos: [-120, 0.1, 0], size: [10, 0.2, 200] },
+            { pos: [120, 0.1, 0], size: [10, 0.2, 200] },
+            { pos: [0, 0.1, 120], size: [200, 0.2, 10] },
+            { pos: [0, 0.1, -120], size: [200, 0.2, 10] },
         ];
 
         streets.forEach(street => {
@@ -262,26 +255,21 @@ class Game {
 
     createHidingSpots() {
         const materials = this.createMaterials();
-        
-        // Tactical cover spots
+
         const covers = [
-            // Dumpsters in alleys
+
             { pos: [-60, 2, -80], size: [6, 4, 4], type: 'crate' },
             { pos: [60, 2, 80], size: [6, 4, 4], type: 'crate' },
-            
-            // Car wrecks on streets
+
             { pos: [25, 2, -15], size: [8, 4, 3], type: 'crate' },
             { pos: [-25, 2, 15], size: [8, 4, 3], type: 'crate' },
-            
-            // Shipping containers
+
             { pos: [140, 4, -140], size: [15, 8, 6], type: 'crate' },
             { pos: [-140, 4, 140], size: [15, 8, 6], type: 'crate' },
-            
-            // Small kiosks/stands
+
             { pos: [70, 3, -70], size: [4, 6, 4], type: 'building' },
             { pos: [-70, 3, 70], size: [4, 6, 4], type: 'building' },
-            
-            // Corner barriers
+
             { pos: [90, 1.5, -90], size: [3, 3, 12], type: 'wall' },
             { pos: [-90, 1.5, 90], size: [3, 3, 12], type: 'wall' },
         ];
@@ -296,9 +284,7 @@ class Game {
 
     createDecorations() {
         const materials = this.createMaterials();
-        
-        // Add some atmosphere objects
-        // Fire barrels (with point lights)
+
         const fireBarrels = [
             [-30, 3, -30], [30, 3, 30], [-100, 3, 0], [100, 3, 0]
         ];
@@ -312,13 +298,11 @@ class Game {
             barrel.castShadow = true;
             this.scene.add(barrel);
 
-            // Fire light
             const fireLight = new THREE.PointLight(0xff4400, 0.7, 30);
             fireLight.position.set(pos[0], pos[1] + 4, pos[2]);
             this.scene.add(fireLight);
         });
 
-        // Antenna/radio towers
         const towers = [
             [-170, 40, -170], [170, 40, 170]
         ];
@@ -332,7 +316,6 @@ class Game {
             tower.castShadow = true;
             this.scene.add(tower);
 
-            // Blinking tower light
             const towerLight = new THREE.PointLight(0xff0000, 0.8, 100);
             towerLight.position.set(pos[0], pos[1] + 35, pos[2]);
             this.scene.add(towerLight);
@@ -382,14 +365,10 @@ class Game {
                 const movementX = event.movementX || 0;
                 const movementY = event.movementY || 0;
 
-                // Simple mouse look - just rotate camera directly
-                // Left/right mouse = rotate around Y axis (horizontal)
                 this.camera.rotation.y -= movementX * this.lookSpeed;
-                
-                // Up/down mouse = rotate around X axis (vertical) - INVERTED for FPS feel
+
                 this.camera.rotation.x -= movementY * this.lookSpeed;
-                
-                // Prevent flipping upside down
+
                 this.camera.rotation.x = Math.max(-1.5, Math.min(1.5, this.camera.rotation.x));
             }
         });
@@ -418,7 +397,7 @@ class Game {
     setupNameScreen() {
         const nameInput = document.getElementById('playerName');
         const joinButton = document.getElementById('joinGame');
-        
+
         joinButton.addEventListener('click', () => {
             const name = nameInput.value.trim();
             if (name) {
@@ -429,7 +408,7 @@ class Game {
                 this.startGame();
             }
         });
-        
+
         nameInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 joinButton.click();
@@ -449,24 +428,24 @@ class Game {
 
     connectToServer() {
         this.ws = new WebSocket('ws://localhost:8080');
-        
+
         this.ws.onopen = () => {
             console.log('Connected to server');
             if (this.gameStarted && this.playerName) {
                 this.sendJoinMessage();
             }
         };
-        
+
         this.ws.onmessage = (event) => {
             const message = JSON.parse(event.data);
             this.handleServerMessage(message);
         };
-        
+
         this.ws.onclose = () => {
             console.log('Disconnected from server');
             setTimeout(() => this.connectToServer(), 3000);
         };
-        
+
         this.ws.onerror = (error) => {
             console.error('WebSocket error:', error);
         };
@@ -487,21 +466,21 @@ class Game {
                 this.playerId = message.player_id;
                 console.log('Assigned player ID:', this.playerId);
                 break;
-                
+
             case 'player_joined':
                 this.addOtherPlayer(message.player);
                 this.updatePlayerCount();
                 break;
-                
+
             case 'player_left':
                 this.removeOtherPlayer(message.player_id);
                 this.updatePlayerCount();
                 break;
-                
+
             case 'player_moved':
                 this.updateOtherPlayer(message);
                 break;
-                
+
             case 'player_shot':
                 console.log('Player', message.shooter_id, 'shot!');
                 break;
@@ -510,24 +489,24 @@ class Game {
 
     addOtherPlayer(player) {
         if (player.id === this.playerId) return;
-        
+
         const geometry = new THREE.CapsuleGeometry(1, 4, 4, 8);
         const material = new THREE.MeshLambertMaterial({ color: 0xff4444 });
         const playerMesh = new THREE.Mesh(geometry, material);
-        
+
         playerMesh.position.set(player.x, player.y, player.z);
         playerMesh.castShadow = true;
-        
+
         const nameSprite = this.createNameSprite(player.name);
         nameSprite.position.set(0, 3, 0);
         playerMesh.add(nameSprite);
-        
+
         this.scene.add(playerMesh);
         this.otherPlayers.set(player.id, {
             mesh: playerMesh,
             data: player
         });
-        
+
         console.log('Added player:', player.name);
     }
 
@@ -552,20 +531,20 @@ class Game {
         const context = canvas.getContext('2d');
         canvas.width = 256;
         canvas.height = 64;
-        
+
         context.fillStyle = 'rgba(0, 0, 0, 0.8)';
         context.fillRect(0, 0, canvas.width, canvas.height);
-        
+
         context.fillStyle = 'white';
         context.font = '24px Arial';
         context.textAlign = 'center';
         context.fillText(name, canvas.width / 2, canvas.height / 2 + 8);
-        
+
         const texture = new THREE.CanvasTexture(canvas);
         const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
         const sprite = new THREE.Sprite(spriteMaterial);
         sprite.scale.set(4, 1, 1);
-        
+
         return sprite;
     }
 
@@ -588,21 +567,18 @@ class Game {
 
     updateMovement(deltaTime) {
         if (!this.gameStarted) return;
-        
-        // Simplified movement - direct control
+
         const moveVector = new THREE.Vector3();
-        
-        // Get camera direction vectors
+
         const forward = new THREE.Vector3();
         this.camera.getWorldDirection(forward);
-        forward.y = 0; // Keep movement on ground plane
+        forward.y = 0;
         forward.normalize();
 
         const right = new THREE.Vector3();
         right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
         right.normalize();
 
-        // Apply WASD movement
         if (this.controls.forward) {
             moveVector.addScaledVector(forward, this.moveSpeed * deltaTime);
         }
@@ -616,12 +592,10 @@ class Game {
             moveVector.addScaledVector(right, -this.moveSpeed * deltaTime);
         }
 
-        // Boundary check (keep player inside the bigger arena)
         const newPos = this.camera.position.clone().add(moveVector);
         if (Math.abs(newPos.x) < 195 && Math.abs(newPos.z) < 195) {
             this.camera.position.add(moveVector);
-            
-            // Only send position update if we actually moved
+
             if (moveVector.length() > 0.01) {
                 this.sendPositionUpdate();
             }
@@ -630,12 +604,12 @@ class Game {
 
     shoot() {
         console.log('Bang! Shot fired at', this.camera.position);
-        
+
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             const forward = new THREE.Vector3();
             this.camera.getWorldDirection(forward);
             const target = this.camera.position.clone().add(forward.multiplyScalar(100));
-            
+
             this.ws.send(JSON.stringify({
                 type: 'shoot',
                 target_x: target.x,
@@ -647,9 +621,9 @@ class Game {
 
     animate() {
         requestAnimationFrame(() => this.animate());
-        
+
         if (this.gameStarted) {
-            const deltaTime = 0.016; // ~60fps
+            const deltaTime = 0.016;
             this.updateMovement(deltaTime);
             this.renderer.render(this.scene, this.camera);
         }
@@ -662,10 +636,8 @@ class Game {
     }
 }
 
-// Start the game
 const game = new Game();
 
-// Add spawn logic after joining
 document.addEventListener('DOMContentLoaded', () => {
     const originalStartGame = game.startGame.bind(game);
     game.startGame = function() {

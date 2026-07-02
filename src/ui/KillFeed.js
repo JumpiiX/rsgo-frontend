@@ -1,7 +1,5 @@
 export class KillFeed {
-    // parent: the shared notification column. The kill feed stacks in flow at the
-    // BOTTOM of that column, so it sits directly under the round-end banner /
-    // notifications with no gap.
+
     constructor(parent = document.body) {
         this.maxKills = 5;
         this.killTimeout = 5000;
@@ -13,8 +11,7 @@ export class KillFeed {
     createKillFeedUI() {
         this.killFeedElement = document.createElement('div');
         this.killFeedElement.id = 'killFeed';
-        // In-flow within the notification column (no fixed positioning) so it
-        // stacks tightly under whatever is above it. Newest kill on top.
+
         this.killFeedElement.style.cssText = `
             width: 100%;
             pointer-events: none;
@@ -60,12 +57,10 @@ export class KillFeed {
 
         this.kills.forEach((kill, index) => {
             const killRow = document.createElement('div');
-            
+
             const age = Date.now() - kill.timestamp;
             const opacity = Math.max(0.3, 1 - (age / this.killTimeout) * 0.5);
-            
-            // Rows involving the local player get a solid orange accent + brighter
-            // background so you can instantly spot your own kills/deaths.
+
             const involvesYou = kill.isYouKiller || kill.isYouVictim;
             killRow.style.cssText = `
                 background: ${involvesYou ? 'rgba(239, 78, 35, 0.16)' : 'rgba(26, 36, 71, 0.85)'};
@@ -82,7 +77,6 @@ export class KillFeed {
                 backdrop-filter: blur(6px);
             `;
 
-            // Killer name — bold + bright if it's you, dimmed otherwise.
             const killer = document.createElement('span');
             killer.style.cssText = `
                 color: ${kill.isYouKiller ? '#fff' : 'rgba(239, 78, 35, 0.95)'};
@@ -90,7 +84,6 @@ export class KillFeed {
             `;
             killer.textContent = kill.killer || 'Player';
 
-            // Arrow connector (killer → victim) — cleaner than a skull mid-row.
             const icon = document.createElement('span');
             icon.style.cssText = `
                 margin: 0 9px;
@@ -99,7 +92,6 @@ export class KillFeed {
             `;
             icon.textContent = '→';
 
-            // Victim name — bold + bright if it's you.
             const victim = document.createElement('span');
             victim.style.cssText = `
                 color: ${kill.isYouVictim ? '#fff' : 'rgba(239, 78, 35, 0.7)'};
@@ -114,7 +106,6 @@ export class KillFeed {
             this.killFeedElement.appendChild(killRow);
         });
 
-        // Add animation styles if not already present
         if (!document.getElementById('killFeedStyles')) {
             const style = document.createElement('style');
             style.id = 'killFeedStyles';

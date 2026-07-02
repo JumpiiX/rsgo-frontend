@@ -13,52 +13,44 @@ export class WeaponSystem {
     }
 
     createWeapon() {
-        
+
         this.weaponGroup = new THREE.Group();
 
-        
         const weaponMaterial = new THREE.MeshBasicMaterial({
-            color: 0xff6600,  
+            color: 0xff6600,
             fog: false
         });
 
-        
         const darkMaterial = new THREE.MeshBasicMaterial({
-            color: 0xcc4400,  
+            color: 0xcc4400,
             fog: false
         });
 
-        
         const blackMaterial = new THREE.MeshBasicMaterial({
             color: 0x222222,
             fog: false
         });
 
-        
         const metalMaterial = new THREE.MeshBasicMaterial({
             color: 0x888888,
             fog: false
         });
 
-        
         const barrelGeometry = new THREE.CylinderGeometry(0.04, 0.04, 0.4, 8);
         const barrel = new THREE.Mesh(barrelGeometry, metalMaterial);
         barrel.rotation.x = Math.PI / 2;
         barrel.position.set(0, 0, -0.2);
 
-        
         const muzzleGeometry = new THREE.CylinderGeometry(0.045, 0.04, 0.02, 8);
         const muzzle = new THREE.Mesh(muzzleGeometry, blackMaterial);
         muzzle.rotation.x = Math.PI / 2;
         muzzle.position.set(0, 0, -0.39);
 
-        
         const gripGeometry = new THREE.BoxGeometry(0.07, 0.22, 0.15);
         const grip = new THREE.Mesh(gripGeometry, blackMaterial);
         grip.position.set(0, -0.09, 0);
         grip.rotation.z = -0.15;
 
-        
         for(let i = 0; i < 3; i++) {
             const lineGeometry = new THREE.BoxGeometry(0.071, 0.005, 0.12);
             const line = new THREE.Mesh(lineGeometry, darkMaterial);
@@ -67,12 +59,10 @@ export class WeaponSystem {
             this.weaponGroup.add(line);
         }
 
-        
         const slideGeometry = new THREE.BoxGeometry(0.11, 0.13, 0.38);
         const slide = new THREE.Mesh(slideGeometry, weaponMaterial);
         slide.position.set(0, 0.04, -0.175);
 
-        
         for(let i = 0; i < 4; i++) {
             const serrationGeometry = new THREE.BoxGeometry(0.112, 0.01, 0.003);
             const serration = new THREE.Mesh(serrationGeometry, darkMaterial);
@@ -80,12 +70,10 @@ export class WeaponSystem {
             this.weaponGroup.add(serration);
         }
 
-        
         const portGeometry = new THREE.BoxGeometry(0.05, 0.08, 0.08);
         const port = new THREE.Mesh(portGeometry, blackMaterial);
         port.position.set(0.04, 0.06, -0.1);
 
-        
         const guardGeometry = new THREE.TorusGeometry(0.045, 0.012, 4, 8, Math.PI);
         const triggerGuard = new THREE.Mesh(guardGeometry, weaponMaterial);
         triggerGuard.position.set(0, -0.025, 0.05);
@@ -96,51 +84,41 @@ export class WeaponSystem {
         trigger.position.set(0, -0.01, 0.05);
         trigger.rotation.z = 0.1;
 
-        
-        
         const frontSightGeometry = new THREE.BoxGeometry(0.025, 0.04, 0.015);
         const frontSight = new THREE.Mesh(frontSightGeometry, blackMaterial);
         frontSight.position.set(0, 0.09, -0.36);
 
-        
         const dotMaterial = new THREE.MeshBasicMaterial({
-            color: 0x00ff00,  
+            color: 0x00ff00,
             fog: false
         });
         const dotGeometry = new THREE.SphereGeometry(0.008, 4, 4);
         const sightDot = new THREE.Mesh(dotGeometry, dotMaterial);
         sightDot.position.set(0, 0.095, -0.36);
 
-        
         const rearSightGeometry = new THREE.BoxGeometry(0.07, 0.035, 0.015);
         const rearSight = new THREE.Mesh(rearSightGeometry, blackMaterial);
         rearSight.position.set(0, 0.09, -0.02);
 
-        
         const notchGeometry = new THREE.BoxGeometry(0.03, 0.02, 0.02);
         const notch = new THREE.Mesh(notchGeometry, weaponMaterial);
         notch.position.set(0, 0.09, -0.02);
 
-        
-        
         const magBaseGeometry = new THREE.BoxGeometry(0.065, 0.02, 0.14);
         const magBase = new THREE.Mesh(magBaseGeometry, blackMaterial);
         magBase.position.set(0, -0.19, 0);
         magBase.rotation.z = -0.15;
 
-        
         const safetyGeometry = new THREE.CylinderGeometry(0.01, 0.01, 0.02, 6);
         const safety = new THREE.Mesh(safetyGeometry, darkMaterial);
         safety.rotation.z = Math.PI / 2;
         safety.position.set(0.055, 0.02, 0.05);
 
-        
         const hammerGeometry = new THREE.BoxGeometry(0.03, 0.04, 0.02);
         const hammer = new THREE.Mesh(hammerGeometry, metalMaterial);
         hammer.position.set(0, 0.06, 0.08);
         hammer.rotation.x = -0.3;
 
-        
         this.weaponGroup.add(barrel);
         this.weaponGroup.add(muzzle);
         this.weaponGroup.add(grip);
@@ -156,38 +134,31 @@ export class WeaponSystem {
         this.weaponGroup.add(safety);
         this.weaponGroup.add(hammer);
 
-        
         this.scene.add(this.weaponGroup);
 
-        
         this.updateWeaponPosition();
 
-        
         this.weaponGroup.traverse((child) => {
             if (child.isMesh) {
-                
+
                 child.renderOrder = 999;
-                child.material.depthTest = true;  
-                child.frustumCulled = false;  
+                child.material.depthTest = true;
+                child.frustumCulled = false;
             }
         });
 
         console.log('Weapon created and added to scene');
     }
 
-    
     animateShoot() {
         if (!this.weaponGroup) return;
 
-        
         const originalZ = this.weaponGroup.position.z;
         const originalRotX = this.weaponGroup.rotation.x;
 
-        
         this.weaponGroup.position.z = originalZ + 0.05;
         this.weaponGroup.rotation.x = originalRotX - 0.15;
 
-        
         setTimeout(() => {
             this.weaponGroup.position.z = originalZ;
             this.weaponGroup.rotation.x = originalRotX;
@@ -195,21 +166,18 @@ export class WeaponSystem {
     }
 
     update(deltaTime) {
-        
+
         this.updateWeaponPosition();
 
-        
         if (this.weaponGroup) {
             const time = Date.now() * 0.001;
             const swayX = Math.sin(time * 1.5) * 0.005;
             const swayY = Math.sin(time * 2) * 0.003;
 
-            
             const offset = this.initialPositionOffset.clone();
             offset.x += swayX;
             offset.y += swayY;
 
-            
             const weaponPos = new THREE.Vector3();
             weaponPos.copy(this.camera.position);
             weaponPos.add(offset.applyQuaternion(this.camera.quaternion));
@@ -220,18 +188,15 @@ export class WeaponSystem {
     updateWeaponPosition() {
         if (!this.weaponGroup) return;
 
-        
         const weaponPos = new THREE.Vector3();
         weaponPos.copy(this.camera.position);
 
-        
         const offset = this.initialPositionOffset.clone();
         offset.applyQuaternion(this.camera.quaternion);
         weaponPos.add(offset);
 
         this.weaponGroup.position.copy(weaponPos);
 
-        
         this.weaponGroup.quaternion.copy(this.camera.quaternion);
         this.weaponGroup.rotateY(this.initialRotationOffset.y);
     }

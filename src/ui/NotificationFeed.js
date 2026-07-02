@@ -1,17 +1,9 @@
-// General-purpose game notification feed. Sits in the top-left notification
-// column (to the RIGHT of the round counter), NOT bottom-left where the health/
-// shield panel lives. Transient toasts for events like "Bomb planted", "Bomb
-// picked up", etc. — pushed via push(). Each toast auto-expires.
-//
-// Strict RSGO palette: translucent navy panel, orange text, orange accent bar.
-
 export class NotificationFeed {
-    // parent: the shared notification column. Toasts stack in flow, above the
-    // kill feed and below the round-end banner.
+
     constructor(parent = document.body) {
         this.items = [];
         this.maxItems = 4;
-        this.lifetime = 4000; // ms each toast stays before fading
+        this.lifetime = 4000;
         this.parent = parent;
         this.createUI();
     }
@@ -31,7 +23,7 @@ export class NotificationFeed {
 
         this.el = document.createElement('div');
         this.el.id = 'notificationFeed';
-        // In-flow within the shared notification column.
+
         this.el.style.cssText = `
             width: 100%;
             pointer-events: none;
@@ -42,8 +34,6 @@ export class NotificationFeed {
         this.parent.appendChild(this.el);
     }
 
-    // Push a toast. title: the main line; subtitle: optional small-caps line;
-    // accent: left bar color (defaults to orange).
     push(title, subtitle = '', accent = '#ef4e23') {
         const item = { title, subtitle, accent, timestamp: Date.now() };
         this.items.unshift(item);

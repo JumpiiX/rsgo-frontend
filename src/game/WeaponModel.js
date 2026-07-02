@@ -8,7 +8,6 @@ export class WeaponModel {
         this.weapon = null;
         this.weaponGroup = new THREE.Group();
 
-        
         this.initialPositionOffset = new THREE.Vector3(0.2, -0.15, -0.3);
         this.initialRotationOffset = new THREE.Euler(0, -0.3, 0);
 
@@ -18,21 +17,18 @@ export class WeaponModel {
     loadWeapon() {
         const loader = new GLTFLoader();
 
-        
         loader.load(
-            '/models/revolver.glb',  
+            '/models/revolver.glb',
             (gltf) => {
                 this.weapon = gltf.scene;
 
-                
-                this.weapon.scale.set(0.1, 0.1, 0.1);  
+                this.weapon.scale.set(0.1, 0.1, 0.1);
 
-                
                 this.weapon.traverse((child) => {
                     if (child.isMesh) {
-                        
+
                         child.material = new THREE.MeshBasicMaterial({
-                            color: 0xff6600,  
+                            color: 0xff6600,
                             fog: false
                         });
                         child.frustumCulled = false;

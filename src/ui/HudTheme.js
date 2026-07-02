@@ -1,31 +1,18 @@
-// Shared HUD theme — strict RSGO navy + orange palette. Every HUD element pulls
-// its colors + panel style from here so the whole interface stays consistent
-// (and a palette change is a one-file edit).
-//
-// Design rules:
-//   • Only two hues: navy (#1a2447) and orange (#ef4e23).
-//   • Panels = translucent navy + orange hairline border + blur.
-//   • Text/values/bars = orange; labels = dim orange; tracks = faint orange.
-//   • State (low health, bomb urgency) is shown by PULSE/animation, never by a
-//     new color.
-
 export const HUD = {
     navy: '#1a2447',
     orange: '#ef4e23',
     orangeRGB: '239, 78, 35',
     navyRGB: '26, 36, 71',
 
-    // Common alpha tokens.
-    panelBg: 'rgba(26, 36, 71, 0.88)',   // navy panel
-    border: 'rgba(239, 78, 35, 0.18)',   // orange hairline
-    text: '#ef4e23',                     // primary value text
-    textDim: 'rgba(239, 78, 35, 0.55)',  // labels
+    panelBg: 'rgba(26, 36, 71, 0.88)',
+    border: 'rgba(239, 78, 35, 0.18)',
+    text: '#ef4e23',
+    textDim: 'rgba(239, 78, 35, 0.55)',
     textFaint: 'rgba(239, 78, 35, 0.35)',
-    track: 'rgba(239, 78, 35, 0.15)',    // empty bar/pip background
-    fill: '#ef4e23',                     // bar/pip fill
+    track: 'rgba(239, 78, 35, 0.15)',
+    fill: '#ef4e23',
 };
 
-// Standard panel CSS string (background + border + blur + radius).
 export function hudPanel(radius = 12) {
     return `
         background: ${HUD.panelBg};
@@ -36,7 +23,6 @@ export function hudPanel(radius = 12) {
     `;
 }
 
-// Inject shared keyframes (pulse / urgent-pulse / flash) once.
 let injected = false;
 export function ensureHudKeyframes() {
     if (injected) return;

@@ -6,27 +6,26 @@ export class BombSystem {
         this.camera = camera;
         this.scene = scene;
         this.bombModel = null;
-        this.bombGroup = new THREE.Group(); // Group to hold the bomb
+        this.bombGroup = new THREE.Group();
         this.isEquipped = false;
         this.hasBomb = false;
         this.isPlanting = false;
         this.plantProgress = 0;
-        this.plantDuration = 3000; // 3 seconds to plant
+        this.plantDuration = 3000;
         this.isDefusing = false;
         this.defuseProgress = 0;
-        this.defuseDuration = 5000; // 5 seconds to defuse
+        this.defuseDuration = 5000;
         this.bombPlanted = false;
-        this.plantedBombPosition = null; // Store bomb position for explosion
-        
-        // Dropped bomb tracking
+        this.plantedBombPosition = null;
+
         this.droppedBomb = null;
         this.droppedBombPosition = null;
         this.canPickupBomb = false;
-        
+
         this.loader = new GLTFLoader();
         this.loadBombModel();
     }
-    
+
     loadBombModel() {
         this.loader.load('/models/Bomb 3D Model.glb', (gltf) => {
             console.log('GLTF loaded, contents:', {
@@ -35,47 +34,41 @@ export class BombSystem {
                 cameras: gltf.cameras.length,
                 asset: gltf.asset
             });
-            
+
             this.bombModel = gltf.scene;
-            
-            // Check what's in the scene and fix materials
+
             let meshCount = 0;
             this.bombModel.traverse((child) => {
                 if (child.isMesh) {
                     meshCount++;
                     console.log('Found mesh:', child.name, 'Geometry:', child.geometry, 'Material:', child.material);
-                    
-                    // Force material to be visible
+
                     if (child.material) {
                         child.material.transparent = false;
                         child.material.opacity = 1;
                         child.material.visible = true;
-                        // Add emissive to make it glow slightly so we can see it
+
                         child.material.emissive = new THREE.Color(0x111111);
                         child.material.needsUpdate = true;
                     }
-                    child.frustumCulled = false; // Disable frustum culling
+                    child.frustumCulled = false;
                 }
             });
             console.log('Total meshes found:', meshCount);
-            
-            // Scale and position the bomb for hand holding
-            this.bombModel.scale.set(0.8, 0.8, 0.8); // Good size for hand
-            this.bombModel.position.set(0, 0, 0); // Position will be set relative to camera
+
+            this.bombModel.scale.set(0.8, 0.8, 0.8);
+            this.bombModel.position.set(0, 0, 0);
             this.bombModel.rotation.set(0, 0, 0);
-            
-            // Add bomb model to the group
+
             this.bombGroup.add(this.bombModel);
-            
-            // Add group to scene, not camera
+
             this.scene.add(this.bombGroup);
-            
-            // Make it invisible initially
+
             this.bombGroup.visible = false;
-            
+
             console.log('Bomb model loaded and added to scene');
             console.log('BombGroup children:', this.bombGroup.children);
-        }, 
+        },
         (progress) => {
             console.log('Loading bomb model:', (progress.loaded / progress.total * 100) + '%');
         },
@@ -83,22 +76,19 @@ export class BombSystem {
             console.error('Error loading bomb model:', error);
         });
     }
-    
+
     giveBomb() {
         this.hasBomb = true;
         this.updateBombUI();
     }
 
-    // Clear the bomb from this client's local player. Called at round start so a
-    // previous round's carrier doesn't keep the bomb — the server then re-grants
-    // it to exactly one (random) attacker via the give_bomb message.
     removeBomb() {
         this.hasBomb = false;
         this.isEquipped = false;
         if (this.bombGroup) {
             this.bombGroup.visible = false;
         }
-        // Show the weapon again in case the bomb was equipped in hand.
+
         if (window.gameInstance && window.gameInstance.weaponSystem) {
             window.gameInstance.weaponSystem.show();
         }
@@ -111,62 +101,57 @@ export class BombSystem {
             console.log('Cannot equip - no bomb in inventory');
             return false;
         }
-        
+
         if (!this.bombModel) {
             console.log('Cannot equip - bomb model not loaded yet');
             return false;
         }
-        
+
         this.isEquipped = true;
         this.bombGroup.visible = true;
-        
-        // Update position to be in front of camera
+
         this.updateBombPosition();
-        
-        // Hide weapon if it exists
+
         if (window.gameInstance && window.gameInstance.weaponSystem) {
             window.gameInstance.weaponSystem.hide();
         }
 
-        // Refresh the HUD so the indicator + the bottom-center "G drop" prompt show.
         this.updateBombUI();
 
         console.log('Bomb equipped successfully');
         return true;
     }
-    
+
     unequipBomb() {
         if (!this.bombModel) return;
-        
+
         this.isEquipped = false;
         this.bombGroup.visible = false;
 
-        // Show weapon again
         if (window.gameInstance && window.gameInstance.weaponSystem) {
             window.gameInstance.weaponSystem.show();
         }
 
-        // Refresh the HUD so the bottom-center "G drop" prompt hides again.
         this.updateBombUI();
 
         console.log('Bomb unequipped');
     }
-    
+
     toggleBomb() {
         if (!this.hasBomb) return false;
-        
+
         if (this.isEquipped) {
             this.unequipBomb();
         } else {
             this.equipBomb();
         }
-        
+
         return this.isEquipped;
     }
-    
+
     startPlanting(onProgressCallback) {
         if (!this.hasBomb || !this.isEquipped || this.isPlanting || this.bombPlanted) return false;
-        
+
         const playerPos = this.camera.position;
         const sites = [
             { x: -250, z: 0 },
@@ -179,80 +164,74 @@ export class BombSystem {
             this.showMessage('Move to bomb site to plant!');
             return false;
         }
-        
+
         this.isPlanting = true;
         this.plantProgress = 0;
-        this.plantDuration = 3000; // 3 seconds to plant
+        this.plantDuration = 3000;
         this.onProgressCallback = onProgressCallback;
         this.showPlantingBar();
-        
-        // Start planting timer
+
         this.plantingInterval = setInterval(() => {
-            this.plantProgress += 100; // Update every 100ms
+            this.plantProgress += 100;
             const progress = Math.min(this.plantProgress / this.plantDuration, 1);
             this.updatePlantingBar(progress);
-            
+
             if (this.onProgressCallback) {
                 this.onProgressCallback(progress);
             }
-            
+
             if (progress >= 1.0) {
                 clearInterval(this.plantingInterval);
                 this.completePlanting();
             }
         }, 100);
-        
+
         console.log('Started planting bomb - hold for 3 seconds');
         return true;
     }
-    
+
     updatePlanting(deltaTime) {
         if (!this.isPlanting) return;
-        
-        this.plantProgress += deltaTime * 1000; // Convert to milliseconds
-        
+
+        this.plantProgress += deltaTime * 1000;
+
         const progress = Math.min(this.plantProgress / this.plantDuration, 1);
         this.updatePlantingBar(progress);
-        
+
         if (this.plantProgress >= this.plantDuration) {
             this.completePlanting();
         }
     }
-    
+
     cancelPlanting() {
         if (!this.isPlanting) return;
-        
+
         this.isPlanting = false;
         this.plantProgress = 0;
         this.hidePlantingBar();
-        
+
         if (this.plantingInterval) {
             clearInterval(this.plantingInterval);
             this.plantingInterval = null;
         }
-        
+
         console.log('Planting cancelled');
     }
-    
+
     completePlanting() {
         this.isPlanting = false;
         this.hidePlantingBar();
-        
-        // Get player's current position for bomb placement
+
         const playerPos = this.camera.position.clone();
         console.log(`Sending plant bomb request at position: ${playerPos.x}, ${playerPos.z}`);
-        
-        // Notify server about bomb plant with position
+
         if (window.gameInstance && window.gameInstance.network) {
             window.gameInstance.network.sendPlantBombWithPosition(playerPos.x, playerPos.z);
         }
-        
+
         console.log('Plant bomb request sent to server - waiting for confirmation');
     }
 
-    // ---- Defuse (defenders) ----
-    // Returns true if a 5-second defuse hold was started. Requires the bomb to
-    // be planted and the player to be near it. Team check is done by the caller.
     startDefusing() {
         if (!this.bombPlanted || this.isDefusing || this.hasExploded) return false;
         if (!this.plantedBombPosition) return false;
@@ -269,11 +248,11 @@ export class BombSystem {
 
         this.isDefusing = true;
         this.defuseProgress = 0;
-        this.defuseDuration = 5000; // 5 seconds to defuse
+        this.defuseDuration = 5000;
         this.showDefusingBar();
 
         this.defusingInterval = setInterval(() => {
-            // Stop if the bomb is gone (exploded/defused by server).
+
             if (!this.bombPlanted) {
                 this.cancelDefusing();
                 return;
@@ -308,7 +287,7 @@ export class BombSystem {
     completeDefusing() {
         this.isDefusing = false;
         this.hideDefusingBar();
-        // Tell the server; it validates and broadcasts bomb_defused + round end.
+
         if (window.gameInstance && window.gameInstance.network) {
             window.gameInstance.network.sendDefuseBomb();
         }
@@ -355,15 +334,14 @@ export class BombSystem {
     }
 
     addBombLight(x, z) {
-        // Add red point light at bomb position
+
         const light = new THREE.PointLight(0xff0000, 3, 20);
         light.position.set(x, 3, z);
         this.scene.add(light);
         this.bombLight = light;
-        
-        // Add a glowing sphere as visual indicator above the bomb
+
         const sphereGeometry = new THREE.SphereGeometry(0.3, 8, 8);
-        const sphereMaterial = new THREE.MeshBasicMaterial({ 
+        const sphereMaterial = new THREE.MeshBasicMaterial({
             color: 0xff0000,
             emissive: 0xff0000,
             emissiveIntensity: 1
@@ -371,39 +349,37 @@ export class BombSystem {
         this.blinkSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
         this.blinkSphere.position.set(x, 4, z);
         this.scene.add(this.blinkSphere);
-        
-        // Blinking effect
+
         this.blinkInterval = setInterval(() => {
             this.bombLight.visible = !this.bombLight.visible;
             this.blinkSphere.visible = !this.blinkSphere.visible;
         }, 500);
     }
-    
+
     startBombTimer(initialTimer = 45) {
-        // Prevent multiple timers
+
         if (this.timerInterval) {
             clearInterval(this.timerInterval);
         }
-        
-        this.bombTimer = initialTimer; // Use server-provided timer
-        this.hasExploded = false; // Track if already exploded
+
+        this.bombTimer = initialTimer;
+        this.hasExploded = false;
         this.updateTimerDisplay();
         this.showBombTimerUI(this.bombTimer);
-        
+
         this.timerInterval = setInterval(() => {
             this.bombTimer--;
             this.updateTimerDisplay();
             this.showBombTimerUI(this.bombTimer);
-            
+
             if (this.bombTimer <= 0 && !this.hasExploded) {
-                // Don't set hasExploded here - wait for server to trigger explosion
+
                 clearInterval(this.timerInterval);
                 this.timerInterval = null;
-                // Don't call explodeBomb here - wait for server message
+
                 this.hideBombTimerUI();
             }
-            
-            // Faster blinking as time runs out
+
             if (this.bombTimer <= 10 && this.blinkInterval) {
                 clearInterval(this.blinkInterval);
                 this.blinkInterval = setInterval(() => {
@@ -414,118 +390,100 @@ export class BombSystem {
             }
         }, 1000);
     }
-    
+
     explodeBomb() {
-        // Prevent multiple explosions
+
         if (this.hasExploded) {
             console.log('Bomb already exploded, ignoring duplicate call');
             return;
         }
-        
+
         this.hasExploded = true;
         console.log('BOMB EXPLODED! Starting explosion animation...');
-        
-        // Create implosion effect first
+
         try {
             this.createImplosionEffect();
             console.log('Explosion animation started successfully');
         } catch (error) {
             console.error('Error creating explosion effect:', error);
         }
-        
-        // After implosion animation, clean up
+
         setTimeout(() => {
             this.showMessage('Bomb detonated');
-            
-            // Clean up
+
             this.cleanup();
-            
-            // Don't call endRound here - let server handle it
-        }, 3000); // Wait for implosion to complete
+
+        }, 3000);
     }
-    
+
     createImplosionEffect() {
         console.log('createImplosionEffect called');
-        
-        // Try to get bomb position from multiple sources
+
         let bombPos;
-        
+
         if (this.plantedBombPosition) {
-            // Use the stored bomb position (most reliable)
+
             bombPos = this.plantedBombPosition.clone();
             console.log('Using stored bomb position:', bombPos);
         } else if (this.plantedBombModel) {
-            // Use the planted bomb model position if available
+
             bombPos = this.plantedBombModel.position.clone();
             console.log('Using planted model position:', bombPos);
         } else if (this.plantedBombGroup) {
-            // Use the planted bomb group position as fallback
+
             bombPos = this.plantedBombGroup.position.clone();
             console.log('Using planted group position:', bombPos);
         } else {
-            // Last resort - use center of bomb site (where bombs are typically planted)
+
             console.warn('No bomb position found - using default bomb site position');
-            bombPos = new THREE.Vector3(0, 1, 0); // Center of map at ground level
+            bombPos = new THREE.Vector3(0, 1, 0);
         }
-        
+
         console.log('Creating explosion at position:', bombPos);
-        
-        // Create a massive black sphere that grows
+
         const explosionGeometry = new THREE.SphereGeometry(10, 16, 12);
-        const explosionMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0x000000,  // Pure black
+        const explosionMaterial = new THREE.MeshBasicMaterial({
+            color: 0x000000,
             transparent: true,
             opacity: 0.8,
             side: THREE.DoubleSide
         });
         const blackExplosion = new THREE.Mesh(explosionGeometry, explosionMaterial);
         blackExplosion.position.copy(bombPos);
-        blackExplosion.position.y = 5; // Ground level
-        
+        blackExplosion.position.y = 5;
+
         console.log('Adding explosion sphere to scene...');
         this.scene.add(blackExplosion);
-        
+
         console.log('Black explosion sphere created at:', blackExplosion.position);
         console.log('Explosion visible:', blackExplosion.visible);
         console.log('Scene has explosion:', this.scene.children.includes(blackExplosion));
-        
-        // Growing animation - simple and visible
+
         let scale = 1;
-        
-        // Store interval ID for cleanup
+
         this.explosionInterval = setInterval(() => {
-            scale += 3; // Grow by 3 units per frame
+            scale += 3;
             blackExplosion.scale.set(scale, scale, scale);
-            
-            // Fade out as it grows
+
             blackExplosion.material.opacity = Math.max(0.1, 0.8 - (scale / 100));
-            
-            // Check if player is inside the explosion radius and kill them
-            const currentRadius = scale * 10; // Scale converted to world units
+
+            const currentRadius = scale * 10;
             if (window.gameInstance && window.gameInstance.camera && window.gameInstance.isAlive) {
                 const playerPos = window.gameInstance.camera.getPosition();
                 const distance = Math.sqrt(
-                    Math.pow(playerPos.x - bombPos.x, 2) + 
+                    Math.pow(playerPos.x - bombPos.x, 2) +
                     Math.pow(playerPos.z - bombPos.z, 2)
                 );
-                
-                // If player is inside the explosion, kill them
+
                 if (distance < currentRadius) {
                     window.gameInstance.killPlayer('Consumed by explosion');
                 }
             }
-            
-            // Check all other players if multiplayer (commented out - not implemented yet)
-            // if (window.gameInstance && window.gameInstance.playerManager) {
-            //     window.gameInstance.playerManager.checkPlayersInExplosion(bombPos, currentRadius);
-            // }
-            
-            // After reaching max size, remove
-            if (scale >= 60) { // Stop at reasonable size
+
+            if (scale >= 60) {
                 clearInterval(this.explosionInterval);
                 this.explosionInterval = null;
-                
-                // Simple screen flash
+
                 const screenFlash = document.createElement('div');
                 screenFlash.style.cssText = `
                     position: fixed;
@@ -538,73 +496,63 @@ export class BombSystem {
                     pointer-events: none;
                 `;
                 document.body.appendChild(screenFlash);
-                
-                // Camera shake
+
                 if (window.gameInstance && window.gameInstance.camera) {
                     window.gameInstance.camera.shake(2.0, 1000);
                 }
-                
-                // Remove explosion after a moment
+
                 setTimeout(() => {
                     this.scene.remove(blackExplosion);
                     blackExplosion.geometry.dispose();
                     blackExplosion.material.dispose();
                 }, 1000);
-                
-                // Remove flash quickly
+
                 setTimeout(() => {
                     document.body.removeChild(screenFlash);
                 }, 200);
             }
-        }, 50); // 20 FPS for smooth growth
+        }, 50);
     }
-    
+
     onLocalBombPlanted() {
-        // Called when local player plants bomb - remove from hand
+
         this.hasBomb = false;
         this.isEquipped = false;
         this.bombGroup.visible = false;
         this.isPlanting = false;
         this.bombPlanted = true;
         this.hidePlantingBar();
-        
+
         if (this.plantingInterval) {
             clearInterval(this.plantingInterval);
             this.plantingInterval = null;
         }
-        
-        // Update UI to show bomb is no longer in inventory
+
         this.updateBombUI();
-        
-        // Show weapon again since bomb is no longer in hand
+
         if (window.gameInstance && window.gameInstance.weaponSystem) {
             window.gameInstance.weaponSystem.show();
         }
-        
+
         console.log('Bomb removed from hand after planting - waiting for timer from server');
     }
-    
+
     onBombPlanted(timer, position = null) {
         console.log(`Remote bomb planted - Timer: ${timer}s at position:`, position);
-        
+
         if (!this.bombModel) {
             console.log('Warning: Bomb model not loaded, cannot show planted bomb');
             return;
         }
-        
-        // Position at actual player location or center if not provided
+
         const bombPos = position || { x: 0, z: 0 };
-        
-        // Store the bomb position for explosion
+
         this.plantedBombPosition = new THREE.Vector3(bombPos.x, 1, bombPos.z);
-        
-        // Create a new group for the planted bomb (same as placeBombOnGround method)
+
         this.plantedBombGroup = new THREE.Group();
-        
-        // Clone the bomb model for ground placement
+
         const plantedBomb = this.bombModel.clone();
-        
-        // Make sure all meshes in the clone are visible
+
         plantedBomb.traverse((child) => {
             if (child.isMesh) {
                 child.visible = true;
@@ -615,71 +563,59 @@ export class BombSystem {
                 }
             }
         });
-        
-        plantedBomb.scale.set(5.0, 5.0, 5.0); // Large on ground
-        plantedBomb.position.set(0, 0, 0); // Local position in group
-        plantedBomb.rotation.set(0, Math.random() * Math.PI * 2, 0); // Random rotation
-        
+
+        plantedBomb.scale.set(5.0, 5.0, 5.0);
+        plantedBomb.position.set(0, 0, 0);
+        plantedBomb.rotation.set(0, Math.random() * Math.PI * 2, 0);
+
         this.plantedBombGroup.add(plantedBomb);
         this.plantedBombGroup.position.set(bombPos.x, 1, bombPos.z);
         this.plantedBombGroup.visible = true;
-        
-        // Add to scene
+
         this.scene.add(this.plantedBombGroup);
-        this.plantedBombModel = this.plantedBombGroup; // Keep reference for cleanup
-        
-        // Add red blinking light effect at bomb position
+        this.plantedBombModel = this.plantedBombGroup;
+
         this.addBombLight(bombPos.x, bombPos.z);
-        
-        // Start countdown timer for all players
+
         this.startBombTimer(timer);
         this.bombPlanted = true;
         this.showBombTimerUI(timer);
-        
+
         console.log(`Bomb planted at (${bombPos.x}, ${bombPos.z}) and timer started for all players`);
     }
-    
-    
+
     onBombDefused() {
         console.log('Bomb defused by another player');
         this.cleanup();
         this.hideBombTimerUI();
     }
-    
+
     onBombExploded() {
         console.log('Bomb exploded - showing explosion for all players');
         console.log('hasExploded before:', this.hasExploded);
-        
-        // Force explosion even if timer hasn't reached zero locally
-        // Server controls the actual explosion timing
+
         this.bombTimer = 0;
-        
-        // Clear any running timer
+
         if (this.timerInterval) {
             clearInterval(this.timerInterval);
             this.timerInterval = null;
         }
-        
-        // Always show explosion when server says so
-        // Reset flag in case it was set by local timer
+
         if (this.hasExploded) {
             console.log('Resetting hasExploded flag to show server-triggered explosion');
             this.hasExploded = false;
         }
-        
+
         this.explodeBomb();
         this.hideBombTimerUI();
     }
-    
-    // The bomb timer is now rendered inside the round box (Game.updateRoundDisplay
-    // reads this.bombPlanted + this.bombTimer and styles it red/urgent). We just
-    // poke the round display to re-render; no standalone box anymore.
+
     showBombTimerUI(_timeLeft) {
         const game = window.gameInstance;
         if (game && typeof game.updateRoundDisplay === 'function') {
             game.updateRoundDisplay();
         }
-        // Remove any leftover legacy standalone box from older sessions.
+
         const legacy = document.getElementById('bombTimer');
         if (legacy) legacy.remove();
     }
@@ -694,13 +630,12 @@ export class BombSystem {
     }
 
     cleanup() {
-        // Reset bomb state
+
         this.bombPlanted = false;
         this.hasExploded = false;
         this.isPlanting = false;
-        this.plantedBombPosition = null; // Clear stored position
+        this.plantedBombPosition = null;
 
-        // Cancel any in-progress defuse
         this.isDefusing = false;
         this.defuseProgress = 0;
         if (this.defusingInterval) {
@@ -709,83 +644,77 @@ export class BombSystem {
         }
         this.hideDefusingBar();
 
-        // Clear ALL timers
         if (this.timerInterval) {
             clearInterval(this.timerInterval);
             this.timerInterval = null;
         }
-        
+
         if (this.blinkInterval) {
             clearInterval(this.blinkInterval);
             this.blinkInterval = null;
         }
-        
+
         if (this.indicatorBlinkInterval) {
             clearInterval(this.indicatorBlinkInterval);
             this.indicatorBlinkInterval = null;
         }
-        
+
         if (this.explosionInterval) {
             clearInterval(this.explosionInterval);
             this.explosionInterval = null;
         }
-        
+
         if (this.plantingInterval) {
             clearInterval(this.plantingInterval);
             this.plantingInterval = null;
         }
-        
-        // Hide UI
+
         this.hideBombTimerUI();
         this.hidePlantingBar();
-        
-        // Remove models
+
         if (this.plantedBombModel) {
             this.scene.remove(this.plantedBombModel);
             this.plantedBombModel = null;
         }
-        
+
         if (this.bombIndicator) {
             this.scene.remove(this.bombIndicator);
             this.bombIndicator = null;
         }
-        
+
         if (this.bombLight) {
             this.scene.remove(this.bombLight);
             this.bombLight = null;
         }
-        
+
         if (this.blinkSphere) {
             this.scene.remove(this.blinkSphere);
             this.blinkSphere = null;
         }
-        
+
         if (this.blinkInterval) {
             clearInterval(this.blinkInterval);
             this.blinkInterval = null;
         }
-        
+
         if (this.timerInterval) {
             clearInterval(this.timerInterval);
             this.timerInterval = null;
         }
-        
-        // Clear explosion interval if it exists
+
         if (this.explosionInterval) {
             clearInterval(this.explosionInterval);
             this.explosionInterval = null;
         }
-        
+
         this.bombPlanted = false;
         this.isPlanting = false;
         this.plantProgress = 0;
 
-        // Hide any lingering action prompts.
         this.hidePlantInstructions();
         this.hideDefuseInstructions();
     }
 
-    // UI Methods
     hideBombUI() {
         const bombIndicator = document.getElementById('bombIndicator');
         if (bombIndicator) {
@@ -794,8 +723,6 @@ export class BombSystem {
         this.hideDropPrompt();
     }
 
-    // Bottom-center prompt, shown the WHOLE time the bomb is equipped, so the
-    // player always knows they can drop it with G.
     updateDropPrompt() {
         let prompt = document.getElementById('bombDropPrompt');
         if (!prompt) {
@@ -842,22 +769,21 @@ export class BombSystem {
         const prompt = document.getElementById('bombDropPrompt');
         if (prompt) prompt.style.display = 'none';
     }
-    
+
     showBombUI() {
         if (this.hasBomb) {
             this.updateBombUI();
         }
     }
-    
+
     updateBombUI() {
         let bombIndicator = document.getElementById('bombIndicator');
-        
+
         if (!bombIndicator) {
-            // Create bomb indicator UI
+
             bombIndicator = document.createElement('div');
             bombIndicator.id = 'bombIndicator';
-            // Slim, minimalist pill in the lower-right: bomb glyph + status + key
-            // hint on a single row. No more chunky 80×100 box.
+
             bombIndicator.style.cssText = `
                 position: fixed;
                 bottom: 150px;
@@ -883,7 +809,6 @@ export class BombSystem {
             const isActive = this.isEquipped;
             const glowColor = isActive ? 'rgba(239, 78, 35, 0.4)' : 'rgba(239, 78, 35, 0.2)';
 
-            // A small key-chip helper so hints render consistently.
             const keyChip = (k) => `
                 <span style="
                     display: inline-flex; align-items: center; justify-content: center;
@@ -894,8 +819,6 @@ export class BombSystem {
                     font-size: 9px; font-weight: 700; color: #ef4e23; letter-spacing: 0.5px;
                 ">${k}</span>`;
 
-            // Filled, rounder bomb glyph: solid body with a small shine, a short
-            // neck, a curved fuse, and a spark that pulses when armed.
             const bombGlyph = `
                 <svg width="24" height="24" viewBox="0 0 24 24" style="flex-shrink:0;">
                     <!-- body -->
@@ -946,11 +869,8 @@ export class BombSystem {
             bombIndicator.style.display = 'none';
         }
 
-        // Persistent bottom-center prompt: visible the whole time the bomb is
-        // equipped, telling the player they can drop it with G.
         this.updateDropPrompt();
 
-        // Add pulse animation if not already present
         if (!document.getElementById('bombPulseStyles')) {
             const style = document.createElement('style');
             style.id = 'bombPulseStyles';
@@ -963,10 +883,10 @@ export class BombSystem {
             document.head.appendChild(style);
         }
     }
-    
+
     showPlantingBar() {
         let plantingBar = document.getElementById('plantingBar');
-        
+
         if (!plantingBar) {
             plantingBar = document.createElement('div');
             plantingBar.id = 'plantingBar';
@@ -996,27 +916,27 @@ export class BombSystem {
             `;
             document.body.appendChild(plantingBar);
         }
-        
+
         plantingBar.style.display = 'block';
     }
-    
+
     updatePlantingBar(progress) {
         const progressBar = document.getElementById('plantingProgress');
         if (progressBar) {
             progressBar.style.width = `${progress * 100}%`;
         }
     }
-    
+
     hidePlantingBar() {
         const plantingBar = document.getElementById('plantingBar');
         if (plantingBar) {
             plantingBar.style.display = 'none';
         }
     }
-    
+
     updateTimerDisplay() {
         let timerDisplay = document.getElementById('bombTimer');
-        
+
         if (!timerDisplay) {
             timerDisplay = document.createElement('div');
             timerDisplay.id = 'bombTimer';
@@ -1033,7 +953,7 @@ export class BombSystem {
             `;
             document.body.appendChild(timerDisplay);
         }
-        
+
         if (this.bombPlanted) {
             timerDisplay.style.display = 'block';
             timerDisplay.innerHTML = `
@@ -1046,8 +966,7 @@ export class BombSystem {
             timerDisplay.style.display = 'none';
         }
     }
-    
-    // Small, minimalist toast for bomb status/hints (matches the HUD style).
+
     showMessage(text) {
         let message = document.getElementById('bombMessage');
 
@@ -1084,19 +1003,16 @@ export class BombSystem {
             message.style.display = 'none';
         }, 3000);
     }
-    
+
     update(deltaTime) {
         if (this.isPlanting) {
             this.updatePlanting(deltaTime);
         }
-        
-        // Update bomb position to follow camera when equipped
+
         if (this.isEquipped && this.bombGroup) {
             this.updateBombPosition();
         }
-        
-        // Show "hold left click to plant" when the carrier is at a bomb site
-        // (same sites/radius as startPlanting), and not already planting/planted.
+
         if (this.isEquipped && !this.bombPlanted && !this.isPlanting) {
             const playerPos = this.camera.position;
             const sites = [{ x: -250, z: 0 }, { x: 250, z: 0 }];
@@ -1111,10 +1027,6 @@ export class BombSystem {
             this.hidePlantInstructions();
         }
 
-        // Show "hold E to defuse" for a defender standing near the planted bomb
-        // (while not already defusing). Team is gated by the game (only the
-        // defending team's keypress starts a defuse), so here we just check the
-        // local player isn't the attacking team if we can tell.
         if (this.bombPlanted && this.plantedBombPosition && !this.isDefusing) {
             const gi = window.gameInstance || window.game;
             const isAttacker = gi && gi.attackingTeam && gi.playerTeam &&
@@ -1133,7 +1045,6 @@ export class BombSystem {
             this.hideDefuseInstructions();
         }
 
-        // Check if we can pickup dropped bomb (throttled to avoid spam)
         if (this.droppedBomb && !this.hasBomb) {
             if (!this.lastPickupCheck || Date.now() - this.lastPickupCheck > 100) {
                 this.checkCanPickup();
@@ -1141,32 +1052,26 @@ export class BombSystem {
             }
         }
     }
-    
+
     updateBombPosition() {
         if (!this.bombGroup || !this.camera) return;
-        
-        // Calculate position offset from camera
-        const offset = new THREE.Vector3(0.3, -0.3, -0.5); // Right, down, forward
-        
-        // Apply camera rotation to offset
+
+        const offset = new THREE.Vector3(0.3, -0.3, -0.5);
+
         offset.applyQuaternion(this.camera.quaternion);
-        
-        // Set bomb position
+
         const bombPos = new THREE.Vector3();
         bombPos.copy(this.camera.position);
         bombPos.add(offset);
-        
+
         this.bombGroup.position.copy(bombPos);
-        
-        // Copy camera rotation for the bomb
+
         this.bombGroup.quaternion.copy(this.camera.quaternion);
-        // Add some rotation to make bomb look better
-        this.bombGroup.rotateY(Math.PI / 6); // Slight Y rotation
-        this.bombGroup.rotateX(-Math.PI / 8); // Slight X rotation
+
+        this.bombGroup.rotateY(Math.PI / 6);
+        this.bombGroup.rotateX(-Math.PI / 8);
     }
-    
-    // Shared minimalist action prompt: "HOLD [key] TO <action>" with a keycap
-    // chip, in the same black/blur HUD style as the rest of the UI.
+
     _actionPromptHTML(keyLabel, actionLabel) {
         return `
             <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.6;">Hold</span>
@@ -1246,40 +1151,34 @@ export class BombSystem {
         }
     }
 
-    // Called when bomb is dropped by any player
     onBombDropped(x, y, z, thrownX, thrownZ) {
         this.hasBomb = false;
         this.isEquipped = false;
         this.bombGroup.visible = false;
         this.updateBombUI();
-        
-        // Create dropped bomb model with throw animation
+
         if (thrownX !== undefined && thrownZ !== undefined) {
             this.showDroppedBomb(x, y, z, thrownX, thrownZ);
         } else {
             this.showDroppedBomb(x, y, z);
         }
-        
-        // Check if we can pick it up
+
         this.checkCanPickup();
     }
-    
-    // Show bomb on ground with throwing animation
+
     showDroppedBomb(x, y, z, thrownX, thrownZ) {
         if (this.droppedBomb) {
             this.scene.remove(this.droppedBomb);
         }
-        
+
         this.droppedBomb = new THREE.Group();
-        
-        // Clone bomb model for ground
+
         if (this.bombModel) {
             const groundBomb = this.bombModel.clone();
-            // Make it much bigger when dropped
+
             groundBomb.scale.set(4.0, 4.0, 4.0);
             groundBomb.position.set(0, 0, 0);
-            
-            // Make it visible
+
             groundBomb.traverse((child) => {
                 if (child.isMesh) {
                     child.visible = true;
@@ -1290,18 +1189,16 @@ export class BombSystem {
                     }
                 }
             });
-            
+
             this.droppedBomb.add(groundBomb);
         }
-        
-        // Add glowing effect
+
         const light = new THREE.PointLight(0xff6600, 2, 15);
         light.position.set(0, 1, 0);
         this.droppedBomb.add(light);
-        
-        // Add a pulsing sphere for visibility
+
         const sphereGeometry = new THREE.SphereGeometry(0.5, 8, 8);
-        const sphereMaterial = new THREE.MeshBasicMaterial({ 
+        const sphereMaterial = new THREE.MeshBasicMaterial({
             color: 0xff6600,
             transparent: true,
             opacity: 0.6
@@ -1309,71 +1206,63 @@ export class BombSystem {
         const glowSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
         glowSphere.position.set(0, 2, 0);
         this.droppedBomb.add(glowSphere);
-        
-        // Start position (where player is)
+
         const startPos = new THREE.Vector3(x, y + 1, z);
-        
-        // End position - use thrown coordinates if provided, otherwise drop in place
+
         if (thrownX !== undefined && thrownZ !== undefined) {
             this.droppedBombPosition = new THREE.Vector3(thrownX, 1, thrownZ);
         } else {
             this.droppedBombPosition = new THREE.Vector3(x, 1, z);
         }
-        
+
         this.scene.add(this.droppedBomb);
-        
-        // Animate throw or place immediately
+
         if (thrownX !== undefined && thrownZ !== undefined) {
-            // Start at player position and animate to thrown position
+
             this.droppedBomb.position.copy(startPos);
             this.animateBombThrow(startPos, this.droppedBombPosition);
         } else {
-            // No throw animation, just place at final position
+
             this.droppedBomb.position.copy(this.droppedBombPosition);
         }
-        
-        // Add pickup prompt if close
+
         this.createPickupPrompt();
     }
-    
-    // Animate bomb being thrown with arc motion
+
     animateBombThrow(startPos, endPos) {
-        const duration = 600; // Animation duration in ms
+        const duration = 600;
         const startTime = Date.now();
-        const maxHeight = Math.max(startPos.y, endPos.y) + 2; // Arc peak
-        
+        const maxHeight = Math.max(startPos.y, endPos.y) + 2;
+
         const animate = () => {
             const elapsed = Date.now() - startTime;
             const progress = Math.min(elapsed / duration, 1);
-            
+
             if (progress < 1) {
-                // Calculate arc position
+
                 const x = startPos.x + (endPos.x - startPos.x) * progress;
                 const z = startPos.z + (endPos.z - startPos.z) * progress;
-                
-                // Parabolic arc for Y position
-                const arcProgress = 4 * progress * (1 - progress); // Parabola: peaks at 0.5
+
+                const arcProgress = 4 * progress * (1 - progress);
                 const y = startPos.y + (maxHeight - startPos.y) * arcProgress + (endPos.y - startPos.y) * progress;
-                
+
                 this.droppedBomb.position.set(x, y, z);
-                
-                // Add rotation for realism
+
                 this.droppedBomb.rotation.x = progress * Math.PI * 3;
                 this.droppedBomb.rotation.z = progress * Math.PI * 2;
-                
+
                 requestAnimationFrame(animate);
             } else {
-                // Animation complete - bomb lands
+
                 this.droppedBomb.position.copy(endPos);
-                this.droppedBomb.rotation.set(0, 0, 0); // Reset rotation
+                this.droppedBomb.rotation.set(0, 0, 0);
                 console.log(`Bomb landed at: ${endPos.x.toFixed(1)}, ${endPos.y}, ${endPos.z.toFixed(1)}`);
             }
         };
-        
+
         animate();
     }
-    
-    // Clear dropped bomb (called at round start)
+
     clearDroppedBomb() {
         if (this.droppedBomb) {
             this.scene.remove(this.droppedBomb);
@@ -1385,30 +1274,25 @@ export class BombSystem {
         }
     }
 
-    // Called when someone picks up the bomb
     onBombPickedUp(playerId, isMe) {
-        // Remove dropped bomb from scene
+
         if (this.droppedBomb) {
             this.scene.remove(this.droppedBomb);
             this.droppedBomb = null;
             this.droppedBombPosition = null;
         }
-        
-        // Hide pickup prompt
+
         this.hidePickupPrompt();
         this.canPickupBomb = false;
-        
-        // If we picked it up, give us the bomb
+
         if (isMe) {
             this.giveBomb();
         }
     }
-    
-    // Check if player is near dropped bomb
+
     checkCanPickup() {
         if (!this.droppedBombPosition || !this.camera) return false;
-        
-        // Check if player is on attacking team
+
         const gameInstance = window.gameInstance || window.game;
         if (gameInstance && gameInstance.attackingTeam && gameInstance.playerTeam) {
             if (gameInstance.playerTeam !== gameInstance.attackingTeam) {
@@ -1417,30 +1301,29 @@ export class BombSystem {
                 return false;
             }
         }
-        
+
         const distance = this.camera.position.distanceTo(this.droppedBombPosition);
-        // Use horizontal distance only since bomb is at ground level but player is higher up
+
         const horizontalDistance = new THREE.Vector2(
             this.camera.position.x - this.droppedBombPosition.x,
             this.camera.position.z - this.droppedBombPosition.z
         ).length();
-        this.canPickupBomb = horizontalDistance < 5.0; // Use horizontal distance for pickup
-        
-        // Debug logging (only when distance changes significantly)
+        this.canPickupBomb = horizontalDistance < 5.0;
+
         if (!this.lastLoggedDistance || Math.abs(horizontalDistance - this.lastLoggedDistance) > 1) {
             console.log(`Bomb 3D distance: ${distance.toFixed(2)}, horizontal: ${horizontalDistance.toFixed(2)}, Can pickup: ${this.canPickupBomb}`);
             this.lastLoggedDistance = horizontalDistance;
         }
-        
+
         if (this.canPickupBomb) {
             this.showPickupPrompt();
         } else {
             this.hidePickupPrompt();
         }
-        
+
         return this.canPickupBomb;
     }
-    
+
     createPickupPrompt() {
         let prompt = document.getElementById('bombPickupPrompt');
         if (!prompt) {
@@ -1468,13 +1351,13 @@ export class BombSystem {
         }
         return prompt;
     }
-    
+
     showPickupPrompt() {
         const prompt = this.createPickupPrompt();
         prompt.innerHTML = 'Press [E] to pick up bomb';
         prompt.style.display = 'block';
     }
-    
+
     hidePickupPrompt() {
         const prompt = document.getElementById('bombPickupPrompt');
         if (prompt) {

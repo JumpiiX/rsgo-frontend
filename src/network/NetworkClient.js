@@ -21,19 +21,15 @@ export class NetworkClient {
     }
 
     connect() {
-        // Pick the WS scheme from the PAGE protocol. On an https:// page the
-        // browser BLOCKS insecure ws:// (mixed content) — the socket looks like
-        // it "opens" then is silently killed, so the backend never sees the
-        // connection. On https we therefore use wss:// and route through the
-        // reverse proxy path (/ws) which terminates TLS in front of the backend.
+
         let wsUrl;
         if (window.location.hostname === 'localhost') {
             wsUrl = 'ws://localhost:6969';
         } else if (window.location.protocol === 'https:') {
-            // Secure: go through the proxy on the same host:443, path /ws.
+
             wsUrl = `wss://${window.location.host}/ws`;
         } else {
-            // Plain http: direct to the backend port.
+
             wsUrl = `ws://${window.location.hostname}:6969`;
         }
         console.log('[WS] connecting to', wsUrl);
@@ -41,15 +37,14 @@ export class NetworkClient {
 
         this.ws.onopen = () => {
             this.connected = true;
-            // Analytics: count the first successful connect as "joined the lobby"
-            // (don't re-fire on the 3s auto-reconnect loop).
+
             if (!this._joinedTracked) {
                 this._joinedTracked = true;
                 try { window.game && window.game._track && window.game._track('lobby-joined'); } catch (e) {}
             }
             const n = (this._pendingSends && this._pendingSends.length) || 0;
             console.log('[WS] OPEN — flushing', n, 'queued message(s)');
-            // Flush any messages queued while the socket was still connecting.
+
             if (this._pendingSends && this._pendingSends.length) {
                 const queued = this._pendingSends;
                 this._pendingSends = [];
@@ -68,8 +63,7 @@ export class NetworkClient {
         this.ws.onclose = (ev) => {
             this.connected = false;
             console.warn('[WS] CLOSED code=', ev.code, 'reason=', ev.reason, 'wasClean=', ev.wasClean);
-            // Analytics: connection dropped. If a match was in progress, count it as
-            // abandoned (rage-quit / crash signal); always log the raw disconnect.
+
             try {
                 if (window.game && window.game._track) {
                     window.game._track('ws-disconnected', { code: ev.code });
@@ -116,12 +110,12 @@ export class NetworkClient {
 
         case 'structure_placed':
             if (this.onBuildingPlacedCallback) {
-                // Convert backend message format to frontend format
+
                 const buildingMsg = {
                     player_id: message.player_id,
                     x: message.x,
                     z: message.z,
-                    rotation: message.y,  // y field stores rotation
+                    rotation: message.y,
                     building_type: message.structure_type
                 };
                 this.onBuildingPlacedCallback(buildingMsg);
@@ -134,7 +128,7 @@ export class NetworkClient {
             console.log('My player ID:', this.playerId);
             if (message.player.id !== this.playerId) {
                 console.log('Adding player via direct call to game instance');
-                // Direct call to game instance if callback not set up yet
+
                 if (this.onPlayerJoinedCallback) {
                     console.log('Calling onPlayerJoinedCallback for player:', message.player.id);
                     this.onPlayerJoinedCallback(message.player);
@@ -156,8 +150,7 @@ export class NetworkClient {
 
         case 'player_moved':
             if (this.onPlayerMovedCallback && message.player_id !== this.playerId) {
-                // NOTE: logging every movement message (hundreds/sec) caused
-                // visible stutter, especially with DevTools open. Keep it off.
+
                 this.onPlayerMovedCallback(message);
             }
             break;
@@ -198,77 +191,77 @@ export class NetworkClient {
                 this.onScoreboardUpdateCallback(message);
             }
             break;
-            
+
         case 'round_start':
             console.log('Round started:', message);
             if (this.onRoundStartCallback) {
                 this.onRoundStartCallback(message);
             }
             break;
-            
+
         case 'round_end':
             console.log('Round ended:', message);
             if (this.onRoundEndCallback) {
                 this.onRoundEndCallback(message);
             }
             break;
-            
+
         case 'build_phase_end':
             console.log('Build phase ended');
             if (this.onBuildPhaseEndCallback) {
                 this.onBuildPhaseEndCallback(message.round_time);
             }
             break;
-            
+
         case 'bomb_planted':
             console.log('Bomb planted:', message);
             if (this.onBombPlantedCallback) {
                 this.onBombPlantedCallback(message);
             }
             break;
-            
+
         case 'bomb_defused':
             console.log('Bomb defused:', message);
             if (this.onBombDefusedCallback) {
                 this.onBombDefusedCallback(message);
             }
             break;
-            
+
         case 'bomb_exploded':
             console.log('Bomb exploded');
             if (this.onBombExplodedCallback) {
                 this.onBombExplodedCallback();
             }
             break;
-            
+
         case 'money_update':
             console.log('Money update:', message);
             if (this.onMoneyUpdateCallback) {
                 this.onMoneyUpdateCallback(message);
             }
             break;
-            
+
         case 'give_bomb':
             console.log('Player given bomb:', message);
             if (this.onGiveBombCallback) {
                 this.onGiveBombCallback(message);
             }
             break;
-            
+
         case 'bomb_dropped':
             console.log('Bomb dropped:', message);
             if (this.onBombDroppedCallback) {
                 this.onBombDroppedCallback(message);
             }
             break;
-            
+
         case 'bomb_picked_up':
             console.log('Bomb picked up:', message);
             if (this.onBombPickedUpCallback) {
                 this.onBombPickedUpCallback(message);
             }
             break;
-            
+
         case 'match_end':
             console.log('Match ended:', message);
             if (this.onMatchEndCallback) {
@@ -284,8 +277,7 @@ export class NetworkClient {
             break;
 
         case 'wall_hole':
-            // Authoritative bullet hole from the server — render it on the
-            // matching wall so every client shows the same holes.
+
             if (this.onWallHoleCallback) {
                 this.onWallHoleCallback(message);
             }
@@ -304,7 +296,7 @@ export class NetworkClient {
 
     sendMove(position, rotation) {
         if (this.isConnected()) {
-            // Position logging removed for cleaner console
+
             this.send({
                 type: 'move',
                 x: position.x,
@@ -347,7 +339,7 @@ export class NetworkClient {
             });
         }
     }
-    
+
     sendPlantBomb() {
         if (this.isConnected()) {
             this.send({
@@ -355,12 +347,12 @@ export class NetworkClient {
             });
         }
     }
-    
+
     sendPlantBombWithPosition(x, z) {
         console.log('sendPlantBombWithPosition called with:', x, z);
         console.log('Is connected?', this.isConnected());
         console.log('WebSocket state:', this.ws ? this.ws.readyState : 'no ws');
-        
+
         if (this.isConnected()) {
             const message = {
                 type: 'plant_bomb',
@@ -374,7 +366,7 @@ export class NetworkClient {
             console.error('Cannot send plant_bomb - not connected!');
         }
     }
-    
+
     sendDefuseBomb() {
         if (this.isConnected()) {
             this.send({
@@ -382,7 +374,7 @@ export class NetworkClient {
             });
         }
     }
-    
+
     sendDropBomb() {
         if (this.isConnected()) {
             this.send({
@@ -390,7 +382,7 @@ export class NetworkClient {
             });
         }
     }
-    
+
     sendPickupBomb() {
         if (this.isConnected()) {
             this.send({
@@ -398,7 +390,7 @@ export class NetworkClient {
             });
         }
     }
-    
+
     sendBuyItem(item) {
         if (this.isConnected()) {
             this.send({
@@ -409,8 +401,7 @@ export class NetworkClient {
     }
 
     createTeamLobby(playerName) {
-        // No isConnected() guard — send() now queues until the socket opens, so
-        // this works even when called immediately after connect().
+
         this.send({
             type: 'create_team_lobby',
             name: playerName
@@ -438,14 +429,12 @@ export class NetworkClient {
                 type: 'place_structure',
                 structure_type: buildingType,
                 x: position.x,
-                y: rotation, // Using y field to store rotation
+                y: rotation,
                 z: position.z
             });
         }
     }
 
-    // Tell the server a bullet punched a hole in a destructible wall. The server
-    // records it (so shots can pass through) and broadcasts it to all clients.
     sendWallHit(wallX, wallZ, localX, worldY, radius) {
         if (this.isConnected()) {
             this.send({
@@ -461,15 +450,11 @@ export class NetworkClient {
 
     send(data) {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            // Per-message send logging floods the console during movement (one
-            // 'move' per frame) and causes stutter; only log the lobby/team msgs.
+
             if (data.type !== 'move') console.log('[WS] send →', data.type, 'readyState=OPEN');
             this.ws.send(JSON.stringify(data));
         } else {
-            // Socket not open yet (still CONNECTING). Queue the message and flush
-            // it on open — otherwise early messages like create_team_lobby /
-            // join_team are silently lost, which broke the shared lobby (each
-            // window failed to register and looked solo).
+
             if (!this._pendingSends) this._pendingSends = [];
             this._pendingSends.push(data);
             console.log('[WS] QUEUED (socket not open) →', data.type,

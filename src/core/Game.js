@@ -23,7 +23,7 @@ import { ReplayRecorder } from '../game/ReplayRecorder.js';
 
 export class Game {
     constructor() {
-        ensureHudKeyframes(); // shared HUD pulse/flash animations
+        ensureHudKeyframes();
         this.renderer = null;
         this.scene = null;
         this.camera = null;
@@ -39,10 +39,9 @@ export class Game {
         this.miniMap = null;
         this.compass = null;
         this.scoreboard = null;
-        
-        // Make game instance globally available for NetworkClient
+
         window.game = this;
-        window.gameInstance = this; // Also set gameInstance for BombSystem
+        window.gameInstance = this;
         this.killFeed = null;
         this.notifications = null;
         this.ammoDisplay = null;
@@ -55,8 +54,7 @@ export class Game {
         this.kills = 0;
         this.health = 100;
         this.shield = 100;
-        
-        // Round system
+
         this.roundNumber = 1;
         this.orangeScore = 0;
         this.redScore = 0;
@@ -64,23 +62,21 @@ export class Game {
         this.isInBuildPhase = false;
         this.buildPhaseTimer = null;
         this.maxShield = 100;
-        this.shieldRegenDelay = 5000; 
-        this.shieldRegenRate = 10; 
+        this.shieldRegenDelay = 5000;
+        this.shieldRegenRate = 10;
         this.lastHitTime = 0;
         this.shieldRegenInterval = null;
-        
-        // Camera recoil
+
         this.cameraRecoil = { x: 0, y: 0 };
         this.recoilRecovery = 0.05;
-        
-        // Build mode
+
         this.isBuildMode = false;
         this.savedCameraPosition = null;
         this.savedCameraRotation = null;
-        this.buildMoney = 800; // Starting money (will be synced with server)
+        this.buildMoney = 800;
         this.selectedWallType = null;
         this.isDragModeEnabled = false;
-        this.buildWalls = []; // Track all placed walls for cleanup
+        this.buildWalls = [];
         this.isPlacingWall = false;
         this.wallStartPos = null;
         this.wallPreview = null;
@@ -88,17 +84,13 @@ export class Game {
         this.floatingWallPreview = null;
         this.globalDragHandlers = null;
         this.lastMouseMapPos = null;
-        this.currentWallRotation = 0; // Fixed rotation, changes with R key
-        // Which half of the map is the local player's, derived from spawn Z:
-        //  -1 = bottom half (z<0), +1 = top half (z>0). Set on respawn. Used by
-        // build mode to forbid placing in the ENEMY's two diagonal tunnels.
+        this.currentWallRotation = 0;
+
         this.myHalfSign = 0;
 
-        // Grid system - clean checkerboard pattern
-        this.gridSize = 20; // Grid size = wall length for perfect squares
-        this.placedWallPositions = new Set(); // Track occupied grid positions
-        
-        // Prevent cursor hide function
+        this.gridSize = 20;
+        this.placedWallPositions = new Set();
+
         this.preventCursorHide = (e) => {
             if (document.body.style.cursor === 'none' || document.body.style.cursor === '') {
                 document.body.style.cursor = 'default';
@@ -117,39 +109,34 @@ export class Game {
         this.collisionSystem = new CollisionSystem(this.scene.getScene());
         this.mapBuilder = new MapBuilder(this.scene.getScene(), this.collisionSystem);
         this.input = new InputManager();
-        
-        // Only create network if not already created
+
         if (!this.network) {
             this.network = new NetworkClient();
             this.network.connect();
-            
-            // Set up round system callbacks
+
             this.network.onRoundStartCallback = (message) => {
                 this.roundNumber = message.round_number;
                 this.orangeScore = message.orange_score;
                 this.redScore = message.red_score;
                 this.attackingTeam = message.attacking_team;
-                // Analytics: a new MATCH begins at round 1.
+
                 if (message.round_number === 1) this._track('match-started');
                 this.startBuildPhaseTimer(message.buy_time);
                 this.updateRoundDisplay();
                 console.log(`Round ${this.roundNumber} started! Build phase: ${message.buy_time}s`);
                 console.log(`Scores: Orange: ${this.orangeScore}, Red: ${this.redScore}`);
                 console.log(`Attacking team: ${this.attackingTeam}`);
-                
+
                 const doRoundRespawn = () => {
                     console.log('New round starting - force respawning player');
                     this.isAlive = true;
-                    // A new round arrived: cancel any pending post-round cleanup
-                    // and clear leftover meshes now so respawns start clean.
+
                     if (this._postRoundCleanupTimer) {
                         clearTimeout(this._postRoundCleanupTimer);
                         this._postRoundCleanupTimer = null;
                         if (this.playerManager) this.playerManager.clearAllPlayers();
                     }
-                    // Team mode is positioned by the server's player_respawned
-                    // message; only random-spawn for non-team modes. (Also: there
-                    // is no respawn() method — this previously threw.)
+
                     if (this.gameMode !== 'team') {
                         this.spawnPlayer();
                     }
@@ -159,36 +146,29 @@ export class Game {
                     console.log('Player force-respawned for new round');
                     if (this.bombSystem) {
                         this.bombSystem.clearDroppedBomb();
-                        // Clear any bomb left over from a previous round; the
-                        // server re-grants it to one attacker via give_bomb.
+
                         this.bombSystem.removeBomb();
                     }
                 };
 
-                // If the kill cam / replay is showing the killing blow, let it
-                // play out fully before respawning — otherwise the last kill of a
-                // round cuts the kill cam short the instant the next round starts.
                 const killCamActive = this.killCam && this.killCam.isActive && this.killCam.isActive();
                 if (this.replayRecorder && this.replayRecorder.isPlaying) {
                     const elapsed = performance.now() / 1000 - this.replayRecorder.replayWallStart;
                     const remaining = Math.max(0, this.replayRecorder.replayDuration - elapsed) * 1000;
-                    // Add a short hold after the replay so the final frame (and the
-                    // dead body lying on the floor) is visible before respawn.
+
                     setTimeout(doRoundRespawn, remaining + 1200);
                 } else if (killCamActive) {
-                    // Kill cam active but not replaying (e.g. spectating) — give a
-                    // brief grace period rather than yanking it immediately.
+
                     setTimeout(doRoundRespawn, 1500);
                 } else {
                     doRoundRespawn();
                 }
             };
-            
+
             this.network.onRoundEndCallback = (message) => {
                 this.orangeScore = message.orange_score;
                 this.redScore = message.red_score;
-                // Round is over — stop the Playing-phase countdown so it doesn't
-                // bleed into the next round / build phase.
+
                 this.stopRoundTimer();
                 this.updateRoundDisplay();
                 console.log(`Round ended! Winner: ${message.winner}, Reason: ${message.reason}`);
@@ -206,33 +186,26 @@ export class Game {
                 this.buildPhaseTimer = null;
                 this.updateRoundDisplay();
 
-                // Auto-exit build mode when phase ends
                 if (this.isBuildMode) {
                     this.isBuildMode = false;
                     this.exitBuildMode();
                     console.log('Exiting build mode - build phase ended');
                 }
 
-                // Start the Playing-phase round countdown (server is authoritative;
-                // this is the visual timer, defaulting to 100s if not provided).
                 this.startRoundTimer(roundTime || 100);
 
                 console.log('Build phase ended! Combat phase started!');
             };
-            
+
             this.network.onGiveBombCallback = (message) => {
                 if (message.player_id === this.network.playerId) {
                     this.bombSystem.giveBomb();
                     console.log('You have the bomb!');
                 }
             };
-            
+
             this.network.onBombDroppedCallback = (message) => {
-                // Drop at server-authoritative position. We don't apply a
-                // client-side forward throw because the local camera may
-                // not be aimed where the dropper was facing (e.g. on death
-                // the death cam has already snapped the camera elsewhere),
-                // which produced phantom bombs under remote players.
+
                 this.bombSystem.onBombDropped(message.position_x, message.position_y, message.position_z);
                 console.log('Bomb dropped at:', message.position_x, message.position_y, message.position_z);
             };
@@ -242,17 +215,16 @@ export class Game {
                 this.bombSystem.onBombPickedUp(message.player_id, isMe);
                 console.log(`${message.player_name} picked up the bomb`);
             };
-            
+
             this.network.onBombPlantedCallback = (message) => {
                 console.log(`Bomb planted by player ${message.player_id} - Timer: ${message.timer}s at position:`, message.position_x, message.position_z);
                 if (this.bombSystem) {
-                    const position = { 
-                        x: message.position_x || 0, 
-                        z: message.position_z || 0 
+                    const position = {
+                        x: message.position_x || 0,
+                        z: message.position_z || 0
                     };
                     this.bombSystem.onBombPlanted(message.timer, position);
 
-                    // If this player planted the bomb, remove it from their hand
                     if (message.player_id === this.network.playerId) {
                         this.bombSystem.onLocalBombPlanted();
                         console.log('Bomb removed from local player hand after server confirmation');
@@ -284,7 +256,7 @@ export class Game {
                 console.log('Halftime — resetting map (clearing built walls)');
                 this.clearBuildWalls();
             };
-            // Authoritative bullet holes from the server (other players' shots).
+
             this.network.onWallHole((message) => this.applyServerWallHole(message));
         }
 
@@ -295,11 +267,8 @@ export class Game {
         this.weaponSystem = new RifleWeapon(this.camera.getCamera(), this.scene.getScene(), this.playerTeam);
         this.bombSystem = new BombSystem(this.camera.getCamera(), this.scene.getScene());
 
-        
         document.getElementById('gameContainer').appendChild(this.renderer.getRenderer().domElement);
 
-        // F8 toggles the live performance overlay (FPS / frame time / draw calls).
-        // Handy while CPU/GPU-throttling in DevTools to simulate a weak laptop.
         document.addEventListener('keydown', (e) => {
             if (e.code === 'F8') { e.preventDefault(); this.togglePerfOverlay(); }
         });
@@ -310,24 +279,18 @@ export class Game {
 
     setupSystems() {
         this.lighting.setupLights();
-        
-        // Build appropriate map based on game mode
+
         const mapType = this.gameMode === 'team' ? 'orangePlanet' : 'city';
         console.log('Building map with type:', mapType);
         this.mapBuilder.buildMap(mapType);
-        
+
         this.input.setupControls(this.camera.getCamera());
         this.input.setCollisionSystem(this.collisionSystem);
 
-        
         this.miniMap = new SimpleMiniMap(this.scene.getScene(), this.renderer.getRenderer());
         this.compass = new Compass();
         this.scoreboard = new Scoreboard();
 
-        // One shared notification COLUMN, right of the round counter. Everything
-        // stacks in flow (no fixed-top gaps): round-end banner first, then live
-        // notifications, then the kill feed directly underneath. So when a round
-        // result is showing, the kill feed sits right under it — no empty space.
         this.notifColumn = document.createElement('div');
         this.notifColumn.id = 'notifColumn';
         this.notifColumn.style.cssText = `
@@ -343,8 +306,6 @@ export class Game {
         `;
         document.body.appendChild(this.notifColumn);
 
-        // Order in column: notifications above, kill feed below (banner is
-        // inserted at the very top on demand by showRoundEndMessage).
         this.notifications = new NotificationFeed(this.notifColumn);
         this.killFeed = new KillFeed(this.notifColumn);
         this.ammoDisplay = new AmmoDisplay();
@@ -375,26 +336,15 @@ export class Game {
             recorder: this.replayRecorder,
             onHitmarker: () => this.showHitmarker(),
         });
-        
-        // Money system
-        this.playerMoney = 800; // Starting money (will be synced from server)
-        this.buildMoney = 800; // Make sure build money is also initialized
+
+        this.playerMoney = 800;
+        this.buildMoney = 800;
         this.createMoneyDisplay();
 
-        
-        
-
-
-        
         this.network.onPlayerJoined((player) => this.playerManager.addPlayer(player));
         this.network.onPlayerLeft((playerId) => this.playerManager.removePlayer(playerId));
         this.network.onPlayerMoved((message) => {
-            // During the build phase nobody can legitimately move (the sender
-            // blocks its own movement in handleMove). Any player_moved that
-            // arrives now is a stale/in-flight update from the previous round
-            // that would drag a freshly respawned model back to last round's
-            // kill spot. Discard it — the authoritative build-phase positions
-            // come from player_respawned.
+
             if (this.gameMode === 'team' && this.isInBuildPhase) {
                 return;
             }
@@ -408,11 +358,9 @@ export class Game {
         this.network.onShieldUpdate((message) => this.handleShieldUpdate(message));
         this.network.onMoneyUpdate((message) => this.handleMoneyUpdate(message));
         this.network.onScoreboardUpdate((data) => this.handleScoreboardUpdate(data));
-        
-        // Process any players that arrived before PlayerManager was ready
+
         this.network.processPendingPlayers();
 
-        
         this.input.onShoot(() => this.handleShoot());
         this.input.onMove((position, rotation) => this.handleMove(position, rotation));
         this.input.onScoreboard((show) => this.handleScoreboard(show));
@@ -427,7 +375,6 @@ export class Game {
         this.input.onDefuseStop(() => this.handleDefuseStop());
     }
 
-    // Fade one full-screen onboarding screen out and the next one in.
     transitionScreen(fromId, toId) {
         const from = document.getElementById(fromId);
         const to = document.getElementById(toId);
@@ -439,14 +386,11 @@ export class Game {
             }, 380);
         }
         if (to) {
-            // small delay so the fade-out reads before fade-in
+
             setTimeout(() => { to.style.display = 'flex'; to.classList.add('show'); }, 180);
         }
     }
 
-    // Animated "joining match" loader: lights up each step, waits for the server
-    // lobby, then transitions into team selection. Purely visual pacing over the
-    // real connection (the lobby is created in parallel from setupNameScreen).
     runJoinLoader() {
         const steps = Array.from(document.querySelectorAll('#loadingSteps li'));
         const hint = document.getElementById('loadingHint');
@@ -460,9 +404,7 @@ export class Game {
             if (hint && hints[i]) hint.textContent = hints[i];
         };
         advance();
-        // Only ever transition to team select ONCE — otherwise the safety timer
-        // below could re-show the team screen on top of a game that already
-        // started (the bug: team-select reappeared after clicking Start match).
+
         let transitioned = false;
         const goToTeamSelect = () => {
             if (transitioned || this.gameStarted) return;
@@ -473,7 +415,7 @@ export class Game {
             i++;
             if (i >= steps.length) {
                 clearInterval(tick);
-                // Wait until the server lobby is ready (usually already is), then go.
+
                 const waitLobby = setInterval(() => {
                     if (this._lobbyReady) {
                         clearInterval(waitLobby);
@@ -483,8 +425,7 @@ export class Game {
                         setTimeout(goToTeamSelect, 400);
                     }
                 }, 100);
-                // Safety: never hang on the loader — but goToTeamSelect() no-ops
-                // if we already transitioned or the game has started.
+
                 this._loaderSafety = setTimeout(() => { clearInterval(waitLobby); goToTeamSelect(); }, 4000);
                 return;
             }
@@ -496,10 +437,8 @@ export class Game {
         const nameInput = document.getElementById('playerName');
         const joinButton = document.getElementById('joinGame');
 
-        // Autofocus the name field.
         setTimeout(() => nameInput.focus(), 100);
 
-        // Light up the arrow only once a name is typed.
         const refreshArrow = () => joinButton.classList.toggle('ready', nameInput.value.trim().length > 0);
         nameInput.addEventListener('input', refreshArrow);
         refreshArrow();
@@ -510,45 +449,37 @@ export class Game {
                 this.playerName = name;
                 this._track('name-entered');
                 const yn = document.getElementById('yourName'); if (yn) yn.textContent = name;
-                // Smoothly transition name -> animated loader -> team select.
+
                 this.transitionScreen('nameScreen', 'loadingScreen');
                 this.runJoinLoader();
 
-                // Initialize network early for team lobby creation
                 if (!this.network) {
                     this.network = new NetworkClient();
                     this.network.connect();
-                    
-                    // Set up round system callbacks HERE for team games
+
                     this.network.onRoundStartCallback = (message) => {
                         this.roundNumber = message.round_number;
                         this.orangeScore = message.orange_score;
                         this.redScore = message.red_score;
                         this.attackingTeam = message.attacking_team;
-                        // Analytics: a new MATCH begins at round 1.
+
                         if (message.round_number === 1) this._track('match-started');
                         this.startBuildPhaseTimer(message.buy_time);
                         this.updateRoundDisplay();
                         console.log(`Round ${this.roundNumber} started! Build phase: ${message.buy_time}s`);
                         console.log(`Scores: Orange: ${this.orangeScore}, Red: ${this.redScore}`);
                         console.log(`Attacking team: ${this.attackingTeam}`);
-                        
+
                         const doRoundRespawn = () => {
                             console.log('New round starting - force respawning player');
                             this.isAlive = true;
-                            // A new round arrived: cancel any pending post-round
-                            // cleanup and clear leftover meshes now.
+
                             if (this._postRoundCleanupTimer) {
                                 clearTimeout(this._postRoundCleanupTimer);
                                 this._postRoundCleanupTimer = null;
                                 if (this.playerManager) this.playerManager.clearAllPlayers();
                             }
-                            // In team mode the authoritative spawn position comes
-                            // from the server's player_respawned message (handled in
-                            // handlePlayerRespawned, which places the camera at the
-                            // team-based spawn). Calling spawnPlayer() here would pick
-                            // a RANDOM local spawn point and clobber that, which made
-                            // both players land on the same spawn from round 2 on.
+
                             if (this.gameMode !== 'team') {
                                 this.spawnPlayer();
                             }
@@ -559,8 +490,7 @@ export class Game {
 
                             if (this.bombSystem) {
                                 this.bombSystem.clearDroppedBomb();
-                                // Clear any bomb left over from a previous round;
-                                // the server re-grants it to one attacker via give_bomb.
+
                                 this.bombSystem.removeBomb();
                             }
                         };
@@ -576,7 +506,7 @@ export class Game {
                             doRoundRespawn();
                         }
                     };
-                    
+
                     this.network.onRoundEndCallback = (message) => {
                         this.orangeScore = message.orange_score;
                         this.redScore = message.red_score;
@@ -596,47 +526,44 @@ export class Game {
                         this.isInBuildPhase = false;
                         this.buildPhaseTimer = null;
                         this.updateRoundDisplay();
-                        
-                        // Auto-exit build mode when phase ends
+
                         if (this.isBuildMode) {
                             this.isBuildMode = false;
                             this.exitBuildMode();
                             console.log('Exiting build mode - build phase ended');
                         }
-                        
+
                         console.log('Build phase ended! Combat phase started!');
                     };
-                    
+
                     this.network.onGiveBombCallback = (message) => {
                         if (message.player_id === this.network.playerId) {
                             this.bombSystem.giveBomb();
                             console.log('You have the bomb!');
                         }
                     };
-                    
+
                     this.network.onBombDroppedCallback = (message) => {
-                        // Drop at server-authoritative position only — see
-                        // the comment on the other onBombDroppedCallback above.
+
                         this.bombSystem.onBombDropped(message.position_x, message.position_y, message.position_z);
                         console.log('Bomb dropped at:', message.position_x, message.position_y, message.position_z);
                     };
-                    
+
                     this.network.onBombPickedUpCallback = (message) => {
                         const isMe = message.player_id === this.network.playerId;
                         this.bombSystem.onBombPickedUp(message.player_id, isMe);
                         console.log(`${message.player_name} picked up the bomb`);
                     };
-                    
+
                     this.network.onBombPlantedCallback = (message) => {
                         console.log(`Bomb planted by player ${message.player_id} - Timer: ${message.timer}s at position:`, message.position_x, message.position_z);
                         if (this.bombSystem) {
-                            const position = { 
-                                x: message.position_x || 0, 
-                                z: message.position_z || 0 
+                            const position = {
+                                x: message.position_x || 0,
+                                z: message.position_z || 0
                             };
                             this.bombSystem.onBombPlanted(message.timer, position);
 
-                            // If this player planted the bomb, remove it from their hand
                             if (message.player_id === this.network.playerId) {
                                 this.bombSystem.onLocalBombPlanted();
                                 console.log('Bomb removed from local player hand after server confirmation');
@@ -665,13 +592,10 @@ export class Game {
                         console.log('Halftime — resetting map (clearing built walls)');
                         this.clearBuildWalls();
                     };
-                    // Authoritative bullet holes from the server (other players' shots).
+
                     this.network.onWallHole((message) => this.applyServerWallHole(message));
                 }
 
-                // Skip the old mode-select step: it's always Team vs Team. Create
-                // the team lobby now; the team-select screen appears via the
-                // onTeamLobbyCreated callback once the loader finishes.
                 this.network.createTeamLobby(this.playerName);
                 this.setupTeamSelection();
             }
@@ -699,36 +623,31 @@ export class Game {
     setupTeamSelection() {
         this.selectedTeam = null;
         this.teamPlayers = { orange: [], red: [] };
-        
-        // Only set up callbacks and listeners once
+
         if (!this.teamListenersSetup) {
             this.teamListenersSetup = true;
-            
-            // Set up network callbacks for team updates
+
             this.network.onTeamLobbyCreated((message) => {
-                // Lobby is ready: mark the loader's final step done, then glide
-                // from the loader into team selection.
+
                 this._lobbyReady = true;
                 console.log('Team lobby created:', message.lobby_id);
             });
-            
+
             this.network.onTeamUpdate((message) => {
                 console.log('Team update received:', message);
                 this.teamPlayers.orange = message.orange_team;
                 this.teamPlayers.red = message.red_team;
-                // Keep a player_id -> team map so placed walls can be colored by
-                // the team that built them (the wall message only carries player_id).
+
                 if (!this.playerTeams) this.playerTeams = {};
                 (message.orange_team || []).forEach((p) => { if (p && p.id) this.playerTeams[p.id] = 'orange'; });
                 (message.red_team || []).forEach((p) => { if (p && p.id) this.playerTeams[p.id] = 'red'; });
                 this.updateTeamDisplay();
                 this.updateStartButton(message.can_start);
             });
-            
+
             this.network.onGameStarted((message) => {
                 if (message.game_mode === 'team') {
-                    // Cancel any pending loader→team-select transition so the
-                    // team screen can't pop back up over the running game.
+
                     if (this._loaderSafety) { clearTimeout(this._loaderSafety); this._loaderSafety = null; }
                     ['nameScreen', 'loadingScreen', 'teamSelectionScreen'].forEach((id) => {
                         const el = document.getElementById(id);
@@ -741,29 +660,26 @@ export class Game {
                         this.playerManager.setGameMode(this.gameMode);
                         this.playerManager.setLocalTeam(this.playerTeam);
                     }
-                    
-                    // Initialize round counter for team games
+
                     this.roundNumber = 1;
                     this.orangeScore = 0;
                     this.redScore = 0;
                     this.updateRoundDisplay();
-                    
+
                     this.startGame();
                 }
             });
-            
-            // Team join buttons
+
             document.getElementById('joinOrangeTeam').addEventListener('click', () => {
                 console.log('Joining orange team...');
                 this.joinTeam('orange');
             });
-            
+
             document.getElementById('joinRedTeam').addEventListener('click', () => {
                 console.log('Joining red team...');
                 this.joinTeam('red');
             });
-            
-            // Start game button
+
             document.getElementById('startTeamGame').addEventListener('click', () => {
                 if (this.selectedTeam) {
                     console.log('Starting team game...');
@@ -771,24 +687,22 @@ export class Game {
                 }
             });
         }
-        
+
         this.updateTeamDisplay();
     }
-    
+
     joinTeam(team) {
         console.log('joinTeam called with:', team);
         this.selectedTeam = team;
         this.network.joinTeam(team);
-        // Instant UI feedback for the local picker (highlight/grow the chosen
-        // half). The ROSTERS + start button stay server-driven (onTeamUpdate),
-        // so every player in the lobby sees the same authoritative state.
+
         this.updateTeamDisplay();
         console.log('Sent join team request for:', team);
     }
-    
+
     updateTeamDisplay() {
         const myName = this.playerName;
-        // Build a roster of player chips (only filled — no permanent empty slots).
+
         const renderRoster = (containerId, players) => {
             const el = document.getElementById(containerId);
             if (!el) return;
@@ -810,7 +724,6 @@ export class Game {
         renderRoster('orangeTeamSlots', this.teamPlayers.orange);
         renderRoster('redTeamSlots', this.teamPlayers.red);
 
-        // Highlight the half the local player picked.
         const orangeHalf = document.getElementById('joinOrangeTeam');
         const navyHalf = document.getElementById('joinRedTeam');
         const screen = document.getElementById('teamSelectionScreen');
@@ -818,7 +731,6 @@ export class Game {
         if (navyHalf) navyHalf.classList.toggle('selected', this.selectedTeam === 'red');
         if (screen) screen.classList.toggle('has-pick', !!this.selectedTeam);
 
-        // Status line ('red' is internally the Navy team).
         const statusElement = document.getElementById('teamStatus');
         if (statusElement) {
             statusElement.textContent = this.selectedTeam
@@ -826,95 +738,66 @@ export class Game {
                 : 'Pick a side to join';
         }
     }
-    
+
     canStartGame() {
         return this.teamPlayers.orange.length > 0 || this.teamPlayers.red.length > 0;
     }
-    
+
     updateStartButton(canStart = false) {
         const startButton = document.getElementById('startTeamGame');
-        // Enabled vs disabled styling is handled entirely by the .rsgo-btn CSS
-        // (orange fill when enabled, hollow navy/orange when disabled) so we only
-        // toggle the disabled flag — no off-palette colors.
+
         startButton.disabled = !(this.selectedTeam && canStart);
     }
-    
 
     startGame() {
         if (!this.gameStarted) {
             this.gameStarted = true;
             this.initialize();
 
-            
             this.updateHealthDisplay();
             this.updateKillCounter();
 
-            
             setTimeout(() => {
-                // Only join deathmatch lobby if we're in deathmatch mode
+
                 if (this.gameMode === 'deathmatch' && this.network.isConnected()) {
                     this.network.joinGame(this.playerName);
-                    // Deathmatch uses random spawn
+
                     this.spawnPlayer();
                 }
-                // Team mode players don't spawn yet - wait for server to send spawn position
+
             }, 200);
         }
     }
 
-    // ===== SPAWN INTRO CINEMATIC =====
-    // A ~6s fly-through that plays once on the first spawn of the match: high
-    // bird's-eye over the whole map → orbit showing the skyline → swoop down to the
-    // player's spawn, then hand off to first-person. Camera-only eye-candy; input is
-    // suspended (see the _introPlaying gate in animate()), no gameplay/server impact.
     startIntroCinematic(spawnPos, spawnYaw) {
         const cam = this.camera.getCamera();
 
-        // Facing direction at the spawn (where first-person will look) = toward map
-        // center. The camera should arrive looking that way for a seamless handoff.
         const lookDir = new THREE.Vector3(-Math.sin(spawnYaw), 0, -Math.cos(spawnYaw));
 
-        // Path keyframes (camera positions). Catmull-Rom smooths them into a curve.
-        //  A: high above map center (bird's-eye establishing shot)
-        //  B: descend toward the player's side, off to one side (orbit feel)
-        //  C: closer, swinging in behind the spawn
-        //  D: the exact spawn position (eye height) — seamless first-person handoff
-        const side = Math.sign(spawnPos.z) || -1; // player's half
+        const side = Math.sign(spawnPos.z) || -1;
         const A = new THREE.Vector3(0, 620, 40);
         const B = new THREE.Vector3(side * -260, 380, side * 120);
         const C = new THREE.Vector3(spawnPos.x - lookDir.x * 220, 150, spawnPos.z - lookDir.z * 220);
         const D = spawnPos.clone();
         this._introCurve = new THREE.CatmullRomCurve3([A, B, C, D], false, 'catmullrom', 0.5);
 
-        // Look-at targets per phase: start gazing at the map center, end looking the
-        // same way first-person will (so the final frame matches the handoff exactly).
         this._introLookStart = new THREE.Vector3(0, 0, 0);
         this._introLookEnd = spawnPos.clone().add(lookDir.clone().multiplyScalar(60));
-        this._introLookEnd.y = spawnPos.y; // level gaze at the end
+        this._introLookEnd.y = spawnPos.y;
 
-        this._introDuration = 6000; // ms
-        this._introStartMs = null;   // set on the first update frame (after warm-up)
+        this._introDuration = 6000;
+        this._introStartMs = null;
         this._introWarmup = 0;
         this._introSpawnPos = spawnPos.clone();
         this._introSpawnYaw = spawnYaw;
         this._introPlaying = true;
 
-        // Defer building remote-player models until the cinematic ends — adding a
-        // skinned character mid-flight is a ~250ms hitch. They're not visible from
-        // the air anyway.
         if (this.playerManager) this.playerManager.deferAdds = true;
 
-        // Hide the HUD during the cinematic so it reads as a clean fly-through.
         this._setHudVisibleForIntro(false);
 
-        // Show the intro-only decor (trees / markings / props / glow strips) so the
-        // aerial view looks alive. Hidden again when we land (see finishIntroCinematic).
         if (this.mapBuilder && this.mapBuilder.introDecor) this.mapBuilder.introDecor.visible = true;
 
-        // Place the camera at the very start so there's no first-frame pop. The
-        // timeline clock starts on the first update frame after a short warm-up (see
-        // updateIntroCinematic) so any first-frame render hitch happens before the
-        // flight begins, not during it.
         cam.position.copy(A);
         cam.lookAt(this._introLookStart);
     }
@@ -922,35 +805,25 @@ export class Game {
     updateIntroCinematic() {
         const cam = this.camera.getCamera();
 
-        // Re-assert the HUD-hidden state every frame: various per-frame update
-        // functions (ammo, health, bomb indicator) re-show their elements, so a
-        // one-time hide isn't enough — keep them hidden for the whole cinematic.
         this._setHudVisibleForIntro(false);
 
-        // Warm-up: hold on the very first frames so any first-frame hitch (shader
-        // compile / texture upload that happens when these objects first render)
-        // occurs BEFORE the timeline starts — then the flight itself is smooth.
         if (this._introStartMs === null) {
             this._introWarmup = (this._introWarmup || 0) + 1;
-            // Keep the camera parked at the start; render a few frames first.
+
             cam.position.copy(this._introCurve.getPoint(0));
             cam.lookAt(this._introLookStart);
-            if (this._introWarmup < 3) return;   // ~3 frames of warm-up
-            this._introStartMs = performance.now(); // NOW start the clock
+            if (this._introWarmup < 3) return;
+            this._introStartMs = performance.now();
             this._introWarmup = 0;
         }
 
         const t = Math.min(1, (performance.now() - this._introStartMs) / this._introDuration);
 
-        // Ease in-out so it accelerates off the establishing shot and gently lands.
         const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 
-        // Position along the curve.
         const p = this._introCurve.getPoint(e);
         cam.position.copy(p);
 
-        // Blend the look-at target from map-center to the spawn-forward target,
-        // weighted toward the end so the last second settles into the play view.
         const lookT = Math.min(1, e * 1.15);
         const look = this._introLookStart.clone().lerp(this._introLookEnd, lookT);
         cam.lookAt(look);
@@ -960,8 +833,8 @@ export class Game {
 
     finishIntroCinematic() {
         this._introPlaying = false;
-        this._introDone = true; // the build prompt may appear from now on
-        // Snap to the exact first-person spawn pose so control resumes seamlessly.
+        this._introDone = true;
+
         const cam = this.camera.getCamera();
         cam.position.copy(this._introSpawnPos);
         this.input.yaw = this._introSpawnYaw;
@@ -970,69 +843,57 @@ export class Game {
         cam.quaternion.copy(q);
         cam.updateMatrixWorld();
         this._setHudVisibleForIntro(true);
-        this._hudPrevDisplay = null; // reset for any future use
-        // Build any remote players that were deferred during the cinematic (the
-        // ~250ms character-build hitch now happens in first-person, where a brief
-        // hiccup right at spawn is far less noticeable than during the smooth flight).
+        this._hudPrevDisplay = null;
+
         if (this.playerManager) this.playerManager.flushDeferredPlayers();
-        // Now that the cinematic is over, show the "press B to build" prompt if the
-        // build phase is still running (it was suppressed during the intro).
+
         this.updateBuildPrompt();
-        // Hide the intro-only decor now that we're in first-person play.
+
         if (this.mapBuilder && this.mapBuilder.introDecor) this.mapBuilder.introDecor.visible = false;
-        // free the temp objects
+
         this._introCurve = null;
     }
 
-    // Show/hide gameplay HUD elements during the intro for a clean cinematic.
-    // Hide/show the gameplay HUD for a cinematic. `keepPovWeapon` (used by the kill
-    // cam) keeps the CROSSHAIR + WEAPON viewmodel visible, since the kill cam shows
-    // the killer's point of view — you want to see "their" gun + reticle. The intro
-    // hides everything (keepPovWeapon = false).
     _setHudVisibleForIntro(visible, keepPovWeapon = false) {
-        // The full HUD — everything hidden for a clean cinematic. We remember each
-        // element's ORIGINAL display value so showing it again restores flex/grid/etc.
-        // (a blanket display='' would turn a flex container into block).
+
         const ids = [
-            'roundContainer',         // round / score / timer box
-            'healthContainer',        // health + shield bars
-            'killCounter',            // kill count pill
-            'simple-minimap',         // minimap box
-            'minimap-player-arrow',   // minimap player arrow (separate fixed element)
-            'compass-container',      // compass strip
-            'compass-center-line',    // compass middle line (separate fixed element)
-            'compass-left-fade',      // compass edge fades (separate)
+            'roundContainer',
+            'healthContainer',
+            'killCounter',
+            'simple-minimap',
+            'minimap-player-arrow',
+            'compass-container',
+            'compass-center-line',
+            'compass-left-fade',
             'compass-right-fade',
-            'compass-degree-display', // compass heading number (e.g. "0°")
-            'ammoContainer',          // ammo display
-            'bombIndicator',          // bomb-carrier box
-            'bombDropPrompt',         // bomb drop prompt
-            'notifColumn',            // notifications + kill feed column
+            'compass-degree-display',
+            'ammoContainer',
+            'bombIndicator',
+            'bombDropPrompt',
+            'notifColumn',
         ];
-        // The crosshair is hidden for the intro but KEPT for the kill cam POV.
+
         if (!keepPovWeapon) ids.push('crosshair');
         if (!this._hudPrevDisplay) this._hudPrevDisplay = {};
         ids.forEach((id) => {
             const el = document.getElementById(id);
             if (!el) return;
             if (visible) {
-                // restore what it was before we hid it (default '' if unknown)
+
                 el.style.display = (id in this._hudPrevDisplay) ? this._hudPrevDisplay[id] : '';
             } else {
-                // Record the ORIGINAL display only the FIRST time we hide it (this
-                // runs every frame; don't overwrite the saved value with 'none').
+
                 if (!(id in this._hudPrevDisplay)) this._hudPrevDisplay[id] = el.style.display;
                 el.style.display = 'none';
             }
         });
         if (this.ammoDisplay) { visible ? this.ammoDisplay.show() : this.ammoDisplay.hide(); }
-        // Weapon viewmodel: shown normally, AND kept during the kill cam (POV gun).
+
         if (this.weaponSystem) {
             if (visible || keepPovWeapon) this.weaponSystem.show();
             else this.weaponSystem.hide();
         }
-        // Make sure the crosshair is actually visible during the kill cam (it may
-        // have been hidden by an earlier full-hide).
+
         if (keepPovWeapon && !visible) {
             const cx = document.getElementById('crosshair');
             if (cx) cx.style.display = '';
@@ -1044,7 +905,6 @@ export class Game {
         const spawnPoint = this.camera.spawnPoints[spawnIndex];
         this.camera.getCamera().position.set(spawnPoint.x, spawnPoint.y, spawnPoint.z);
 
-        // Initialize physics state
         if (this.input) {
             this.input.velocity.set(0, 0, 0);
             this.input.onGround = true;
@@ -1055,20 +915,18 @@ export class Game {
         this.input.pitch = 0;
 
         this.camera.getCamera().updateMatrixWorld();
-        
-        // Bomb is given by server in team games
-        
+
         console.log('🎯 Player spawned at:', spawnPoint);
         console.log('📍 Total spawn points available:', this.camera.spawnPoints.length);
         console.log('🎲 Selected spawn index:', spawnIndex);
     }
 
     handleMove(position, rotation) {
-        // Block movement during build phase in team mode
+
         if (this.gameMode === 'team' && this.isInBuildPhase) {
-            return; // Don't move during build phase
+            return;
         }
-        
+
         if (this.network && this.gameStarted && this.isAlive) {
             const trueRotation = {
                 x: this.input ? this.input.pitch : (rotation.x || 0),
@@ -1079,32 +937,29 @@ export class Game {
     }
 
     handleShoot() {
-        // Disable shooting in build mode or build phase
+
         if (this.isBuildMode) {
             return;
         }
-        
-        // Disable shooting during build phase in team mode
+
         if (this.gameMode === 'team' && this.isInBuildPhase) {
-            return; // Can't shoot during build phase
+            return;
         }
-        
-        // Disable shooting if bomb is equipped
+
         if (this.bombSystem && this.bombSystem.isEquipped) {
             return;
         }
-        
+
         if (this.network && this.gameStarted && this.isAlive) {
-            // Check if weapon can shoot
+
             if (!this.weaponSystem || !this.weaponSystem.canShoot()) {
-                // Show low ammo warning if empty
+
                 if (this.weaponSystem && this.weaponSystem.currentAmmo === 0) {
                     this.ammoDisplay.showLowAmmoWarning();
                 }
                 return;
             }
 
-            // Shoot the weapon (consumes ammo, adds recoil)
             if (this.weaponSystem.shoot()) {
                 const cameraDir = new THREE.Vector3();
                 this.camera.getCamera().getWorldDirection(cameraDir);
@@ -1140,7 +995,7 @@ export class Game {
             }
         }
     }
-    
+
     handleReload() {
         if (this.weaponSystem && this.gameStarted && this.isAlive) {
             if (this.weaponSystem.startReload()) {
@@ -1148,53 +1003,53 @@ export class Game {
             }
         }
     }
-    
+
     handleBombToggle() {
         if (this.bombSystem && this.gameStarted && this.isAlive) {
             const isEquipped = this.bombSystem.toggleBomb();
             if (isEquipped) {
-                // Hide weapon when bomb is equipped
+
                 if (this.weaponSystem) {
                     this.weaponSystem.hide();
                 }
             } else {
-                // Show weapon when bomb is unequipped
+
                 if (this.weaponSystem) {
                     this.weaponSystem.show();
                 }
             }
         }
     }
-    
+
     handleBombDrop() {
-        // Only allow dropping bomb when it's equipped (visible)
+
         if (this.bombSystem && this.bombSystem.hasBomb && this.bombSystem.isEquipped && this.gameStarted && this.isAlive) {
-            // Send drop bomb request to server
+
             this.network.sendDropBomb();
             console.log('Dropping bomb...');
         } else if (this.bombSystem && this.bombSystem.hasBomb && !this.bombSystem.isEquipped) {
             console.log('Equip bomb with T first before dropping');
         }
     }
-    
+
     handleBombPickup() {
         console.log(`Pickup attempt: canPickup=${this.bombSystem?.canPickupBomb}, gameStarted=${this.gameStarted}, isAlive=${this.isAlive}`);
         if (this.bombSystem && this.bombSystem.canPickupBomb && this.gameStarted && this.isAlive) {
-            // Send pickup bomb request to server
+
             this.network.sendPickupBomb();
             console.log('Attempting to pick up bomb...');
         } else {
             console.log('Cannot pickup bomb - conditions not met');
         }
     }
-    
+
     handleBombPlantStart() {
         if (this.bombSystem && this.gameStarted && this.isAlive) {
             if (this.bombSystem.isEquipped && !this.bombSystem.isPlanting) {
-                // Start planting with progress
+
                 this.bombSystem.startPlanting((progress) => {
                     if (progress >= 1.0) {
-                        // BombSystem.completePlanting() will handle sending to server
+
                         console.log('Bomb planting complete - sending to server...');
                     }
                 });
@@ -1202,7 +1057,7 @@ export class Game {
             }
         }
     }
-    
+
     handleBombPlantStop() {
         if (this.bombSystem && this.gameStarted && this.isAlive) {
             this.bombSystem.cancelPlanting();
@@ -1211,14 +1066,14 @@ export class Game {
 
     handleDefuseStart() {
         if (!this.bombSystem || !this.gameStarted || !this.isAlive) return;
-        // Only the DEFENDING team can defuse. Defender = not on the attacking team.
+
         if (this.gameMode === 'team' &&
             this.attackingTeam &&
             this.playerTeam &&
             this.playerTeam === this.attackingTeam) {
-            return; // attacker can't defuse
+            return;
         }
-        // Only meaningful once a bomb is actually planted.
+
         if (!this.bombSystem.bombPlanted) return;
         this.bombSystem.startDefusing();
     }
@@ -1251,7 +1106,6 @@ export class Game {
         const endPos = new THREE.Vector3(message.target_x, message.target_y, message.target_z);
         this.bulletSystem.createBullet(startPos, endPos, false);
 
-        // Trigger the shooter's firing animation on their player model.
         if (this.playerManager) {
             this.playerManager.playerShoot(shooterId);
         }
@@ -1261,45 +1115,36 @@ export class Game {
         const playerPosition = this.camera.getPosition();
         const shootDirection = new THREE.Vector3().subVectors(target, playerPosition).normalize();
 
-        
         const raycaster = new THREE.Raycaster();
         raycaster.set(playerPosition, shootDirection);
-        raycaster.far = 1000; 
-        
+        raycaster.far = 1000;
+
         raycaster.camera = this.camera.getCamera();
 
-        
-
-        
         let closestHit = null;
         let closestDistance = Infinity;
 
         this.playerManager.otherPlayers.forEach((player, playerId) => {
             const playerPos = player.mesh.position;
             const distanceToPlayer = playerPosition.distanceTo(playerPos);
-            
 
-            
             const intersects = raycaster.intersectObject(player.mesh, true);
 
             if (intersects.length > 0) {
                 const distance = intersects[0].distance;
-
 
                 if (distance < closestDistance) {
                     closestDistance = distance;
                     closestHit = { playerId, player, distance };
                 }
             } else {
-                
 
-                
-                if (distanceToPlayer <= 3) { 
+                if (distanceToPlayer <= 3) {
                     const directionToPlayer = new THREE.Vector3().subVectors(playerPos, playerPosition).normalize();
                     const dot = shootDirection.dot(directionToPlayer);
 
-                    if (dot > 0.9) { 
-                        
+                    if (dot > 0.9) {
+
                         if (distanceToPlayer < closestDistance) {
                             closestDistance = distanceToPlayer;
                             closestHit = { playerId, player, distance: distanceToPlayer };
@@ -1309,17 +1154,10 @@ export class Game {
             }
         });
 
-        
         if (closestHit) {
-            
 
-            
-            // WALL OCCLUSION (mirrors the server): if a wall sits between us and
-            // the player, the shot is blocked — don't show a hitmarker, don't
-            // predict damage/death locally. The server would reject it anyway, so
-            // predicting it caused ghost hitmarkers + fake death animations.
             if (this.isShotBlockedByWall(playerPosition, shootDirection, closestHit.distance)) {
-                this.checkWallHit(playerPosition, shootDirection); // still punch the hole / show impact
+                this.checkWallHit(playerPosition, shootDirection);
                 return null;
             }
 
@@ -1334,13 +1172,8 @@ export class Game {
         this.checkWallHit(playerPosition, shootDirection);
         return null;
 
-
     }
 
-    // Is a wall between the shooter and a player at `playerDistance` along the
-    // shot? Raycasts map walls + placed build walls. A destructible wall does NOT
-    // block if the bullet passes through one of its existing holes (consistent
-    // with the server's hole logic).
     isShotBlockedByWall(from, dir, playerDistance) {
         const raycaster = new THREE.Raycaster();
         raycaster.set(from, dir);
@@ -1355,13 +1188,13 @@ export class Game {
 
         const hits = raycaster.intersectObjects(walls);
         for (const hit of hits) {
-            if (hit.distance >= playerDistance) break; // wall is behind the player
+            if (hit.distance >= playerDistance) break;
             const wall = hit.object;
-            // Destructible wall: a shot through an existing hole isn't blocked.
+
             if (wall.userData.isDestructible && this.checkBulletThroughHole(wall, hit.point)) {
                 continue;
             }
-            return true; // a solid wall is in the way
+            return true;
         }
         return false;
     }
@@ -1371,7 +1204,6 @@ export class Game {
         raycaster.set(shooterPos, shootDirection);
         raycaster.far = 1000;
 
-        // Get all objects in the scene
         const allObjects = [];
         this.scene.getScene().traverse((child) => {
             if (child.isMesh && child.userData.isDestructible) {
@@ -1379,66 +1211,54 @@ export class Game {
             }
         });
 
-        // Find the closest destructible wall hit
         const intersects = raycaster.intersectObjects(allObjects);
-        
+
         if (intersects.length > 0) {
             const hit = intersects[0];
             const wall = hit.object;
-            
-            // Check if bullet is going through an existing hole
+
             const bulletPassesThrough = this.checkBulletThroughHole(wall, hit.point);
-            
+
             if (!bulletPassesThrough) {
-                // Create bullet hole at the hit position
+
                 this.createBulletHole(wall, hit.point, hit.face.normal);
             } else {
                 console.log('Bullet passed through existing hole!');
-                
-                // Visual feedback for bullet passing through
+
                 this.createBulletPassThroughEffect(hit.point);
-                
-                // Bullet passes through - continue checking for hits beyond this wall
+
                 this.checkBulletBeyondWall(shooterPos, shootDirection, hit.distance);
             }
         }
     }
 
     createBulletHole(wall, hitPoint, normal) {
-        // Initialize bulletHoles array if it doesn't exist
+
         if (!wall.userData.bulletHoles) {
             wall.userData.bulletHoles = [];
         }
-        
-        // MAXIMUM 2 HOLES - after that, create decals instead
+
         if (wall.userData.bulletHoles.length >= 2) {
             console.log('🎯 Wall has 2 holes - creating decal instead');
             this.addBulletDecalToWall(wall, hitPoint, normal);
             return;
         }
-        
+
         const holeRadius = 1.2;
         console.log('🔫 Creating hole in wall');
 
-        // Convert hit point to wall's local coordinates
         const localHitPoint = wall.worldToLocal(hitPoint.clone());
 
-        // Add the hole (max 2)
         wall.userData.bulletHoles.push({
             position: localHitPoint.clone(),
             normal: normal.clone(),
             radius: holeRadius
         });
 
-        // Recreate wall geometry with holes
         this.recreateWallWithHoles(wall);
 
         console.log(`🕳️ Hole ${wall.userData.bulletHoles.length} of 2 created`);
 
-        // Tell the server so it records the hole (shots can pass through it) AND
-        // broadcasts it to the OTHER clients so everyone sees the same holes.
-        // local_x = along the wall's width (local X); world_y = absolute height
-        // (matches the server occlusion test). These match the server's Hole frame.
         if (this.network) {
             this.network.sendWallHit(
                 wall.position.x, wall.position.z,
@@ -1447,13 +1267,10 @@ export class Game {
         }
     }
 
-    // Apply an authoritative bullet hole sent by the server (a hole from ANOTHER
-    // player's shot). Finds the matching destructible wall by position and adds
-    // the hole if it isn't already there (the shooter already made it locally).
     applyServerWallHole(message) {
         const { wall_x, wall_z, local_x, world_y, radius } = message;
-        // Find the nearest destructible build wall to the reported center.
-        let wall = null, best = 4.0; // 2-unit tolerance squared
+
+        let wall = null, best = 4.0;
         for (const w of (this.buildWalls || [])) {
             if (!w.userData || !w.userData.isDestructible) continue;
             const d2 = (w.position.x - wall_x) ** 2 + (w.position.z - wall_z) ** 2;
@@ -1463,10 +1280,8 @@ export class Game {
         if (!wall.userData.bulletHoles) wall.userData.bulletHoles = [];
         if (wall.userData.bulletHoles.length >= 2) return;
 
-        // local_x is along width, world_y is absolute; convert to the wall's local
-        // frame (local Y is centered on the wall, so subtract the wall's Y).
         const localY = world_y - wall.position.y;
-        // Skip if we already have a hole very close to this spot (shooter's local one).
+
         const dup = wall.userData.bulletHoles.some((h) =>
             Math.abs(h.position.x - local_x) < 0.5 && Math.abs(h.position.y - localY) < 0.5);
         if (dup) return;
@@ -1481,8 +1296,7 @@ export class Game {
     }
 
     addBulletDecalToWall(wall, hitPoint, normal) {
-        // Small FLAT bullet mark — same as normal walls (was a big 0.5 sphere
-        // "bubble", which we no longer want). A thin circle laid on the surface.
+
         const decalGeometry = new THREE.CircleGeometry(0.18, 12);
         const decalMaterial = new THREE.MeshBasicMaterial({
             color: 0xef4e23,
@@ -1495,135 +1309,121 @@ export class Game {
 
         const decal = new THREE.Mesh(decalGeometry, decalMaterial);
 
-        // Lay it flat on the wall face, lifted slightly off the surface.
         const n = normal.clone().normalize();
         decal.position.copy(hitPoint).add(n.clone().multiplyScalar(0.05));
         decal.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
 
         decal.renderOrder = 1000;
-        
-        // Add to scene
+
         this.scene.getScene().add(decal);
-        
-        // Store decal reference for cleanup
+
         if (!wall.userData.decals) {
             wall.userData.decals = [];
         }
         wall.userData.decals.push(decal);
-        
-        // Same fade timing as normal bullet impacts (5 seconds)
+
         setTimeout(() => {
-            // Fade out effect
+
             let opacity = 1;
             const fadeInterval = setInterval(() => {
                 opacity -= 0.1;
                 decal.material.opacity = opacity;
-                
+
                 if (opacity <= 0) {
                     clearInterval(fadeInterval);
                     this.scene.getScene().remove(decal);
                     decal.geometry.dispose();
                     decal.material.dispose();
-                    
+
                     const index = wall.userData.decals.indexOf(decal);
                     if (index > -1) {
                         wall.userData.decals.splice(index, 1);
                     }
                 }
             }, 50);
-        }, 4000); // Start fade after 4 seconds
-        
+        }, 4000);
+
         console.log('🟠 Added normal bullet impact to wall');
     }
 
     recreateWallWithHoles(wall) {
         if (!wall.userData.bulletHoles || wall.userData.bulletHoles.length === 0) {
-            return; // No holes to create
+            return;
         }
-        
-        // Store original properties
+
         const originalMaterial = wall.material;
         const originalPosition = wall.position.clone();
         const originalRotation = wall.rotation.clone();
-        
-        // Store original wall dimensions (destructible walls are 20x20x2)
+
         if (!wall.userData.originalDimensions) {
-            // First time - store dimensions
+
             wall.userData.originalDimensions = {
                 width: 20,
                 height: 20,
                 depth: 2
             };
         }
-        
+
         const dims = wall.userData.originalDimensions;
-        
-        // Create wall shape with correct orientation
+
         const shape = new THREE.Shape();
         shape.moveTo(-dims.width/2, -dims.height/2);
         shape.lineTo(dims.width/2, -dims.height/2);
         shape.lineTo(dims.width/2, dims.height/2);
         shape.lineTo(-dims.width/2, dims.height/2);
         shape.closePath();
-        
-        // Add simple circular holes
+
         for (const holeData of wall.userData.bulletHoles) {
             const hole = new THREE.Path();
             hole.arc(holeData.position.x, holeData.position.y, holeData.radius, 0, Math.PI * 2, true);
             shape.holes.push(hole);
         }
-        
-        // Create new geometry
+
         const extrudeSettings = {
             depth: dims.depth,
             bevelEnabled: false
         };
-        
+
         const newGeometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-        
-        // Center the geometry
+
         newGeometry.translate(0, 0, -dims.depth/2);
-        
-        // Replace geometry
+
         wall.geometry.dispose();
         wall.geometry = newGeometry;
-        
-        // Restore original properties
+
         wall.material = originalMaterial;
         wall.position.copy(originalPosition);
         wall.rotation.copy(originalRotation);
-        
+
         console.log(`✅ Wall updated with ${wall.userData.bulletHoles.length} hole(s)`);
     }
 
     updateWallCollisionBounds(wall) {
-        // Update collision system to account for holes
+
         if (this.collisionSystem && wall.userData.isDestructibleWall) {
-            // For now, keep the full collision bounds - bullets will use hole detection
-            // In a more advanced system, we could create complex collision shapes
+
             console.log('🔧 Wall collision bounds updated (keeping full bounds for now)');
         }
     }
 
     createBulletPassThroughEffect(hitPoint) {
-        // Create a brief yellow flash effect to show bullet passing through
+
         const flashGeometry = new THREE.SphereGeometry(0.3, 8, 8);
         const flashMaterial = new THREE.MeshBasicMaterial({
             color: 0xef4e23,
             transparent: true,
             opacity: 0.8
         });
-        
+
         const flash = new THREE.Mesh(flashGeometry, flashMaterial);
         flash.position.copy(hitPoint);
         this.scene.getScene().add(flash);
-        
-        // Animate flash and remove after short time
+
         let opacity = 0.8;
         const fadeOut = () => {
             opacity -= 0.1;
             flash.material.opacity = opacity;
-            
+
             if (opacity <= 0) {
                 this.scene.getScene().remove(flash);
                 flash.geometry.dispose();
@@ -1632,74 +1432,68 @@ export class Game {
                 requestAnimationFrame(fadeOut);
             }
         };
-        
-        // Start fade out after 100ms
+
         setTimeout(fadeOut, 100);
-        
+
         console.log('🔥 Bullet passed through hole - showing flash effect!');
     }
 
     createBulletTrail(startPos, direction) {
-        // Create visible bullet trail showing bullet continuing beyond wall
+
         const endPos = startPos.clone().add(direction.clone().multiplyScalar(50));
-        
+
         const trail = new THREE.BufferGeometry();
         const positions = new Float32Array([
             startPos.x, startPos.y, startPos.z,
             endPos.x, endPos.y, endPos.z
         ]);
         trail.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        
-        const trailMaterial = new THREE.LineBasicMaterial({ 
+
+        const trailMaterial = new THREE.LineBasicMaterial({
             color: 0xef4e23,
             transparent: true,
             opacity: 0.8
         });
-        
+
         const line = new THREE.Line(trail, trailMaterial);
         this.scene.getScene().add(line);
-        
-        // Remove trail after short time
+
         setTimeout(() => {
             this.scene.getScene().remove(line);
             trail.dispose();
             trailMaterial.dispose();
         }, 200);
-        
+
         console.log('🔴 Created red bullet trail through wall hole');
     }
 
     checkBulletThroughHole(wall, hitPoint) {
-        // Convert hit point to wall's local coordinates for comparison
+
         const localHitPoint = wall.worldToLocal(hitPoint.clone());
-        
-        // Check if wall has bulletHoles array and if hit point is within any existing hole
+
         if (!wall.userData.bulletHoles || !Array.isArray(wall.userData.bulletHoles)) {
-            return false; // No holes exist yet
+            return false;
         }
-        
+
         for (const hole of wall.userData.bulletHoles) {
             const distance = localHitPoint.distanceTo(hole.position);
-            
-            // If bullet hits within the hole radius, it passes through
+
             if (distance <= hole.radius) {
                 return true;
             }
         }
-        
+
         return false;
     }
 
     checkBulletBeyondWall(shooterPos, shootDirection, wallDistance) {
-        // Create a new raycast starting just beyond the wall  
+
         const beyondWallPos = shooterPos.clone().add(
             shootDirection.clone().multiplyScalar(wallDistance + 0.2)
         );
-        
-        // With real geometry holes, bullets naturally continue through empty space
+
         console.log('🎯 Checking for targets beyond destructible wall hole...');
-        
-        // Check for player hits beyond the wall
+
         const raycaster = new THREE.Raycaster();
         raycaster.set(beyondWallPos, shootDirection);
         raycaster.far = 1000 - wallDistance;
@@ -1729,7 +1523,7 @@ export class Game {
     }
 
     addPlayerImpact(playerMesh, shooterPos, shootDirection) {
-        
+
         const geometry = new THREE.SphereGeometry(0.15, 6, 6);
         const material = new THREE.MeshBasicMaterial({
             color: 0xef4e23,
@@ -1738,21 +1532,17 @@ export class Game {
         });
         const impactMark = new THREE.Mesh(geometry, material);
 
-
         impactMark.userData.isPlayerImpact = true;
-        // Decorative only — don't let impact marks intercept shooting raycasts.
+
         impactMark.raycast = () => {};
 
-        
         const toPlayer = new THREE.Vector3().subVectors(playerMesh.position, shooterPos).normalize();
-        const impactOffset = toPlayer.multiplyScalar(2.2); 
+        const impactOffset = toPlayer.multiplyScalar(2.2);
         impactMark.position.copy(playerMesh.position).sub(impactOffset);
-        impactMark.position.y += 1; 
+        impactMark.position.y += 1;
 
-        
         playerMesh.add(impactMark);
 
-        
         setTimeout(() => {
             if (impactMark.parent) {
                 impactMark.parent.remove(impactMark);
@@ -1763,13 +1553,11 @@ export class Game {
     handlePlayerHit(message) {
         console.log(`Player ${message.player_id} hit! Health: ${message.health}/100, Shield: ${message.shield}/100 (damage: ${message.damage})`);
 
-        
         if (message.player_id === this.network.playerId) {
-            
-            this.health = message.health;
-            this.shield = message.shield || 0; 
 
-            
+            this.health = message.health;
+            this.shield = message.shield || 0;
+
             this.lastHitTime = Date.now();
             this.startShieldRegen();
 
@@ -1777,23 +1565,21 @@ export class Game {
             this.showHitEffect();
             console.log(`YOU GOT HIT! Shield: ${this.shield}, Health: ${this.health}`);
         } else {
-            
+
             const player = this.playerManager.otherPlayers.get(message.player_id);
             if (player) {
-                
+
             }
         }
     }
 
     startShieldRegen() {
-        
+
         if (this.shieldRegenInterval) {
             clearInterval(this.shieldRegenInterval);
             this.shieldRegenInterval = null;
         }
 
-        
-        
         console.log('Shield regeneration will be handled by server after 5 seconds');
     }
 
@@ -1804,9 +1590,9 @@ export class Game {
             console.log(`💰 Money updated to: $${message.money} (playerMoney=${this.playerMoney}, buildMoney=${this.buildMoney})`);
         }
     }
-    
+
     handleShieldUpdate(message) {
-        
+
         if (message.player_id === this.network.playerId) {
             this.shield = message.shield;
             this.updateHealthDisplay();
@@ -1816,22 +1602,18 @@ export class Game {
 
     handlePlayerDied(message) {
         console.log('Player died message received:', message);
-        
-        // Use names from message if available, otherwise look them up
+
         const killerName = message.killer_name || this.getPlayerName(message.killer_id) || 'Unknown';
         const victimName = message.victim_name || this.getPlayerName(message.player_id) || 'Unknown';
-        
-        // Get team information (safely check if playerManager and players exist)
+
         const killerTeam = message.killer_team || (this.playerManager?.players?.[message.killer_id]?.team) || null;
         const victimTeam = message.victim_team || (this.playerManager?.players?.[message.player_id]?.team) || null;
-        
-        // Add to kill feed
+
         const isYouKiller = message.killer_id === this.network.playerId;
         const isYouVictim = message.player_id === this.network.playerId;
         console.log('Kill details:', { killerName, victimName, isYouKiller, isYouVictim, myPlayerId: this.network.playerId });
         this.killFeed.addKill(killerName, victimName, isYouKiller, isYouVictim, killerTeam, victimTeam);
-        
-        
+
         if (message.player_id === this.network.playerId) {
             this.isAlive = false;
             this.health = 0;
@@ -1851,10 +1633,9 @@ export class Game {
             console.log(`You were killed by ${killerName}`);
             this.showDeathMessage(`Killed by ${killerName}`, 5);
         } else {
-            
+
             this.playerManager.killPlayer(message.player_id);
 
-            
             if (message.killer_id === this.network.playerId) {
                 console.log('You are the killer - updating kill counter');
                 console.log('Before kill update - kills:', this.kills);
@@ -1869,10 +1650,7 @@ export class Game {
     }
 
     handlePlayerRespawned(message) {
-        // A respawn means the next round's players are arriving. Cancel any pending
-        // post-round cleanup timer NOW so it can't fire later and wipe a freshly
-        // respawned mesh (the race that left both players invisible after a
-        // timeout round end, where nobody dies so no kill cam gates the cleanup).
+
         if (this._postRoundCleanupTimer) {
             clearTimeout(this._postRoundCleanupTimer);
             this._postRoundCleanupTimer = null;
@@ -1897,41 +1675,29 @@ export class Game {
             if (this.killCam) {
                 this.killCam.onLocalPlayerRespawned();
             }
-            // The replay (if any) has now finished and the kill cam has just
-            // restored remote meshes to their kill-spot positions. Run the
-            // deferred round cleanup to remove the ghost mesh and snap remote
-            // players back to their fresh spawns.
+
             this.finishRoundCleanup();
 
             if (this.weaponSystem) {
                 this.weaponSystem.show();
-                this.weaponSystem.resetWeapon(); // Reset to full ammo
+                this.weaponSystem.resetWeapon();
             }
 
-            // Remember which half of the map is ours (sign of spawn Z). Build
-            // mode uses this to forbid placing in the enemy's two diagonal tunnels.
             if (typeof message.player.z === 'number' && message.player.z !== 0) {
                 this.myHalfSign = message.player.z < 0 ? -1 : 1;
             }
 
-            // Use the position from the server instead of random spawn
             this.camera.getCamera().position.set(message.player.x, message.player.y + 5, message.player.z);
-            // Initialize physics state
+
             if (this.input) {
                 this.input.velocity.set(0, 0, 0);
                 this.input.onGround = true;
             }
             this.camera.getCamera().rotation.set(0, 0, 0);
-            // Always spawn facing the map center (origin), regardless of which
-            // spawn side. At yaw 0 the camera looks down -z; the facing
-            // direction is (-sin yaw, -cos yaw), so to point from the spawn
-            // toward (0,0) we need yaw = atan2(x, z). Attackers (z=-300) end up
-            // facing +z and defenders (z=+300) facing -z, both toward the map.
+
             this.input.yaw = Math.atan2(message.player.x, message.player.z);
             this.input.pitch = 0;
-            // Apply the yaw to the camera immediately so the first frame is
-            // already facing the map (the input handler only updates the
-            // quaternion on mouse movement).
+
             const spawnYawQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.input.yaw);
             this.camera.getCamera().quaternion.copy(spawnYawQ);
             this.camera.getCamera().updateMatrixWorld();
@@ -1939,30 +1705,25 @@ export class Game {
             console.log(`You respawned at position (${message.player.x}, ${message.player.y}, ${message.player.z}), facing map (yaw ${this.input.yaw.toFixed(2)})`);
             this.hideDeathMessage();
 
-            // FIRST spawn of the match → play the cinematic fly-through that ends
-            // exactly at this spawn pose, then hands off to first-person. Only once.
             if (!this._introHasPlayed) {
                 this._introHasPlayed = true;
                 const cam = this.camera.getCamera();
                 this.startIntroCinematic(cam.position.clone(), this.input.yaw);
             }
 
-            
             const healthContainer = document.getElementById('healthContainer');
             if (healthContainer) {
                 healthContainer.style.display = 'block';
             }
-            
-            // Show ammo display when respawning
+
             if (this.ammoDisplay) {
                 this.ammoDisplay.show();
             }
-            
+
             this.updateHealthDisplay();
-            this.updateAmmoDisplay(); // Update ammo display 
+            this.updateAmmoDisplay();
         } else {
-            
-            // Since players are now completely removed on death, we need to re-add them
+
             this.playerManager.respawnPlayer(message.player);
             console.log(`Player ${message.player.name} respawned`);
         }
@@ -1979,24 +1740,20 @@ export class Game {
 
     activateDeathCam() {
         this.deathCamActive = true;
-        
+
         this.originalCameraPosition = this.camera.getPosition().clone();
 
-        
         this.camera.getCamera().position.set(0, 300, 0);
-        this.camera.getCamera().lookAt(0, 0, 0); 
+        this.camera.getCamera().lookAt(0, 0, 0);
 
-        
         this.input.isPointerLocked = false;
         document.exitPointerLock();
 
-        
         const healthContainer = document.getElementById('healthContainer');
         if (healthContainer) {
             healthContainer.style.display = 'none';
         }
-        
-        // Hide ammo display during death cam
+
         if (this.ammoDisplay) {
             this.ammoDisplay.hide();
         }
@@ -2004,11 +1761,11 @@ export class Game {
 
     deactivateDeathCam() {
         this.deathCamActive = false;
-        
+
     }
 
     showDeathMessage(message, countdown = 5) {
-        
+
         let deathMsg = document.getElementById('deathMessage');
         if (!deathMsg) {
             deathMsg = document.createElement('div');
@@ -2045,7 +1802,7 @@ export class Game {
                 timeLeft--;
                 setTimeout(updateMessage, 1000);
             } else {
-                
+
                 this.showRespawnButton();
             }
         };
@@ -2057,14 +1814,14 @@ export class Game {
     showRespawnButton() {
         const deathMsg = document.getElementById('deathMessage');
         if (deathMsg) {
-            // In team mode, don't show respawn button during rounds
+
             if (this.gameMode === 'team') {
                 deathMsg.innerHTML = `
                     <div style="color: #ef4e23; margin-bottom: 20px;">You were eliminated</div>
                     <div style="color: rgba(239, 78, 35, 0.5); font-size: 16px;">Waiting for round to end...</div>
                 `;
             } else {
-                // Deathmatch mode - show respawn button
+
                 deathMsg.innerHTML = `
                     <div style="color: #ef4e23; margin-bottom: 20px;">You were eliminated</div>
                     <button id="respawnButton" style="
@@ -2082,7 +1839,6 @@ export class Game {
                     </button>
                 `;
 
-                
                 const respawnBtn = document.getElementById('respawnButton');
                 if (respawnBtn) {
                     respawnBtn.addEventListener('click', () => {
@@ -2093,18 +1849,13 @@ export class Game {
         }
     }
 
-    // Called on every round_end. Shows the win banner and keeps players visible
-    // and able to fight for a short post-round window before the meshes are
-    // cleared (the server starts the next round ~3s later). When the local
-    // player died this round a kill-cam replay is already running, so cleanup is
-    // deferred by that path instead and we don't double-schedule.
     handleRoundEndMessage(message) {
         this._track('round-won', { winner: message.winner, reason: message.reason });
-        // Build a clean banner: big title + small-caps reason, team-colored accent.
+
         const winnerName = message.winner === 'orange' ? 'Orange'
             : message.winner === 'red' ? 'Navy'
             : (message.winner || 'Team');
-        // Single accent — orange — for both teams (palette is strict 2-color).
+
         const accent = '#ef4e23';
 
         let title = `${winnerName} team wins`;
@@ -2136,14 +1887,11 @@ export class Game {
             (this.killCam && this.killCam.isActive && this.killCam.isActive());
 
         if (replayActive) {
-            // The kill cam owns the meshes; cleanup happens at local respawn.
+
             this._pendingRoundCleanup = true;
             return;
         }
 
-        // No replay (e.g. defuse / bomb / you survived): keep everyone visible
-        // and fightable for a moment, THEN clear. The next round's respawn
-        // (~3s) will re-position everyone.
         if (this._postRoundCleanupTimer) {
             clearTimeout(this._postRoundCleanupTimer);
         }
@@ -2152,24 +1900,15 @@ export class Game {
             if (this.playerManager) {
                 this.playerManager.clearAllPlayers();
             }
-        }, 6000); // long enough for the ~3s death animation + a beat lying down
+        }, 6000);
     }
 
-    // Match over (a team reached 7 wins). Show a big full-screen winner animation
-    // for every player, then send everyone back to the landing page. `message.winner`
-    // is 'orange' or 'red' (red = the NAVY team).
-    // Fire a custom analytics event (Umami). Safe no-op if the script isn't loaded
-    // (blocked / not yet configured) so it never affects gameplay.
     _track(eventName, data) {
         try { window.umami && window.umami.track(eventName, data); } catch (e) {}
     }
 
-    // Lightweight always-on FPS watchdog for analytics. Keeps a short rolling
-    // average and, if FPS stays below LOW_FPS_THRESHOLD for LOW_FPS_WINDOW_MS of
-    // actual gameplay, fires a single 'low-fps' event (once per session). Cheap:
-    // just array push/shift, no DOM writes.
     _sampleLowFps(realDelta) {
-        if (this._lowFpsTracked || !this.gameStarted) return; // once per session, only in-game
+        if (this._lowFpsTracked || !this.gameStarted) return;
         const LOW_FPS_THRESHOLD = 25;
         const LOW_FPS_WINDOW_MS = 3000;
         const ms = Math.max(0.0001, realDelta) * 1000;
@@ -2186,16 +1925,15 @@ export class Game {
                 this._track('low-fps', { fps: Math.round(fps) });
             }
         } else {
-            this._lowFpsSince = null; // recovered — reset the timer
+            this._lowFpsSince = null;
         }
     }
 
     handleMatchEnd(message) {
-        if (this._matchEndShown) return; // guard against duplicate broadcasts
+        if (this._matchEndShown) return;
         this._matchEndShown = true;
         this._track('match-finished', { winner: message.winner });
 
-        // Freeze the round: stop timers, release pointer lock, hide HUD timers.
         this.stopRoundTimer();
         if (this.input) this.input.isPointerLocked = false;
         if (document.exitPointerLock) document.exitPointerLock();
@@ -2205,7 +1943,6 @@ export class Game {
         const teamName = isNavy ? 'NAVY' : 'ORANGE';
         const score = `${this.orangeScore} : ${this.redScore}`;
 
-        // Keyframes for the cinematic (injected once).
         if (!document.getElementById('matchEndStyles')) {
             const st = document.createElement('style');
             st.id = 'matchEndStyles';
@@ -2230,7 +1967,6 @@ export class Game {
             color: #fff; overflow: hidden;
         `;
 
-        // Full-screen color sweep wiping up from the bottom in the winner's color.
         overlay.innerHTML = `
             <div style="position:absolute; inset:0; background:rgba(13,19,38,0.96); animation: meFadeIn 0.4s ease both;"></div>
             <div style="position:absolute; inset:0; transform-origin: bottom;
@@ -2264,27 +2000,15 @@ export class Game {
         `;
         document.body.appendChild(overlay);
 
-        // After the cinematic, send everyone back to the landing page. A full reload
-        // is the cleanest reset (drops the WS, clears all game state, returns to the
-        // name/landing screen) — matches "move every player to the landing page".
         setTimeout(() => {
             try { if (this.network && this.network.ws) this.network.ws.close(); } catch (e) {}
-            // Send everyone back to the LANDING page (site root), not the game page.
+
             window.location.href = window.location.origin + '/';
         }, 6500);
     }
 
     cleanupForRoundTransition() {
-        // Called on round_end. The hard part: a round usually ends the instant
-        // the local player dies (team eliminated), so the kill cam replay of
-        // who killed us is just STARTING and needs its snapshot buffer + the
-        // real remote meshes (it animates them) to play out (~5s).
-        //
-        // So we never wipe the kill cam / snapshots here. We only clear the
-        // remote player meshes when NO replay is active. When a replay IS
-        // active, the kill cam owns the meshes; the actual stale-position
-        // cleanup then happens at the local respawn (see handlePlayerRespawned,
-        // which runs only after the replay finishes) via finishRoundCleanup().
+
         const replayActive =
             (this.replayRecorder && this.replayRecorder.isPlaying) ||
             (this.killCam && this.killCam.isActive && this.killCam.isActive());
@@ -2299,9 +2023,6 @@ export class Game {
         }
     }
 
-    // Remove every structure built during the build phase: the wall meshes,
-    // their collision boxes, and the occupied-grid bookkeeping. Used for the
-    // halftime map reset when sides switch.
     clearBuildWalls() {
         if (this.buildWalls && this.buildWalls.length) {
             this.buildWalls.forEach((wall) => {
@@ -2323,14 +2044,6 @@ export class Game {
         console.log('🧹 Build walls cleared (map reset)');
     }
 
-    // Runs once the kill cam replay has finished (called from the local
-    // respawn, which is itself deferred until the replay ends). Removes the
-    // replay's leftovers — the ghost body mesh — and resets kill cam state.
-    // We do NOT clearAllPlayers() here: by now every remote player's
-    // player_respawned has already arrived and moved their mesh to a fresh
-    // spawn. Instead we re-assert those fresh positions, because the kill
-    // cam's stopPlayback (triggered just before this) restores remote meshes
-    // to their frozen kill-spot positions — this undoes that.
     finishRoundCleanup() {
         if (!this._pendingRoundCleanup) return;
         this._pendingRoundCleanup = false;
@@ -2344,9 +2057,7 @@ export class Game {
             this.replayRecorder.resetForRound();
         }
         if (this.playerManager) {
-            // Snap every remote mesh back to its authoritative position (the
-            // fresh spawn delivered by player_respawned and stored in .data),
-            // overriding any kill-spot restore the kill cam just applied.
+
             this.playerManager.otherPlayers.forEach((p) => {
                 if (p && p.mesh && p.data) {
                     p.mesh.position.set(p.data.x, p.data.y, p.data.z);
@@ -2402,10 +2113,10 @@ export class Game {
             <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.6; margin-bottom: 2px;">Money</div>
             <div id="moneyAmount" style="font-size: 24px; font-weight: 300; color: #ef4e23; line-height: 1;">$${this.buildMoney}</div>
         `;
-        moneyDisplay.style.display = 'none'; // Hide by default, only show in build mode
+        moneyDisplay.style.display = 'none';
         document.body.appendChild(moneyDisplay);
     }
-    
+
     updatePlayerMoney(amount) {
         this.playerMoney = amount;
         this.buildMoney = amount;
@@ -2416,13 +2127,12 @@ export class Game {
     }
 
     updateKillCounter() {
-        
+
         let killCounter = document.getElementById('killCounter');
         if (!killCounter) {
             killCounter = document.createElement('div');
             killCounter.id = 'killCounter';
-            // Sits just UNDER the minimap (minimap: top 20 + 202 tall = 222),
-            // right-aligned to it, so it never overlaps the minimap circle.
+
             killCounter.style.cssText = `
                 position: fixed;
                 top: 234px;
@@ -2438,8 +2148,7 @@ export class Game {
             `;
             document.body.appendChild(killCounter);
         }
-        // Compact inline pill: crisp target/reticle icon + count + "kills" label.
-        // A clean crosshair reads far better at small sizes than a tiny skull.
+
         killCounter.innerHTML = `
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
                  stroke="#ef4e23" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;">
@@ -2455,10 +2164,6 @@ export class Game {
         `;
     }
 
-    // Team mark — matches the team-selection screen, which identifies teams by
-    // their bold NAME in the team color (ORANGE in orange, NAVY in navy). Used in
-    // the round box and the round-end "X won" banner so they read consistently.
-    // `team` is the internal id ('orange' or 'red'); 'red' is the NAVY team.
     _teamMark(team, fontSize = 13) {
         const isNavy = team === 'red' || team === 'navy';
         const color = isNavy ? '#9fb0d8' : '#ef4e23';
@@ -2466,7 +2171,6 @@ export class Game {
         return `<span style="font-weight: 800; letter-spacing: 2px; color: ${color}; font-size: ${fontSize}px;">${label}</span>`;
     }
 
-    // Small colored dot + name, for the scoreboard rows in the round box.
     _teamLogo(team) {
         const isNavy = team === 'red' || team === 'navy';
         const color = isNavy ? '#9fb0d8' : '#ef4e23';
@@ -2498,13 +2202,9 @@ export class Game {
             `;
             document.body.appendChild(roundContainer);
         }
-        
+
         const ORANGE = '#ef4e23', NAVY = '#1a2447', RED = '#ff4444';
 
-        // === ONE UNIFIED TIMER ===  picks ONE of three modes, in priority order:
-        //   1. Bomb planted → 40s bomb countdown (RED, pulsing)
-        //   2. Build phase  → build countdown
-        //   3. Playing      → round countdown (M:SS, turns red when low)
         const bombTicking = this.bombSystem && this.bombSystem.bombPlanted &&
             typeof this.bombSystem.bombTimer === 'number' && this.bombSystem.bombTimer > 0;
 
@@ -2525,7 +2225,7 @@ export class Game {
             timeColor = low ? RED : ORANGE;
             timePulse = low;
         } else {
-            // Fallback so the timer row never just vanishes mid-round.
+
             timeLabel = 'Round Time';
             timeValue = '—';
             timeColor = ORANGE;
@@ -2557,7 +2257,6 @@ export class Game {
             </div>
         `;
 
-        // Inject the pulse keyframes once (used by the urgent timer styling).
         if (!document.getElementById('rsgoBombPulseStyle')) {
             const styleEl = document.createElement('style');
             styleEl.id = 'rsgoBombPulseStyle';
@@ -2571,21 +2270,13 @@ export class Game {
             this.refreshBuildBanner();
         }
 
-        // Show/hide the big "press B to build" call-to-action.
         this.updateBuildPrompt();
     }
 
-    // A prominent center-screen prompt during the build phase telling players to
-    // press B to open build mode. Players didn't know how to enter it. Shows only
-    // while in the build phase AND not already in build mode; hidden otherwise.
     updateBuildPrompt() {
-        // Suppress the prompt around the spawn intro cinematic. The intro plays once
-        // on the first spawn; it can start a moment AFTER the build phase begins, so
-        // we also hide the prompt BEFORE it has played (while it's still pending) to
-        // avoid a brief flash. Allowed only once the intro is over (_introDone), or
-        // in any later round where no intro plays.
+
         const introPendingOrPlaying = this._introPlaying || (!this._introDone && this.gameStarted);
-        // Don't pop the prompt the instant the kill cam ends — give a short beat.
+
         const kcActive = !!(this.killCam && this.killCam.isActive && this.killCam.isActive());
         const promptDelayed = kcActive || (this._buildPromptDelayUntil && performance.now() < this._buildPromptDelayUntil);
         const shouldShow = this.gameMode === 'team' && this.isInBuildPhase &&
@@ -2641,16 +2332,14 @@ export class Game {
     }
 
     startBuildPhaseTimer(seconds) {
-        // New round begins in build phase — clear any leftover round countdown so
-        // the unified timer shows "Build Phase" first, then "Round Time".
+
         this.stopRoundTimer();
         this.isInBuildPhase = true;
         this.buildPhaseTimer = seconds;
         this._track('build-phase-started');
-        // The intro only plays on the very first spawn. For later rounds (or modes
-        // with no intro), mark it done so the "press B" prompt isn't suppressed.
+
         if (this._introHasPlayed && !this._introPlaying) this._introDone = true;
-        this.updateRoundDisplay(); // show timer + "press B" prompt immediately
+        this.updateRoundDisplay();
 
         const interval = setInterval(() => {
             this.buildPhaseTimer--;
@@ -2660,8 +2349,7 @@ export class Game {
                 clearInterval(interval);
                 this.isInBuildPhase = false;
                 this.buildPhaseTimer = null;
-                // Safety net: if the server's build_phase_end is slow/missed, start
-                // the round timer here so the Playing countdown always appears.
+
                 if (typeof this.roundTimer !== 'number') {
                     this.startRoundTimer(100);
                 }
@@ -2670,15 +2358,12 @@ export class Game {
         }, 1000);
     }
 
-    // Playing-phase round countdown. The server is authoritative (it actually ends
-    // the round at 0); this is the visual timer shown in the round box. Counting
-    // freezes when the bomb is planted — the bomb timer takes over the same slot.
     startRoundTimer(seconds) {
         this.stopRoundTimer();
         this.roundTimer = seconds;
         this.updateRoundDisplay();
         this.roundTimerInterval = setInterval(() => {
-            // Freeze while the bomb is ticking — BombSystem drives the slot then.
+
             if (this.bombSystem && this.bombSystem.bombPlanted) return;
             this.roundTimer--;
             this.updateRoundDisplay();
@@ -2697,16 +2382,15 @@ export class Game {
         this.updateRoundDisplay();
     }
 
-    // Format seconds as M:SS for the HUD.
     formatClock(totalSeconds) {
         const s = Math.max(0, Math.floor(totalSeconds));
         const m = Math.floor(s / 60);
         const ss = String(s % 60).padStart(2, '0');
         return `${m}:${ss}`;
     }
-    
+
     updateHealthDisplay() {
-        
+
         let healthContainer = document.getElementById('healthContainer');
         if (!healthContainer) {
             healthContainer = document.createElement('div');
@@ -2730,8 +2414,6 @@ export class Game {
             `;
             document.body.appendChild(healthContainer);
 
-            
-            // Shield display
             const shieldContainer = document.createElement('div');
             shieldContainer.style.cssText = `
                 display: flex;
@@ -2739,16 +2421,14 @@ export class Game {
                 align-items: flex-start;
                 gap: 4px;
             `;
-            
+
             const shieldText = document.createElement('div');
             shieldText.id = 'shieldText';
             shieldText.innerHTML = `
                 <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.6; margin-bottom: 2px;">Shield</div>
                 <div style="font-size: 20px; font-weight: 600; color: #ef4e23; line-height: 1;">${this.shield}</div>
             `;
-            
-            // Shield = OUTLINED bar (orange border, hollow) to distinguish it
-            // from the solid-fill health bar below — using only orange + navy.
+
             const shieldBarContainer = document.createElement('div');
             shieldBarContainer.style.cssText = `
                 width: 100px;
@@ -2767,14 +2447,12 @@ export class Game {
                 width: ${(this.shield / this.maxShield) * 100}%;
                 transition: width 0.3s ease;
             `;
-            
+
             shieldBarContainer.appendChild(shieldBar);
             shieldContainer.appendChild(shieldText);
             shieldContainer.appendChild(shieldBarContainer);
             healthContainer.appendChild(shieldContainer);
 
-            
-            // Health display
             const healthContainerDiv = document.createElement('div');
             healthContainerDiv.style.cssText = `
                 display: flex;
@@ -2782,15 +2460,14 @@ export class Game {
                 align-items: flex-start;
                 gap: 4px;
             `;
-            
+
             const healthText = document.createElement('div');
             healthText.id = 'healthText';
             healthText.innerHTML = `
                 <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.6; margin-bottom: 2px;">Health</div>
                 <div style="font-size: 20px; font-weight: 600; color: #ef4e23; line-height: 1;">${this.health}</div>
             `;
-            
-            // Health = SOLID orange bar on a faint orange track.
+
             const healthBarContainer = document.createElement('div');
             healthBarContainer.style.cssText = `
                 width: 100px;
@@ -2809,15 +2486,13 @@ export class Game {
                 transition: width 0.3s ease;
                 border-radius: 3px;
             `;
-            
+
             healthBarContainer.appendChild(healthBar);
             healthContainerDiv.appendChild(healthText);
             healthContainerDiv.appendChild(healthBarContainer);
             healthContainer.appendChild(healthContainerDiv);
         }
 
-        
-        // Update health and shield text displays and bars
         const healthText = document.getElementById('healthText');
         const shieldText = document.getElementById('shieldText');
         const healthBar = document.getElementById('healthBar');
@@ -2837,19 +2512,14 @@ export class Game {
             `;
         }
 
-        // Update health bar
         if (healthBar) {
             healthBar.style.width = `${this.health}%`;
         }
 
-        // Update shield bar
         if (shieldBar) {
             shieldBar.style.width = `${(this.shield / this.maxShield) * 100}%`;
         }
 
-        
-        // Health stays ORANGE always; LOW health is signalled by a pulse (not a
-        // color change) to keep the strict 2-color palette.
         if (healthText) {
             const healthValue = healthText.querySelector('div:last-child');
             healthValue.style.color = '#ef4e23';
@@ -2871,7 +2541,7 @@ export class Game {
     }
 
     showHitEffect() {
-        
+
         let hitOverlay = document.getElementById('hitOverlay');
         if (!hitOverlay) {
             hitOverlay = document.createElement('div');
@@ -2890,9 +2560,6 @@ export class Game {
             document.body.appendChild(hitOverlay);
         }
 
-        
-        // Orange damage vignette (was red) — stays in palette while still reading
-        // as an alarm flash at the screen edges.
         hitOverlay.style.background = `radial-gradient(circle at center,
             rgba(239, 78, 35, 0) 0%,
             rgba(239, 78, 35, 0.18) 55%,
@@ -2900,12 +2567,10 @@ export class Game {
         hitOverlay.style.opacity = '1';
         hitOverlay.style.boxShadow = 'inset 0 0 100px rgba(239, 78, 35, 0.8)';
 
-        
         setTimeout(() => {
             hitOverlay.style.opacity = '0';
         }, 100);
 
-        
         setTimeout(() => {
             hitOverlay.style.opacity = '0.3';
         }, 200);
@@ -2919,34 +2584,23 @@ export class Game {
         requestAnimationFrame(() => this.animate());
 
         if (this.gameStarted) {
-            // REAL wall-clock frame time (seconds), clamped so a hitch/tab-out
-            // can't teleport the player. Everything physics/motion-related uses this
-            // so movement speed is FRAME-RATE INDEPENDENT: at 30fps each frame moves
-            // twice as far as at 60fps, so real distance-per-second is identical.
-            // (Was a hardcoded 0.016, which made the player literally move at HALF
-            // speed at 30fps — the slowdown bug.)
+
             const nowMs = performance.now();
             const realDelta = this._lastFrameMs ? Math.min(0.1, (nowMs - this._lastFrameMs) / 1000) : 0.016;
             this._lastFrameMs = nowMs;
 
-            // Movement, recoil, weapon, bomb all run on real elapsed time.
             const deltaTime = realDelta;
 
-            
             if (this.replayRecorder && !this.replayRecorder.isPlaying) {
                 this.replayRecorder.captureFrame();
             }
 
-            // Hide the gameplay HUD (health/shield, ammo, compass, minimap, crosshair)
-            // while the kill cam is active — it's a cinematic, like the intro. Toggle
-            // only on state CHANGE so we don't fight per-frame HUD updates.
             const kcActive = !!(this.killCam && this.killCam.isActive && this.killCam.isActive());
             if (kcActive !== this._kcHudHidden) {
                 this._kcHudHidden = kcActive;
-                // keepPovWeapon=true → keep crosshair + weapon (it's the killer's POV).
+
                 this._setHudVisibleForIntro(!kcActive, true);
-                // Recolor the POV gun to the KILLER's team while the cam is up, then
-                // restore your own team color when it ends.
+
                 if (this.weaponSystem && this.weaponSystem.setTeam) {
                     if (kcActive) {
                         const killerId = this.killCam.replayTargetId;
@@ -2957,16 +2611,14 @@ export class Game {
                     }
                 }
             }
-            // While the kill cam is active, keep re-asserting the hidden state (some
-            // per-frame updaters re-show health/ammo) and hold the "press B" prompt
-            // for ~1.2s AFTER it ends so it doesn't pop the instant the cam closes.
+
             if (kcActive) {
                 this._setHudVisibleForIntro(false, true);
                 this._buildPromptDelayUntil = performance.now() + 1200;
             }
 
             if (this._introPlaying) {
-                // The spawn-intro cinematic owns the camera; input is suspended.
+
                 this.updateIntroCinematic();
             } else if (this.killCam && this.killCam.isActive()) {
                 this.killCam.update();
@@ -2977,40 +2629,25 @@ export class Game {
                     this.input.updateMovement(deltaTime, this.camera);
                     this.updateCameraRecoil(deltaTime);
                 }
-                
-                // Map boundary check disabled for now - simple flat map
-                // if (this.gameMode === 'team') {
-                //     const playerPos = this.camera.getPosition();
-                //     const distanceFromCenter = Math.sqrt(playerPos.x * playerPos.x + playerPos.z * playerPos.z);
-                //     
-                //     const mapRadius = this.mapBuilder?.getMapRadius() || 800;
-                //     if (distanceFromCenter > mapRadius) {
-                //         this.takeDamage(100, 'fall-off');
-                //     }
-                // }
+
             }
 
             this.bulletSystem.update(deltaTime);
 
-            // Advance remote player animation mixers (idle/run/shoot/death).
             if (this.playerManager) {
                 this.playerManager.update(realDelta);
             }
 
-
             if (this.weaponSystem) {
                 this.weaponSystem.update(deltaTime);
-                // Update ammo display during reload or when ammo changes (but NOT
-                // during the intro cinematic — it would re-show the hidden HUD).
+
                 if (!this._introPlaying) this.updateAmmoDisplay();
             }
 
-            // Update bomb system
             if (this.bombSystem) {
                 this.bombSystem.update(deltaTime);
             }
 
-            // Minimap + compass: skip entirely during the intro cinematic (HUD hidden).
             if (this.miniMap && !this.isBuildMode && !this._introPlaying) {
                 const playerPos = this.camera.getPosition();
                 const cameraRotation = this.input.yaw;
@@ -3018,34 +2655,23 @@ export class Game {
                 this.compass.update(cameraRotation);
             }
 
-            
             this.renderer.getRenderer().autoClear = true;
 
-            
             this.renderer.render(this.scene.getScene(), this.camera.getCamera());
-
 
             if (this.miniMap && !this.isBuildMode && !this._introPlaying) {
                 this.miniMap.render();
             }
 
-            // Live performance overlay (toggle with F8). Reads real frame time and
-            // the renderer's draw-call / triangle counters so you can SEE perf while
-            // CPU/GPU-throttling in DevTools to simulate a weaker laptop.
             this.updatePerfOverlay(realDelta);
 
-            // Analytics: detect sustained low FPS (always on, independent of the F8
-            // overlay). Fire 'low-fps' once per session if the rolling average stays
-            // below 25 FPS for ~3s of actual play — flags users on weak hardware.
             this._sampleLowFps(realDelta);
         }
     }
 
-    // Update (and lazily create) the perf HUD. Hidden until toggled with F8.
     updatePerfOverlay(realDelta) {
         if (!this._perfVisible) return;
 
-        // Rolling average FPS over the last ~30 frames for a stable readout.
         if (!this._perfSamples) this._perfSamples = [];
         const ms = Math.max(0.0001, realDelta) * 1000;
         this._perfSamples.push(ms);
@@ -3053,7 +2679,6 @@ export class Game {
         const avgMs = this._perfSamples.reduce((a, b) => a + b, 0) / this._perfSamples.length;
         const fps = Math.round(1000 / avgMs);
 
-        // Throttle the DOM write to ~5/sec so the overlay itself is cheap.
         const now = performance.now();
         if (this._perfLastWrite && now - this._perfLastWrite < 200) return;
         this._perfLastWrite = now;
@@ -3080,19 +2705,12 @@ export class Game {
         const players = this.playerManager && this.playerManager.otherPlayers
             ? this.playerManager.otherPlayers.size : 0;
 
-        // Worst frame in the current window = the stutter you actually feel.
         const worstMs = Math.max(...this._perfSamples);
         const lowFps = Math.round(1000 / worstMs);
 
         const fpsColor = fps >= 55 ? '#a6e3a1' : fps >= 30 ? '#f9e2af' : '#f38ba8';
         const trisStr = tris > 1000 ? `${(tris / 1000).toFixed(1)}k` : String(tris);
 
-
-        // The four numbers that actually tell us what's going on:
-        //   fps        — overall smoothness
-        //   1% low     — worst frame (reveals stutter on weak hardware)
-        //   ms/frame   — budget (16.6ms = 60fps ceiling)
-        //   draws      — the #1 GPU cost; if FPS tanks and draws are high → GPU-bound
         el.innerHTML = `
             <div style="font-size:10px; letter-spacing:1.5px; opacity:0.5; text-transform:uppercase; margin-bottom:6px;">Performance · F8</div>
             <div style="color:${fpsColor}; font-weight:700; font-size:20px;">${fps} <span style="font-size:11px;opacity:0.6;">fps</span></div>
@@ -3129,10 +2747,10 @@ export class Game {
             isCurrentPlayer: player.id === this.network.playerId
         }));
         console.log('Processed players data:', playersData);
-        
+
         this.scoreboard.updatePlayers(playersData);
     }
-    
+
     addCameraRecoil() {
         const pitchKick = 0.022 + Math.random() * 0.006;
         const yawKick = (Math.random() - 0.5) * 0.012;
@@ -3237,33 +2855,26 @@ export class Game {
         animate();
     }
 
-    // Hitmarker = the crosshair logo ITSELF reacts (no separate element on top):
-    // on a hit it spins + pops bigger + flashes a colored glow, then springs back to
-    // normal. Normal hit = ORANGE; KILL = bigger spin + RED so kills feel distinct.
     showHitmarker(killed = false) {
         const cx = document.getElementById('crosshair');
         if (!cx) return;
 
-        // Kill = stronger: bigger pop, full spin, red glow. Normal = orange, half spin.
         const glow = killed ? '#ff3b3b' : '#ef4e23';
         const peak = killed ? 1.9 : 1.5;
         const spin = killed ? 360 : 180;
 
         const base = 'translate(-50%, -50%)';
 
-        // Snap to the "hit" pose instantly (no transition), then spring back.
         cx.style.transition = 'none';
         cx.style.transform = `${base} scale(${peak}) rotate(${spin}deg)`;
         cx.style.filter = `drop-shadow(0 0 5px ${glow}) drop-shadow(0 0 10px ${glow}) brightness(1.7)`;
 
-        // Next frame: ease back to the resting crosshair (snappy spring).
         requestAnimationFrame(() => {
             cx.style.transition = 'transform 0.26s cubic-bezier(.2,.9,.25,1), filter 0.26s ease';
             cx.style.transform = base;
             cx.style.filter = 'none';
         });
 
-        // Safety: ensure it's fully reset after the animation.
         if (this._hitmarkerTimeout) clearTimeout(this._hitmarkerTimeout);
         this._hitmarkerTimeout = setTimeout(() => {
             cx.style.transition = 'none';
@@ -3271,12 +2882,9 @@ export class Game {
             cx.style.filter = 'none';
         }, 320);
 
-        // KILL ONLY: an extra red ring bursts outward from the crosshair and fades —
-        // a distinct flourish the normal hit doesn't have, so a kill is unmistakable.
         if (killed) this._killBurst();
     }
 
-    // A red ring that expands out from the center and fades — the kill flourish.
     _killBurst() {
         if (!document.getElementById('killBurstStyle')) {
             const st = document.createElement('style');
@@ -3300,34 +2908,31 @@ export class Game {
     }
 
     checkForDirectMapAccess() {
-        // Check URL for direct map builder access
+
         const urlParams = new URLSearchParams(window.location.search);
         const mapBuilder = urlParams.get('mapbuilder');
         const hash = window.location.hash;
-        
+
         if (mapBuilder === 'orange' || hash === '#mapbuilder' || window.location.pathname.includes('mapbuilder')) {
             console.log('🗺️ Direct map builder access detected - loading orange planet map');
             this.loadDirectMapBuilder();
         }
     }
-    
+
     loadDirectMapBuilder() {
-        // Hide all UI elements except game container
+
         document.getElementById('nameScreen').style.display = 'none';
         document.getElementById('mapSelection').style.display = 'none';
         document.getElementById('teamSelectionScreen').style.display = 'none';
         document.getElementById('gameContainer').style.display = 'block';
-        
-        // Set game mode and map for orange planet
+
         this.gameMode = 'team';
         this.mapType = 'orangePlanet';
         this.playerName = 'MapBuilder';
-        
-        // Start the game directly with orange planet map
+
         console.log('🚀 Starting direct map builder mode');
         this.startGame();
-        
-        // Force spawn position to be inside the map for map builder mode
+
         setTimeout(() => {
             console.log('Setting map builder spawn position to (0, 10, 0) - center of map');
             if (this.camera && this.camera.getCamera()) {
@@ -3337,27 +2942,24 @@ export class Game {
                 this.input.position.set(0, 10, 0);
             }
         }, 500);
-        
-        // Add instructions in console
+
         console.log('🎮 Map Builder Mode Active!');
         console.log('📍 Use WASD to move around the orange planet map');
         console.log('🖱️ Click to enable movement controls');
         console.log('🔨 Press B to enter build mode with sky camera');
         console.log('🔧 You can now build step by step with the developer');
     }
-    
+
     toggleBuildMode() {
         if (!this.gameStarted || !this.isAlive) return;
-        
-        // If already in build mode, always allow exiting
+
         if (this.isBuildMode) {
             this.isBuildMode = false;
             this.exitBuildMode();
-            this.updateBuildPrompt(); // re-show the "press B" prompt if still in build phase
+            this.updateBuildPrompt();
             return;
         }
 
-        // Only allow entering build mode during build phase in team games
         if (this.gameMode === 'team' && !this.isInBuildPhase) {
             console.log('⚠️ Build mode only available during build phase');
             return;
@@ -3365,54 +2967,41 @@ export class Game {
 
         this.isBuildMode = true;
         this.enterBuildMode();
-        this.updateBuildPrompt(); // hide the prompt now that they're in build mode
+        this.updateBuildPrompt();
     }
-    
+
     enterBuildMode() {
         console.log('🔨 Entering build mode - switching to bird view camera');
-        
+
         this.isBuildMode = true;
-        
-        // Sync build money with player money
+
         this.buildMoney = this.playerMoney;
-        
-        // Save current camera state
+
         this.savedCameraPosition = this.camera.getPosition().clone();
         this.savedCameraRotation = {
             yaw: this.input.yaw,
             pitch: this.input.pitch
         };
-        
-        // Bird view, FLIPPED PER TEAM so a player always sees their OWN spawn +
-        // tunnels at the bottom of the screen and the ENEMY's (red, no-build) at
-        // the top. The player's spawn is at z = 300 * myHalfSign; we put the
-        // camera on that same side and look at center, so their side renders low.
+
         const half = this.myHalfSign || -1;
         const cam = this.camera.getCamera();
-        cam.position.set(0, 300, 100 * half); // sit on the player's own side
+        cam.position.set(0, 300, 100 * half);
         cam.up.set(0, 1, 0);
-        cam.lookAt(0, 0, 0); // look at map center → own side renders at the bottom
+        cam.lookAt(0, 0, 0);
 
-        // Build mode has no pointer lock, so these don't drive the camera; we set
-        // them only so the restored-on-exit baseline is sane.
         this.input.yaw = 0;
         this.input.pitch = -Math.PI / 3;
-        
-        // Exit pointer lock for easier UI interaction
+
         this.input.isPointerLocked = false;
         document.exitPointerLock();
-        
-        // Auto-select barrier and enable drag mode immediately
+
         this.selectedWallType = 'barrier';
         this.isDragModeEnabled = true;
-        
-        // Set wall cursor since barrier is auto-selected
+
         this.setWallCursor();
-        
-        // Hide all game UI elements
+
         this.hideGameUI();
-        
-        // Show build mode UI
+
         this.showBuildModeUI();
 
         const moneyDisplay = document.getElementById('moneyDisplay');
@@ -3439,46 +3028,32 @@ export class Game {
         if (minimapArrow) {
             minimapArrow.style.display = 'none';
         }
-        
-        // Don't setup wall placement system - only drag from UI allowed
-        // this.setupWallPlacement();
-        
-        // Create visible grid lines on the floor
+
         this.createGridLines();
 
-        // Tint the two ENEMY diagonal tunnels reddish so the player can see at a
-        // glance where they're not allowed to build.
         this.createEnemyZoneOverlay();
 
         console.log('Build mode ready - barrier selected, drag mode enabled');
     }
 
-    // Lay a smooth translucent red strip over each of the enemy's two diagonal
-    // tunnels — the lanes a team may NOT build in. Each strip is a single rotated
-    // plane that follows the tunnel exactly: it mirrors MapBuilder.createAngledFloor
-    // (pathWidth 100, full spawn→site length, angle atan2(dx,dz)), so the red edge is
-    // a clean straight line matching the tunnel floor — no grid staircase. We trim the
-    // far end so the strip stops at the shared bomb site (which stays buildable).
     createEnemyZoneOverlay() {
         this.removeEnemyZoneOverlay();
-        if (!this.myHalfSign) return; // half unknown → nothing to mark
+        if (!this.myHalfSign) return;
         this.enemyZoneGroup = new THREE.Group();
         const mat = new THREE.MeshBasicMaterial({
             color: 0xd63030, transparent: true, opacity: 0.28,
             side: THREE.DoubleSide, depthWrite: false,
         });
-        const PATH = 100;       // diagonal floor width in MapBuilder
+        const PATH = 100;
         for (const c of this.enemyTunnelCorridors()) {
-            // The strip spans the FULL lane (spawn → site center), matching
-            // isInEnemyTunnel exactly — the lane stays blocked right up to the site.
+
             const len = c.len;
             const geo = new THREE.PlaneGeometry(PATH, len);
             const strip = new THREE.Mesh(geo, mat);
             strip.rotation.x = -Math.PI / 2;
-            // Match createAngledFloor's orientation: rotation.z = atan2(dx, dz) where
-            // (dx,dz) is spawn→site; (c.ux,c.uz) is that direction normalized.
+
             strip.rotation.z = Math.atan2(c.ux, c.uz);
-            // Center the (trimmed) strip along the lane, starting from the spawn end.
+
             const midAlong = len / 2;
             strip.position.set(c.sx + c.ux * midAlong, 0.3, c.sz + c.uz * midAlong);
             strip.renderOrder = 2;
@@ -3497,21 +3072,19 @@ export class Game {
             this.enemyZoneGroup = null;
         }
     }
-    
+
     createGridLines() {
-        // Create a visible grid on the floor for build mode
+
         this.gridGroup = new THREE.Group();
-        
-        const gridExtent = 400; // How far the grid extends from center
-        const lineColor = 0x000000; // Black lines
-        const lineMaterial = new THREE.LineBasicMaterial({ 
+
+        const gridExtent = 400;
+        const lineColor = 0x000000;
+        const lineMaterial = new THREE.LineBasicMaterial({
             color: lineColor,
             opacity: 0.3,
             transparent: true
         });
-        
-        // Create lines along X axis (vertical lines when looking from above)
-        // Offset by 10 to align with wall edges
+
         for (let x = -gridExtent + 10; x <= gridExtent; x += this.gridSize) {
             const points = [];
             points.push(new THREE.Vector3(x - 10, 0.1, -gridExtent));
@@ -3520,9 +3093,7 @@ export class Game {
             const line = new THREE.Line(geometry, lineMaterial);
             this.gridGroup.add(line);
         }
-        
-        // Create lines along Z axis (horizontal lines when looking from above)
-        // Offset by 10 to align with wall edges
+
         for (let z = -gridExtent + 10; z <= gridExtent; z += this.gridSize) {
             const points = [];
             points.push(new THREE.Vector3(-gridExtent, 0.1, z - 10));
@@ -3531,16 +3102,15 @@ export class Game {
             const line = new THREE.Line(geometry, lineMaterial);
             this.gridGroup.add(line);
         }
-        
-        // Add grid to scene
+
         this.scene.getScene().add(this.gridGroup);
         console.log('Grid lines created with size:', this.gridSize);
     }
-    
+
     removeGridLines() {
         if (this.gridGroup) {
             this.scene.getScene().remove(this.gridGroup);
-            // Dispose of all geometries and materials
+
             this.gridGroup.traverse((child) => {
                 if (child.geometry) child.geometry.dispose();
                 if (child.material) child.material.dispose();
@@ -3549,37 +3119,31 @@ export class Game {
             console.log('Grid lines removed');
         }
     }
-    
+
     exitBuildMode() {
         console.log('🎮 Exiting build mode - returning to normal camera');
-        
-        // Reset build mode flag
+
         this.isBuildMode = false;
-        
-        // Restore camera state
+
         if (this.savedCameraPosition && this.savedCameraRotation) {
             this.camera.getCamera().position.copy(this.savedCameraPosition);
             this.input.yaw = this.savedCameraRotation.yaw;
             this.input.pitch = this.savedCameraRotation.pitch;
-            
-            // Apply saved rotation to camera
+
             const yawQuaternion = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.input.yaw);
             const pitchQuaternion = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), this.input.pitch);
             this.camera.getCamera().quaternion.copy(yawQuaternion).multiply(pitchQuaternion);
-            
-            // Immediately update compass to reflect restored rotation
+
             if (this.compass) {
                 this.compass.update(this.input.yaw);
             }
         }
-        
-        // Hide build mode UI
+
         this.hideBuildModeUI();
 
-        // Remove grid lines + enemy-zone overlay
         this.removeGridLines();
         this.removeEnemyZoneOverlay();
-        // Put any in-hand wall down so it doesn't linger after exit.
+
         this.deselectWallPlacement();
 
         const moneyDisplay = document.getElementById('moneyDisplay');
@@ -3606,25 +3170,21 @@ export class Game {
         if (minimapArrow) {
             minimapArrow.style.display = 'block';
         }
-        
-        // Show game UI again
+
         this.showGameUI();
-        
-        // Force recreate compass if it's not working
+
         if (this.compass) {
-            // Remove any broken compass elements
+
             document.querySelectorAll('[id*="compass"]').forEach(el => el.remove());
-            
-            // Recreate compass - import Compass class
+
             import('../ui/Compass.js').then(module => {
                 this.compass = new module.Compass();
             });
         }
-        
-        // Restore default cursor
+
         document.body.style.cursor = 'default';
     }
-    
+
     showBuildModeUI() {
         let buildUI = document.getElementById('buildModeUI');
         if (!buildUI) {
@@ -3665,9 +3225,6 @@ export class Game {
             color: #ef4e23;
         `;
 
-        // Swatch previews each wall in MY team color. The destructible wall looks
-        // the same as the others on purpose — only the "Destructible" label tells
-        // the builder which one it is; in-world it's indistinguishable to enemies.
         const myTeam = this.playerTeam === 'red' ? 'red' : 'orange';
         const main = myTeam === 'red' ? '#1a2447' : '#ef4e23';
         const slotInner = (hotkey, name, price, wallType) => {
@@ -3920,14 +3477,14 @@ export class Game {
         if (timerEl) {
             const t = this.buildPhaseTimer;
             timerEl.textContent = t != null ? `${t}s` : '--';
-            // Pulse the countdown when time is running out (≤10s), no color change.
+
             timerEl.style.animation = (t != null && t <= 10) ? 'hudUrgent 0.7s ease infinite' : 'none';
         }
         const moneyEl = document.getElementById('buildBannerMoney');
         if (moneyEl) {
             moneyEl.textContent = `$${this.buildMoney}`;
         }
-        // Bottom hint reflects whether a wall is currently in hand.
+
         const hintEl = document.getElementById('buildBottomHint');
         if (hintEl) {
             const placed = (this.buildWalls && this.buildWalls.length) || 0;
@@ -3993,18 +3550,14 @@ export class Game {
             }
         });
     }
-    
+
     setupWallSelection() {
         const wallOptions = document.querySelectorAll('.wall-option');
         wallOptions.forEach(option => {
             const wallType = option.getAttribute('data-wall');
-            
-            // CLICK a card = select that wall type (ghost goes "in hand" and
-            // follows the cursor). Same flow as pressing the 1/2/3 hotkey. Then
-            // left-click the map to place as many as you want.
+
             if (wallType === 'barrier' || wallType === 'large' || wallType === 'destructible') {
-                // stopPropagation on mousedown/mouseup so the document-level
-                // place handler doesn't fire from the click that happens on the card.
+
                 option.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); });
                 option.addEventListener('mouseup', (e) => { e.stopPropagation(); });
                 option.addEventListener('click', (event) => {
@@ -4013,7 +3566,7 @@ export class Game {
                     this.startWallPlacementFromHotkey(wallType);
                 });
             }
-            
+
             option.addEventListener('mouseenter', () => {
                 if (!option.classList.contains('selected')) {
                     option.style.background = 'rgba(239, 78, 35, 0.12)';
@@ -4045,11 +3598,10 @@ export class Game {
             selectedOption.style.border = '1px solid rgba(239, 78, 35, 0.7)';
             selectedOption.style.boxShadow = '0 0 0 1px rgba(239, 78, 35, 0.3), 0 0 12px rgba(239, 78, 35, 0.18)';
         }
-        
+
         this.selectedWallType = wallType;
         console.log(`Selected wall type: ${wallType}`);
-        
-        // Enable drag mode and set cursor for wall building
+
         if (wallType === 'barrier') {
             this.isDragModeEnabled = true;
             this.setWallCursor();
@@ -4058,7 +3610,7 @@ export class Game {
             this.isDragModeEnabled = false;
         }
     }
-    
+
     hideBuildModeUI() {
         const buildUI = document.getElementById('buildModeUI');
         if (buildUI) {
@@ -4077,55 +3629,48 @@ export class Game {
 
         document.body.style.cursor = 'default';
     }
-    
+
     setCustomCursor() {
-        // Create orange crosshair cursor for build mode
+
         const canvas = document.createElement('canvas');
         canvas.width = 32;
         canvas.height = 32;
         const ctx = canvas.getContext('2d');
-        
-        // Draw orange crosshair
+
         ctx.strokeStyle = '#ef4e23';
         ctx.lineWidth = 2;
         ctx.lineCap = 'round';
-        
-        // Horizontal line
+
         ctx.beginPath();
         ctx.moveTo(8, 16);
         ctx.lineTo(24, 16);
         ctx.stroke();
-        
-        // Vertical line
+
         ctx.beginPath();
         ctx.moveTo(16, 8);
         ctx.lineTo(16, 24);
         ctx.stroke();
-        
-        // Center dot
+
         ctx.fillStyle = '#ef4e23';
         ctx.beginPath();
         ctx.arc(16, 16, 2, 0, 2 * Math.PI);
         ctx.fill();
-        
-        // Set cursor
+
         const dataURL = canvas.toDataURL();
         document.body.style.cursor = `url(${dataURL}) 16 16, auto`;
     }
-    
+
     setWallCursor() {
-        // Create big black mouse cursor like editor
+
         const canvas = document.createElement('canvas');
         canvas.width = 48;
         canvas.height = 48;
         const ctx = canvas.getContext('2d');
-        
-        // Draw big black arrow cursor
+
         ctx.fillStyle = '#000000';
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
-        
-        // Draw arrow shape (large pointer)
+
         ctx.beginPath();
         ctx.moveTo(8, 8);
         ctx.lineTo(8, 28);
@@ -4136,67 +3681,60 @@ export class Game {
         ctx.lineTo(28, 22);
         ctx.closePath();
         ctx.fill();
-        
-        // Add white outline for visibility
+
         ctx.stroke();
-        
+
         const dataURL = canvas.toDataURL();
         document.body.style.cursor = `url(${dataURL}) 8 8, auto`;
-        
-        // Force cursor to stay visible
+
         document.body.style.pointerEvents = 'auto';
     }
-    
+
     setDragCursor() {
-        // Create bigger black dragging cursor with placement indicator
+
         const canvas = document.createElement('canvas');
         canvas.width = 48;
         canvas.height = 48;
         const ctx = canvas.getContext('2d');
-        
-        // Draw black placement crosshair
+
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 3;
         ctx.lineCap = 'round';
-        
-        // Draw cross
+
         ctx.beginPath();
-        // Vertical line
+
         ctx.moveTo(24, 8);
         ctx.lineTo(24, 40);
-        // Horizontal line
+
         ctx.moveTo(8, 24);
         ctx.lineTo(40, 24);
         ctx.stroke();
-        
-        // Add white outline for visibility
+
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1;
         ctx.stroke();
-        
-        // Draw corner brackets to indicate placement area
+
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        // Top-left bracket
+
         ctx.moveTo(12, 16);
         ctx.lineTo(12, 12);
         ctx.lineTo(16, 12);
-        // Top-right bracket
+
         ctx.moveTo(32, 12);
         ctx.lineTo(36, 12);
         ctx.lineTo(36, 16);
-        // Bottom-left bracket
+
         ctx.moveTo(12, 32);
         ctx.lineTo(12, 36);
         ctx.lineTo(16, 36);
-        // Bottom-right bracket
+
         ctx.moveTo(32, 36);
         ctx.lineTo(36, 36);
         ctx.lineTo(36, 32);
         ctx.stroke();
-        
-        // Center dot
+
         ctx.fillStyle = '#000000';
         ctx.beginPath();
         ctx.arc(24, 24, 3, 0, 2 * Math.PI);
@@ -4204,46 +3742,44 @@ export class Game {
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1;
         ctx.stroke();
-        
+
         const dataURL = canvas.toDataURL();
         document.body.style.cursor = `url(${dataURL}) 24 24, auto`;
     }
-    
+
     createFloatingWallPreview() {
-        // Remove any existing floating preview
+
         this.clearFloatingWallPreview();
-        
-        // ALL walls have same length for clean grid
-        const wallLength = 20;  // All walls same length (one grid square)
-        const wallThickness = 2;  // All walls same thickness
-        
+
+        const wallLength = 20;
+        const wallThickness = 2;
+
         let height;
         if (this.selectedWallType === 'barrier') {
-            height = 10; // Barrier half height
+            height = 10;
         } else {
-            height = 20; // Full height for large and destructible
+            height = 20;
         }
-        
+
         const width = wallLength;
         const depth = wallThickness;
-        
-        // Create a green wall mesh that follows the mouse
+
         const wallGeometry = new THREE.BoxGeometry(width, height, depth);
-        const wallMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0x00ff00,  // Green color
-            transparent: true, 
+        const wallMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00ff00,
+            transparent: true,
             opacity: 0.5,
             side: THREE.DoubleSide
         });
-        
+
         this.floatingWallPreview = new THREE.Mesh(wallGeometry, wallMaterial);
-        this.floatingWallPreview.layers.set(1); // Put on layer 1 to avoid raycasting
-        this.floatingWallPreview.rotation.y = this.currentWallRotation; // Set initial rotation
+        this.floatingWallPreview.layers.set(1);
+        this.floatingWallPreview.rotation.y = this.currentWallRotation;
         this.scene.getScene().add(this.floatingWallPreview);
-        
+
         console.log(`Created floating green ${this.selectedWallType} wall preview with rotation:`, Math.round(this.currentWallRotation * 180 / Math.PI) + '°');
     }
-    
+
     clearFloatingWallPreview() {
         if (this.floatingWallPreview) {
             console.log('CLEANUP: Removing floating wall preview from scene');
@@ -4256,15 +3792,15 @@ export class Game {
             console.log('CLEANUP: No floating wall preview to remove');
         }
     }
-    
+
     setupGlobalDragHandlers() {
-        if (this.globalDragHandlers) return; // already attached (place-many keeps them on)
-        // Store handlers so we can remove them later
+        if (this.globalDragHandlers) return;
+
         this.globalDragHandlers = {
             mousemove: (event) => this.onGlobalDragMove(event),
             mouseup: (event) => this.onGlobalDragEnd(event),
             keydown: (event) => this.onBuildModeKeyDown(event),
-            // Right-click anywhere = put the wall down (and suppress the browser menu).
+
             contextmenu: (event) => {
                 if (this.isDraggingFromUI) {
                     event.preventDefault();
@@ -4273,7 +3809,6 @@ export class Game {
             },
         };
 
-        // Add to document for global tracking
         document.addEventListener('mousemove', this.globalDragHandlers.mousemove);
         document.addEventListener('mouseup', this.globalDragHandlers.mouseup);
         document.addEventListener('keydown', this.globalDragHandlers.keydown);
@@ -4289,9 +3824,9 @@ export class Game {
             this.globalDragHandlers = null;
         }
     }
-    
+
     onBuildModeKeyDown(event) {
-        // R = rotate the wall in hand 90°.
+
         if (event.code === 'KeyR') {
             event.preventDefault();
             this.currentWallRotation += Math.PI / 2;
@@ -4304,7 +3839,7 @@ export class Game {
             console.log(`Wall rotation: ${Math.round(this.currentWallRotation * 180 / Math.PI)}°`);
             return;
         }
-        // Q or Esc = put the wall down (deselect), staying in build mode.
+
         if (event.code === 'KeyQ' || event.code === 'Escape') {
             if (this.isDraggingFromUI) {
                 event.preventDefault();
@@ -4312,58 +3847,50 @@ export class Game {
             }
         }
     }
-    
+
     onGlobalDragMove(event) {
         if (!this.isDraggingFromUI || !this.floatingWallPreview) {
             if (!this.isDraggingFromUI) console.log('DRAG MOVE: Not dragging from UI, ignoring');
             if (!this.floatingWallPreview) console.log('DRAG MOVE: No floating preview, ignoring');
             return;
         }
-        
-        // Update floating wall position to follow mouse in 3D space
+
         const mapPosition = this.getMapPositionFromMouse(event);
         if (mapPosition) {
-            // SNAP TO GRID - like Fortnite
+
             const snappedPosition = this.snapToGrid(mapPosition);
-            
-            // Set Y position based on wall type
+
             let yPos;
             if (this.selectedWallType === 'large') {
-                yPos = 10; // Large walls at standard height
-                yPos = 1.5; // Ramps at ground level for walking
+                yPos = 10;
+                yPos = 1.5;
             } else if (this.selectedWallType === 'destructible') {
-                yPos = 10; // Destructible walls at standard height
+                yPos = 10;
             } else {
-                yPos = 5; // Barriers at waist height
+                yPos = 5;
             }
-            
-            // Check if we can place at this position
+
             const canPlace = this.canPlaceWallAtPosition(snappedPosition, this.selectedWallType);
-            
-            // Change preview color based on placement validity
+
             if (canPlace) {
-                this.floatingWallPreview.material.color.setHex(0x00ff00); // Green = can place
+                this.floatingWallPreview.material.color.setHex(0x00ff00);
                 this.floatingWallPreview.material.opacity = 0.5;
             } else {
-                this.floatingWallPreview.material.color.setHex(0xff0000); // Red = cannot place
+                this.floatingWallPreview.material.color.setHex(0xff0000);
                 this.floatingWallPreview.material.opacity = 0.3;
             }
-            
-            // Update preview position (snapped to grid)
+
             this.floatingWallPreview.position.set(snappedPosition.x, yPos, snappedPosition.z);
-            // Keep rotation fixed - only changes with R key
+
             this.floatingWallPreview.rotation.y = this.currentWallRotation;
         }
     }
-    
-    // LEFT-CLICK on the map = place a wall AND keep the same wall type in hand
-    // so the player can place many in a row (RTS-style). Right-click / Q / Esc
-    // put the wall down (see onBuildModePointerDown / onBuildModeKeyDown).
+
     onGlobalDragEnd(event) {
         if (!this.isDraggingFromUI) return;
-        // Only the LEFT button places. Other buttons are handled as "put down".
+
         if (event && typeof event.button === 'number' && event.button !== 0) return;
-        // Ignore clicks that land on the build UI (hotbar, banner, buttons).
+
         if (event && event.target && event.target.closest &&
             event.target.closest('#buildModeUI')) return;
 
@@ -4372,16 +3899,14 @@ export class Game {
             const snappedPosition = this.snapToGrid(mapPosition);
             if (this.canPlaceWallAtPosition(snappedPosition, this.selectedWallType, true)) {
                 this.placeWallAtPosition(snappedPosition, this.currentWallRotation);
-                this.refreshBuildBanner(); // update money / count
+                this.refreshBuildBanner();
             } else {
                 console.log('Cannot place wall here - occupied / invalid / enemy tunnel');
             }
         }
-        // DO NOT reset the selection — keep the wall in hand for the next click.
-        // The ghost preview stays attached and keeps following the cursor.
+
     }
 
-    // Put the wall down: clear the in-hand wall type + ghost, back to no selection.
     deselectWallPlacement() {
         if (!this.isDraggingFromUI && !this.selectedWallType) return;
         this.isDraggingFromUI = false;
@@ -4394,72 +3919,56 @@ export class Game {
         this.setWallCursor();
         this.refreshBuildBanner();
     }
-    
-    // Grid system functions
+
     snapToGrid(position) {
-        // Snap walls to grid edges based on rotation
-        // This ensures walls connect perfectly at corners
+
         const isVertical = Math.abs(this.currentWallRotation % Math.PI) > 0.1;
-        
+
         let snappedX, snappedZ;
-        
+
         if (isVertical) {
-            // Vertical walls snap to grid lines on X, centers on Z
+
             snappedX = Math.round(position.x / this.gridSize) * this.gridSize;
-            // Offset by half wall length so ends align with grid
+
             snappedZ = Math.round((position.z + 10) / this.gridSize) * this.gridSize - 10;
         } else {
-            // Horizontal walls snap to centers on X, grid lines on Z  
+
             snappedX = Math.round((position.x + 10) / this.gridSize) * this.gridSize - 10;
             snappedZ = Math.round(position.z / this.gridSize) * this.gridSize;
         }
-        
+
         return { x: snappedX, y: position.y, z: snappedZ };
     }
-    
+
     getGridKey(position) {
-        // Create unique key for grid position
+
         const gridX = Math.round(position.x / this.gridSize);
         const gridZ = Math.round(position.z / this.gridSize);
         return `${gridX}_${gridZ}`;
     }
-    
-    // The four diagonal tunnels of the bowtie map, as corridors from a spawn
-    // (0, ±300) to a site (±250, 0). A team owns the two tunnels on ITS side and
-    // may NOT build in the enemy's two — otherwise it could wall off the enemy's
-    // only routes to the sites. halfWidth is generous so a wall anywhere across
-    // the corridor is caught.
+
     enemyTunnelCorridors() {
-        // HALF_WIDTH 50 = pathWidth 100 / 2, so the no-build lane is exactly the
-        // visible diagonal tunnel floor (and matches the red overlay strip).
+
         const SPAWN_Z = 300, SITE_X = 250, HALF_WIDTH = 50;
-        const SITE_HALF = 90; // bomb-site half-size — the lane STOPS at the site edge,
-                              // so the no-build zone doesn't run into the shared site.
-        // Our half is myHalfSign; the enemy spawns on the opposite side.
+        const SITE_HALF = 90;
+
         const enemyZ = -this.myHalfSign * SPAWN_Z;
-        if (!this.myHalfSign) return []; // unknown half → don't restrict
+        if (!this.myHalfSign) return [];
         const mk = (siteX) => {
             const sx = 0, sz = enemyZ, ex = siteX, ez = 0;
             const dx = ex - sx, dz = ez - sz;
             const fullLen = Math.hypot(dx, dz);
-            const ux = dx / fullLen, uz = dz / fullLen;   // along
-            const px = -uz, pz = ux;              // perpendicular
-            // Trim the site end so the lane ends where the site box starts (its near
-            // edge ~SITE_HALF from the site center), not at the site center.
+            const ux = dx / fullLen, uz = dz / fullLen;
+            const px = -uz, pz = ux;
+
             const len = Math.max(20, fullLen - SITE_HALF);
             return { sx, sz, len, ux, uz, px, pz, halfWidth: HALF_WIDTH };
         };
         return [mk(-SITE_X), mk(SITE_X)];
     }
 
-    // Is (x,z) inside one of the ENEMY tunnel corridors? The enemy's spawn→site
-    // LANES are off limits. The tunnel check takes PRIORITY over the shared-site
-    // exclusion: where a lane overlaps the site box (the tunnel MOUTH right next to
-    // the site) it stays blocked — otherwise a wall could sneak into the red lane
-    // just shy of the site. Only cells that are in the site box AND not in any lane
-    // are allowed (so you can still build ON the contested site itself).
     isInEnemyTunnel(x, z) {
-        // In an enemy lane → blocked, regardless of the site box.
+
         for (const c of this.enemyTunnelCorridors()) {
             const lx = x - c.sx, lz = z - c.sz;
             const along = lx * c.ux + lz * c.uz;
@@ -4472,43 +3981,32 @@ export class Game {
         return false;
     }
 
-    // Would a wall placed at `pos` (with the current rotation) touch the enemy
-    // tunnel red zone ANYWHERE along its body? The red zone is the source of truth:
-    // if any part of the wall's footprint falls in it, the placement is refused —
-    // not just when the wall's center does. We sample points across the wall's
-    // 20×2 footprint and test each with isInEnemyTunnel (the same rule the overlay
-    // draws), so a wall edge clipping the angled lane is caught too.
     wallTouchesEnemyTunnel(pos) {
-        if (!this.myHalfSign) return false; // half unknown → no restriction
-        const fp = this.candidateFootprint(pos); // {x,z,hx,hz} axis-aligned (walls are 0/90°)
-        const STEP = 2; // sample every 2 units across the footprint — finer than the 2-thick wall
+        if (!this.myHalfSign) return false;
+        const fp = this.candidateFootprint(pos);
+        const STEP = 2;
         for (let dx = -fp.hx; dx <= fp.hx; dx += STEP) {
             for (let dz = -fp.hz; dz <= fp.hz; dz += STEP) {
                 if (this.isInEnemyTunnel(fp.x + dx, fp.z + dz)) return true;
             }
-            // Make sure the far edge (dz === +hz) is always sampled even if hz isn't
-            // a multiple of STEP.
+
             if (this.isInEnemyTunnel(fp.x + dx, fp.z + fp.hz)) return true;
         }
-        // And the far x edge for every z sample.
+
         for (let dz = -fp.hz; dz <= fp.hz; dz += STEP) {
             if (this.isInEnemyTunnel(fp.x + fp.hx, fp.z + dz)) return true;
         }
         return false;
     }
 
-    // Axis-aligned footprint (half-extents in x/z) of a placed wall mesh. Walls
-    // are 20 long × 2 thick boxes rotated about Y; at 0/180° they're 20 wide in
-    // x, at 90/270° they're 20 wide in z.
     wallFootprint(mesh) {
         const len = 20, thick = 2;
-        const vertical = Math.abs((mesh.rotation.y % Math.PI)) > 0.1; // ~90°
+        const vertical = Math.abs((mesh.rotation.y % Math.PI)) > 0.1;
         const hx = vertical ? thick / 2 : len / 2;
         const hz = vertical ? len / 2 : thick / 2;
         return { x: mesh.position.x, z: mesh.position.z, hx, hz };
     }
 
-    // Footprint for a CANDIDATE wall at a snapped grid pos with current rotation.
     candidateFootprint(pos) {
         const len = 20, thick = 2;
         const vertical = Math.abs((this.currentWallRotation % Math.PI)) > 0.1;
@@ -4517,34 +4015,26 @@ export class Game {
         return { x: pos.x, z: pos.z, hx, hz };
     }
 
-    // The FIVE tunnels of the bowtie map as oriented corridors {sx,sz, ux,uz (along),
-    // px,pz (across), len, half}: the 4 diagonal spawn→site lanes + the mid A↔B lane.
-    // Each must ALWAYS keep at least one open gap across its width — you can never
-    // fully wall off any single tunnel, even if a detour exists. Cached.
     tunnels() {
         if (this._tunnelList) return this._tunnelList;
         const SPAWN_Z = 300, SITE_X = 250, PATH = 100;
         const mk = (sx, sz, ex, ez) => {
             const dx = ex - sx, dz = ez - sz;
             const len = Math.hypot(dx, dz);
-            const ux = dx / len, uz = dz / len;   // along
-            const px = -uz, pz = ux;               // across
+            const ux = dx / len, uz = dz / len;
+            const px = -uz, pz = ux;
             return { sx, sz, ux, uz, px, pz, len, half: PATH / 2 };
         };
         this._tunnelList = [
-            mk(0, -SPAWN_Z, -SITE_X, 0),   // bottom spawn → site A
-            mk(0, -SPAWN_Z, SITE_X, 0),    // bottom spawn → site B
-            mk(0, SPAWN_Z, -SITE_X, 0),    // top spawn → site A
-            mk(0, SPAWN_Z, SITE_X, 0),     // top spawn → site B
-            mk(-SITE_X, 0, SITE_X, 0),     // mid (A↔B)
+            mk(0, -SPAWN_Z, -SITE_X, 0),
+            mk(0, -SPAWN_Z, SITE_X, 0),
+            mk(0, SPAWN_Z, -SITE_X, 0),
+            mk(0, SPAWN_Z, SITE_X, 0),
+            mk(-SITE_X, 0, SITE_X, 0),
         ];
         return this._tunnelList;
     }
 
-    // Can you still walk from one END of this tunnel to the other, given the walls?
-    // Flood-fill the corridor's OWN open space in its local frame (along × across)
-    // and check the start edge still connects to the far edge. Returns true if the
-    // tunnel is still passable.
     tunnelPassable(c, walls, pad) {
         const stepA = 4, stepP = 4;
         const blocked = (wx, wz) => {
@@ -4572,7 +4062,7 @@ export class Game {
         const last = cols.length - 1;
         while (queue.length) {
             const [ci, ri] = queue.pop();
-            if (ci === last) return true; // reached the far end → still open
+            if (ci === last) return true;
             for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
                 const nc = ci + dc, nr = ri + dr;
                 if (nc < 0 || nr < 0 || nc >= cols.length || nr >= rows.length) continue;
@@ -4580,15 +4070,9 @@ export class Game {
                 if (open.has(k) && !seen.has(k)) { seen.add(k); queue.push([nc, nr]); }
             }
         }
-        return false; // never reached the far end → tunnel sealed
+        return false;
     }
 
-    // Would placing this wall fully SEAL any tunnel? Rule: EVERY one of the five
-    // tunnels must keep at least one open gap across its width. We add the candidate
-    // wall, then check each tunnel can still be crossed end-to-end. Refuse if any
-    // tunnel closes. (We test ALL five, not just nearby ones, so a wall — straight,
-    // diagonal or a half-circle — that seals a tunnel from outside its lane is still
-    // caught.)
     wouldSealAnyTunnel(position) {
         const walls = (this.buildWalls || []).map((m) => this.wallFootprint(m));
         walls.push(this.candidateFootprint(position));
@@ -4602,39 +4086,28 @@ export class Game {
     canPlaceWallAtPosition(position, wallType, shouldFlash = false) {
         const gridPos = this.snapToGrid(position);
 
-        // ZONE RULE: can't build in the enemy's two diagonal tunnels. The red zone
-        // is the source of truth — if ANY part of the wall's footprint touches it
-        // (not just the center), the placement is refused.
         if (this.wallTouchesEnemyTunnel(gridPos)) {
             if (shouldFlash) this.flashBuildZoneWarning("Can't build in enemy tunnels");
             return false;
         }
 
-        // ZONE RULE 2: every tunnel must keep at least one open gap — you can't
-        // fully wall off ANY of the five tunnels (the four spawn→site lanes or the
-        // mid A↔B lane). Partial walls are fine; only the wall that would seal a
-        // tunnel shut is refused.
         if (this.wouldSealAnyTunnel(gridPos)) {
             if (shouldFlash) this.flashBuildZoneWarning("Can't fully close a tunnel");
             return false;
         }
 
-        // Check if player has enough money
         const cost = wallType === 'large' ? 200 : 100;
         if (this.buildMoney < cost) {
-            // Only flash on drop attempt, not while dragging
+
             if (shouldFlash) {
                 this.flashMoneyRed();
             }
             return false;
         }
 
-        // Create unique key based on position and rotation
-        // This ensures walls don't overlap
         const isVertical = Math.abs(this.currentWallRotation % Math.PI) > 0.1;
         const wallKey = `${gridPos.x}_${gridPos.z}_${isVertical ? 'V' : 'H'}`;
 
-        // Check if this exact wall position and orientation is taken
         if (this.placedWallPositions.has(wallKey)) {
             return false;
         }
@@ -4642,7 +4115,6 @@ export class Game {
         return true;
     }
 
-    // Brief banner explaining why a drop was refused (enemy tunnel / sealing mid).
     flashBuildZoneWarning(msg = "Can't build here") {
         let el = document.getElementById('buildZoneWarning');
         if (!el) {
@@ -4662,39 +4134,35 @@ export class Game {
         clearTimeout(this._buildZoneWarnTimer);
         this._buildZoneWarnTimer = setTimeout(() => { el.style.opacity = '0'; }, 1400);
     }
-    
+
     markGridAsOccupied(position, wallType) {
         const gridPos = this.snapToGrid(position);
-        
-        // Mark this exact position and orientation as occupied
+
         const isVertical = Math.abs(this.currentWallRotation % Math.PI) > 0.1;
         const wallKey = `${gridPos.x}_${gridPos.z}_${isVertical ? 'V' : 'H'}`;
         this.placedWallPositions.add(wallKey);
-        
+
         console.log(`Marked ${isVertical ? 'vertical' : 'horizontal'} wall at (${gridPos.x}, ${gridPos.z})`);
     }
-    
-    
+
     handleRemoteBuildingPlaced(message) {
-        // Another player placed a building
+
         console.log('Received building placement message:', message);
         const position = { x: message.x, z: message.z, y: 0 };
         const rotation = message.rotation;
         const wallType = message.building_type;
-        
+
         console.log(`Remote player ${message.player_id} placed ${wallType} at (${position.x}, ${position.z}) rotation: ${rotation}`);
 
-        // Place the wall visually without spending money — colored by the team
-        // that built it (looked up from player_id).
         const team = (this.playerTeams && this.playerTeams[message.player_id]) || 'orange';
         this.placeRemoteWall(position, rotation, wallType, team);
     }
 
     placeRemoteWall(position, rotation, wallType, team = 'orange') {
-        // Similar to placeWallAtPosition but without money check and network send
+
         const wallLength = 20;
         const wallThickness = 2;
-        
+
         let height, yPos;
         if (wallType === 'large') {
             height = 20;
@@ -4706,17 +4174,15 @@ export class Game {
             height = 10;
             yPos = 5;
         }
-        
+
         const width = wallLength;
         const depth = wallThickness;
-        
-        // Mark grid position as occupied
+
         const savedRotation = this.currentWallRotation;
         this.currentWallRotation = rotation;
         this.markGridAsOccupied(position, wallType);
         this.currentWallRotation = savedRotation;
-        
-        // Create the wall geometry
+
         const wallGeometry = new THREE.BoxGeometry(width, height, depth);
         const isDestructible = wallType === 'destructible';
 
@@ -4726,19 +4192,18 @@ export class Game {
         wall.rotation.y = rotation;
         wall.castShadow = true;
         wall.receiveShadow = true;
-        // Color by team + add the destructible X marker.
+
         this.decorateWall(wall, width, height, depth, team, isDestructible);
-        
+
         if (wallType === 'destructible') {
             wall.userData.isDestructible = true;
             wall.userData.bulletHoles = [];
             wall.userData.wallType = 'destructible';
         }
-        
+
         this.scene.add(wall);
         this.buildWalls.push(wall);
-        
-        // Add collision
+
         if (this.collisionSystem) {
             const collisionHeight = wallType === 'barrier' ? 5 : 10;
             this.collisionSystem.addBoxCollider(
@@ -4750,18 +4215,12 @@ export class Game {
         }
     }
 
-    // Palette: a team's MAIN color + its ACCENT (the opposite). Orange team =
-    // orange/navy, navy team ('red') = navy/orange. Flipped per team.
     teamWallColors(team) {
         return team === 'red'
-            ? { main: 0x1a2447, accent: 0xef4e23, emissive: 0x0d1326 } // navy team
-            : { main: 0xef4e23, accent: 0x1a2447, emissive: 0x331100 }; // orange team
+            ? { main: 0x1a2447, accent: 0xef4e23, emissive: 0x0d1326 }
+            : { main: 0xef4e23, accent: 0x1a2447, emissive: 0x331100 };
     }
 
-    // Color a wall in its team's main color. Destructible walls are deliberately
-    // rendered IDENTICALLY to normal walls (no X / special marker) so enemies
-    // can't tell at a glance which walls can be shot through — they have to test
-    // it. The `isDestructible` flag only controls the hole mechanic, not looks.
     decorateWall(wall, width, height, depth, team, isDestructible) {
         const c = this.teamWallColors(team);
         if (wall.material) {
@@ -4773,38 +4232,34 @@ export class Game {
     }
 
     placeWallAtPosition(position, rotation) {
-        // Position is already snapped to grid
-        
-        // ALL walls have same length (20 units) for clean grid
-        const wallLength = 20;  // All walls same length
-        const wallThickness = 2;  // All walls same thickness
-        
+
+        const wallLength = 20;
+        const wallThickness = 2;
+
         let height, yPos, cost;
         if (this.selectedWallType === 'large') {
-            height = 20; // Full height
+            height = 20;
             yPos = 10;
             cost = 800;
         } else if (this.selectedWallType === 'destructible') {
-            height = 20; // Full height
+            height = 20;
             yPos = 10;
             cost = 600;
         } else {
-            // Barrier - same length, half height
-            height = 10; // Half height
+
+            height = 10;
             yPos = 5;
             cost = 400;
         }
-        
+
         const width = wallLength;
         const depth = wallThickness;
-        
-        // Check if player has enough money
+
         if (this.buildMoney < cost) {
             console.log(`Not enough money for ${this.selectedWallType} wall`);
             return;
         }
-        
-        // Send to network FIRST so other players see it
+
         if (this.network && this.network.isConnected()) {
             console.log(`Sending building placement: ${this.selectedWallType} at (${position.x}, ${position.z}) rotation: ${rotation}`);
             this.network.sendPlaceBuilding(position, rotation, this.selectedWallType);
@@ -4812,12 +4267,9 @@ export class Game {
         } else {
             console.log('Network not connected, building placement not sent');
         }
-        
-        // Mark grid position as occupied BEFORE placing wall (pass rotation)
+
         this.markGridAsOccupied(position, this.selectedWallType);
-        
-        // Create wall with correct orientation
-        // Wall always has length 20, but rotation determines which axis
+
         const wallGeometry = new THREE.BoxGeometry(width, height, depth);
         const isDestructible = this.selectedWallType === 'destructible';
 
@@ -4827,21 +4279,18 @@ export class Game {
         wall.rotation.y = rotation;
         wall.castShadow = true;
         wall.receiveShadow = true;
-        // Color by MY team + add the destructible X marker.
+
         this.decorateWall(wall, width, height, depth, this.playerTeam, isDestructible);
-        
-        // Mark destructible walls with special properties
+
         if (this.selectedWallType === 'destructible') {
             wall.userData.isDestructible = true;
-            wall.userData.bulletHoles = []; // Array to track bullet holes
+            wall.userData.bulletHoles = [];
             wall.userData.wallType = 'destructible';
         }
-        
+
         this.scene.getScene().add(wall);
-        this.buildWalls.push(wall);  // Track for cleanup
-        
-        // Add collision — tag as 'buildWall' (so map reset can clear it) and pass
-        // the wall's Y rotation so a rotated wall collides on its real footprint.
+        this.buildWalls.push(wall);
+
         this.collisionSystem.addBoxCollider(
             { x: position.x, y: yPos, z: position.z },
             { x: width, y: height, z: depth },
@@ -4849,59 +4298,54 @@ export class Game {
             rotation
         );
 
-        // Deduct money
         this.buildMoney -= cost;
-        this.playerMoney = this.buildMoney; // Keep playerMoney in sync
+        this.playerMoney = this.buildMoney;
         this.updateMoneyDisplay();
-        
+
         const gridKey = this.getGridKey(position);
         console.log(`Placed ${this.selectedWallType} wall at grid (${position.x}, ${position.z}) [${gridKey}] for $${cost}. Money: $${this.buildMoney}`);
     }
 
-    
     clearWallSelections() {
-        // Remove all wall option selections
+
         document.querySelectorAll('.wall-option').forEach(option => {
             option.classList.remove('selected');
-            // Reset to transparent background with subtle border
+
             option.style.background = 'transparent';
             option.style.border = '1px solid rgba(239, 78, 35, 0.12)';
         });
     }
-    
+
     updateMoneyDisplay() {
-        // Update the money display in bottom right
+
         const moneyAmount = document.getElementById('moneyAmount');
         if (moneyAmount) {
             moneyAmount.textContent = `$${this.buildMoney}`;
         }
-        
-        // Show/hide money display based on build mode
+
         const moneyDisplay = document.getElementById('moneyDisplay');
         if (moneyDisplay) {
-            if (this.isBuildMode) {  // Fixed typo: was inBuildMode, should be isBuildMode
+            if (this.isBuildMode) {
                 moneyDisplay.style.display = 'flex';
             } else {
                 moneyDisplay.style.display = 'none';
             }
         }
     }
-    
+
     flashMoneyRed() {
         const moneyAmount = document.getElementById('moneyAmount');
         const moneyDisplay = document.getElementById('moneyDisplay');
-        
+
         if (moneyAmount && moneyDisplay) {
-            // Store original color
+
             const originalColor = moneyAmount.style.color || '#ef4e23';
             const originalBorder = moneyDisplay.style.border;
-            
-            // Flash red
+
             moneyAmount.style.color = '#ef4e23';
             moneyDisplay.style.border = '1px solid rgba(239, 78, 35, 0.6)';
             moneyDisplay.style.animation = 'shake 0.3s';
-            
-            // Reset after animation
+
             setTimeout(() => {
                 moneyAmount.style.color = originalColor;
                 moneyDisplay.style.border = originalBorder || '1px solid rgba(76, 175, 80, 0.3)';
@@ -4909,253 +4353,221 @@ export class Game {
             }, 300);
         }
     }
-    
+
     setupWallPlacement() {
         const canvas = document.querySelector('#gameContainer canvas');
         if (!canvas) return;
-        
+
         this.wallPlacementHandlers = {
             mousedown: (event) => this.onWallPlaceStart(event),
             mousemove: (event) => this.onWallPlaceMove(event),
             mouseup: (event) => this.onWallPlaceEnd(event)
         };
-        
-        // Add event listeners for wall placement
+
         canvas.addEventListener('mousedown', this.wallPlacementHandlers.mousedown);
         canvas.addEventListener('mousemove', this.wallPlacementHandlers.mousemove);
         canvas.addEventListener('mouseup', this.wallPlacementHandlers.mouseup);
-        
+
         console.log('Wall placement system enabled');
     }
-    
+
     removeWallPlacement() {
         const canvas = document.querySelector('#gameContainer canvas');
         if (!canvas || !this.wallPlacementHandlers) return;
-        
+
         canvas.removeEventListener('mousedown', this.wallPlacementHandlers.mousedown);
         canvas.removeEventListener('mousemove', this.wallPlacementHandlers.mousemove);
         canvas.removeEventListener('mouseup', this.wallPlacementHandlers.mouseup);
-        
+
         console.log('Wall placement system disabled');
     }
-    
+
     onWallPlaceStart(event) {
-        // Only allow barrier placement when wall type is selected and drag mode is enabled
+
         if (this.selectedWallType !== 'barrier' || !this.isDragModeEnabled) return;
-        
-        // Get mouse position on the map
+
         const mapPosition = this.getMapPositionFromMouse(event);
         if (!mapPosition) return;
-        
+
         console.log('Starting wall drag at position:', mapPosition);
         this.isPlacingWall = true;
         this.wallStartPos = mapPosition.clone();
-        
-        // Change cursor to indicate dragging
+
         this.setDragCursor();
     }
-    
+
     onWallPlaceMove(event) {
         if (!this.isPlacingWall || this.selectedWallType !== 'barrier') return;
-        
-        // Update wall preview while dragging
+
         const mapPosition = this.getMapPositionFromMouse(event);
         if (!mapPosition) return;
-        
+
         this.updateBarrierPreview(this.wallStartPos, mapPosition);
     }
-    
+
     onWallPlaceEnd(event) {
         if (!this.isPlacingWall || this.selectedWallType !== 'barrier') return;
-        
+
         const mapPosition = this.getMapPositionFromMouse(event);
         if (!mapPosition) return;
-        
-        // Calculate distance to ensure minimum wall length
+
         const distance = this.wallStartPos.distanceTo(mapPosition);
         if (distance < 3) {
             console.log('Wall too short - minimum length is 3 units');
             this.isPlacingWall = false;
             this.wallStartPos = null;
             this.clearWallPreview();
-            this.setWallCursor(); // Restore wall cursor
+            this.setWallCursor();
             return;
         }
-        
+
         console.log(`Placing wall from (${this.wallStartPos.x.toFixed(1)}, ${this.wallStartPos.z.toFixed(1)}) to (${mapPosition.x.toFixed(1)}, ${mapPosition.z.toFixed(1)}) - Distance: ${distance.toFixed(1)} units`);
-        
-        // Place the barrier
+
         this.placeBarrier(this.wallStartPos, mapPosition);
-        
-        // Reset drag state
+
         this.isPlacingWall = false;
         this.wallStartPos = null;
-        
-        // Clear preview
+
         this.clearWallPreview();
-        
-        // Restore wall cursor for next placement
+
         this.setWallCursor();
     }
-    
+
     getMapPositionFromMouse(event) {
         const canvas = document.querySelector('#gameContainer canvas');
         if (!canvas) return null;
-        
-        // Get mouse coordinates relative to canvas
+
         const rect = canvas.getBoundingClientRect();
         const mouseX = event.clientX - rect.left;
         const mouseY = event.clientY - rect.top;
-        
-        // Convert to normalized device coordinates
+
         const mouse = new THREE.Vector2();
         mouse.x = (mouseX / canvas.clientWidth) * 2 - 1;
         mouse.y = -(mouseY / canvas.clientHeight) * 2 + 1;
-        
-        // Create raycaster from camera
+
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(mouse, this.camera.getCamera());
-        
-        // Get camera position to determine ground intersection
+
         const cameraPos = this.camera.getCamera().position;
         const ray = raycaster.ray;
-        
-        // Calculate intersection with ground plane at Y = 0
-        // Using parametric line equation: point = origin + t * direction
+
         const t = -ray.origin.y / ray.direction.y;
-        
+
         if (t > 0) {
-            // Calculate the intersection point
+
             const intersectionPoint = new THREE.Vector3();
             intersectionPoint.x = ray.origin.x + t * ray.direction.x;
             intersectionPoint.y = 0;
             intersectionPoint.z = ray.origin.z + t * ray.direction.z;
-            
+
             return intersectionPoint;
         }
-        
+
         return null;
     }
-    
+
     updateWallPreview(startPos, endPos) {
-        // Remove existing preview
+
         this.clearWallPreview();
-        
-        // Calculate wall dimensions
+
         const distance = startPos.distanceTo(endPos);
-        if (distance < 5) return; // Minimum wall size
-        
-        // Create preview wall
+        if (distance < 5) return;
+
         const wallHeight = 15;
         const wallWidth = this.selectedWallType === 'large' ? 3 : 1.5;
-        
+
         const wallGeometry = new THREE.BoxGeometry(distance, wallHeight, wallWidth);
-        const wallMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0xef4e23, 
-            transparent: true, 
-            opacity: 0.5 
+        const wallMaterial = new THREE.MeshBasicMaterial({
+            color: 0xef4e23,
+            transparent: true,
+            opacity: 0.5
         });
-        
+
         this.wallPreview = new THREE.Mesh(wallGeometry, wallMaterial);
-        
-        // Position wall between start and end points
+
         this.wallPreview.position.copy(startPos).add(endPos).multiplyScalar(0.5);
         this.wallPreview.position.y = wallHeight / 2;
-        
-        // Rotate wall to face the correct direction
+
         this.wallPreview.lookAt(endPos);
         this.wallPreview.rotateY(Math.PI / 2);
-        
+
         this.scene.getScene().add(this.wallPreview);
     }
-    
+
     updateBarrierPreview(startPos, endPos) {
-        // Remove existing preview
+
         this.clearWallPreview();
-        
-        // Calculate wall dimensions for barrier
+
         const distance = startPos.distanceTo(endPos);
-        if (distance < 3) return; // Minimum wall size for barriers
-        
-        // Create green preview for barrier
-        const wallHeight = 12; // Smaller height for barriers
-        const wallWidth = 1.5;  // Barrier width
-        
+        if (distance < 3) return;
+
+        const wallHeight = 12;
+        const wallWidth = 1.5;
+
         const wallGeometry = new THREE.BoxGeometry(distance, wallHeight, wallWidth);
-        const wallMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0x00ff00,  // Green preview color
-            transparent: true, 
-            opacity: 0.6 
+        const wallMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00ff00,
+            transparent: true,
+            opacity: 0.6
         });
-        
+
         this.wallPreview = new THREE.Mesh(wallGeometry, wallMaterial);
-        
-        // Position wall between start and end points
+
         this.wallPreview.position.copy(startPos).add(endPos).multiplyScalar(0.5);
         this.wallPreview.position.y = wallHeight / 2;
-        
-        // Rotate wall to face the correct direction
+
         this.wallPreview.lookAt(endPos);
         this.wallPreview.rotateY(Math.PI / 2);
-        
+
         this.scene.getScene().add(this.wallPreview);
-        
-        // Show visual feedback
+
         console.log(`Barrier preview: ${distance.toFixed(1)} units long`);
     }
-    
+
     clearWallPreview() {
         if (this.wallPreview) {
             this.scene.getScene().remove(this.wallPreview);
             this.wallPreview = null;
         }
     }
-    
+
     placeWall(startPos, endPos, wallType) {
         const distance = startPos.distanceTo(endPos);
-        if (distance < 5) return; // Minimum wall size
-        
-        // Check if player has enough money
+        if (distance < 5) return;
+
         const cost = wallType === 'large' ? 200 : 100;
         if (this.buildMoney < cost) {
             console.log('Not enough money for wall');
             return;
         }
-        
-        // Deduct money
+
         this.buildMoney -= cost;
-        this.playerMoney = this.buildMoney; // Keep playerMoney in sync
+        this.playerMoney = this.buildMoney;
         this.updateMoneyDisplay();
-        
-        // Create actual wall
+
         const wallHeight = 15;
         const wallWidth = wallType === 'large' ? 3 : 1.5;
-        
+
         const wallGeometry = new THREE.BoxGeometry(distance, wallHeight, wallWidth);
-        const wallMaterial = new THREE.MeshLambertMaterial({ 
+        const wallMaterial = new THREE.MeshLambertMaterial({
             color: 0xef4e23,
             emissive: 0xff3300,
             emissiveIntensity: 0.1
         });
-        
+
         const wall = new THREE.Mesh(wallGeometry, wallMaterial);
-        
-        // Position wall
+
         wall.position.copy(startPos).add(endPos).multiplyScalar(0.5);
         wall.position.y = wallHeight / 2;
-        
-        // Rotate wall
+
         wall.lookAt(endPos);
         wall.rotateY(Math.PI / 2);
-        
-        // Add shadows
+
         wall.castShadow = true;
         wall.receiveShadow = true;
-        
-        // Add to scene
+
         this.scene.getScene().add(wall);
-        
-        // Add collision
+
         if (this.collisionSystem) {
             this.collisionSystem.addBoxCollider(
                 wall.position,
@@ -5163,55 +4575,47 @@ export class Game {
                 'wall'
             );
         }
-        
+
         console.log(`Placed ${wallType} wall for $${cost}. Money remaining: $${this.buildMoney}`);
     }
-    
+
     placeBarrier(startPos, endPos) {
         const distance = startPos.distanceTo(endPos);
-        if (distance < 3) return; // Minimum wall size for barriers
-        
-        // Check if player has enough money for barrier
+        if (distance < 3) return;
+
         const cost = 100;
         if (this.buildMoney < cost) {
             console.log('Not enough money for barrier');
             return;
         }
-        
-        // Deduct money
+
         this.buildMoney -= cost;
-        this.playerMoney = this.buildMoney; // Keep playerMoney in sync
+        this.playerMoney = this.buildMoney;
         this.updateMoneyDisplay();
-        
-        // Create barrier
-        const wallHeight = 12; // Smaller than player height
-        const wallWidth = 1.5;  // Thin wall
-        
+
+        const wallHeight = 12;
+        const wallWidth = 1.5;
+
         const wallGeometry = new THREE.BoxGeometry(distance, wallHeight, wallWidth);
-        const wallMaterial = new THREE.MeshLambertMaterial({ 
-            color: 0xef4e23,    // Orange like the map
+        const wallMaterial = new THREE.MeshLambertMaterial({
+            color: 0xef4e23,
             emissive: 0xff3300,
             emissiveIntensity: 0.2
         });
-        
+
         const wall = new THREE.Mesh(wallGeometry, wallMaterial);
-        
-        // Position wall
+
         wall.position.copy(startPos).add(endPos).multiplyScalar(0.5);
         wall.position.y = wallHeight / 2;
-        
-        // Rotate wall
+
         wall.lookAt(endPos);
         wall.rotateY(Math.PI / 2);
-        
-        // Add shadows
+
         wall.castShadow = true;
         wall.receiveShadow = true;
-        
-        // Add to scene
+
         this.scene.getScene().add(wall);
-        
-        // Add collision
+
         if (this.collisionSystem) {
             this.collisionSystem.addBoxCollider(
                 wall.position,
@@ -5219,33 +4623,25 @@ export class Game {
                 'wall'
             );
         }
-        
+
         console.log(`Placed barrier (${distance.toFixed(1)} units) for $${cost}. Money remaining: $${this.buildMoney}`);
     }
-    
-    // Removed duplicate updateMoneyDisplay
-    
+
     hideGameUI() {
-        // Hide player count and name UI in top left
+
         const uiElement = document.getElementById('ui');
         if (uiElement) uiElement.style.display = 'none';
-        
-        // Hide health/shield bars
+
         const healthContainer = document.getElementById('healthContainer');
         if (healthContainer) healthContainer.style.display = 'none';
-        
-        // Hide ammo display
+
         if (this.ammoDisplay) this.ammoDisplay.hide();
-        
-        // Hide kill counter
+
         const killCounter = document.getElementById('killCounter');
         if (killCounter) killCounter.style.display = 'none';
-        
-        // Hide weapon (revolver)
+
         if (this.weaponSystem) this.weaponSystem.hide();
-        
-        // Hide compass - ULTRA AGGRESSIVE - hide EVERYTHING with compass
-        // Find ANY element with compass in the id and FORCE hide it
+
         document.querySelectorAll('[id*="compass"]').forEach(el => {
             el.style.setProperty('display', 'none', 'important');
             el.style.setProperty('visibility', 'hidden', 'important');
@@ -5254,44 +4650,35 @@ export class Game {
             el.style.setProperty('height', '0', 'important');
             el.style.setProperty('overflow', 'hidden', 'important');
         });
-        
-        // Also hide any fixed position elements at top center (where compass usually is)
+
         document.querySelectorAll('*').forEach(el => {
             const style = window.getComputedStyle(el);
-            if (style.position === 'fixed' && 
-                style.top && parseInt(style.top) < 100 && 
+            if (style.position === 'fixed' &&
+                style.top && parseInt(style.top) < 100 &&
                 style.left && style.left.includes('50%')) {
                 el.style.setProperty('display', 'none', 'important');
             }
         });
-        
-        // Hide minimap (handled by SimpleMiniMap component)
-        
-        // Hide crosshair
+
         const crosshair = document.getElementById('crosshair');
         if (crosshair) crosshair.style.display = 'none';
     }
-    
+
     showGameUI() {
-        // Show player count and name UI in top left
+
         const uiElement = document.getElementById('ui');
         if (uiElement) uiElement.style.display = 'block';
-        
-        // Show health/shield bars
+
         const healthContainer = document.getElementById('healthContainer');
         if (healthContainer) healthContainer.style.display = 'block';
-        
-        // Show ammo display
+
         if (this.ammoDisplay) this.ammoDisplay.show();
-        
-        // Show kill counter
+
         const killCounter = document.getElementById('killCounter');
         if (killCounter) killCounter.style.display = 'block';
-        
-        // Show weapon (revolver)
+
         if (this.weaponSystem) this.weaponSystem.show();
-        
-        // Show compass - restore ALL compass elements with full styles
+
         const compassContainer = document.getElementById('compass-container');
         if (compassContainer) {
             compassContainer.style.cssText = `
@@ -5314,7 +4701,7 @@ export class Game {
                 font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             `;
         }
-        
+
         const compassStrip = document.getElementById('compass-strip');
         if (compassStrip) {
             compassStrip.style.cssText = `
@@ -5325,7 +4712,7 @@ export class Game {
                 align-items: center;
             `;
         }
-        
+
         const compassDegreeDisplay = document.getElementById('compass-degree-display');
         if (compassDegreeDisplay) {
             compassDegreeDisplay.style.cssText = `
@@ -5342,8 +4729,7 @@ export class Game {
                 letter-spacing: 1px;
             `;
         }
-        
-        // Restore any other compass elements
+
         document.querySelectorAll('[id*="compass"]').forEach(el => {
             el.style.removeProperty('display');
             el.style.removeProperty('visibility');
@@ -5352,24 +4738,19 @@ export class Game {
             el.style.removeProperty('height');
             el.style.removeProperty('overflow');
         });
-        
-        // Show minimap (handled by SimpleMiniMap component)
-        
-        // Show crosshair
+
         const crosshair = document.getElementById('crosshair');
         if (crosshair) crosshair.style.display = 'block';
     }
-    
+
     updateBuildModeMovement(deltaTime) {
-        const moveSpeed = 50; // Faster movement for build mode
+        const moveSpeed = 50;
         const camera = this.camera.getCamera();
         const moveVector = new THREE.Vector3();
-        
-        // Define movement directions for top-down view
-        const forward = new THREE.Vector3(0, 0, -1); // North
-        const right = new THREE.Vector3(1, 0, 0);    // East
-        
-        // Apply WASD movement
+
+        const forward = new THREE.Vector3(0, 0, -1);
+        const right = new THREE.Vector3(1, 0, 0);
+
         if (this.input.controls.forward) {
             moveVector.addScaledVector(forward, moveSpeed * deltaTime);
         }
@@ -5382,46 +4763,35 @@ export class Game {
         if (this.input.controls.left) {
             moveVector.addScaledVector(right, -moveSpeed * deltaTime);
         }
-        
-        // Apply movement to camera
+
         camera.position.add(moveVector);
-        
-        // Keep camera at sky height and looking down
+
         camera.position.y = 200;
         camera.lookAt(camera.position.x, 0, camera.position.z);
     }
-    
+
     endRound(winner) {
         console.log(`Round ended! ${winner} wins!`);
-        // Show round end message
+
         const message = winner === 'terrorists' ? 'Terrorists Win!' : 'Counter-Terrorists Win!';
         this.showRoundEndMessage(message);
-        
-        // Reset round after delay
+
         setTimeout(() => {
             this.resetRound();
         }, 5000);
     }
-    
-    // Clean, minimalist round-end banner matching the rest of the HUD.
-    // Push a transient toast into the notification column (right of the round
-    // counter). Safe no-op if the feed isn't created yet.
+
     notify(title, subtitle = '', accent = '#ef4e23') {
         if (this.notifications) this.notifications.push(title, subtitle, accent);
     }
 
-    // title: the big line (e.g. "Defenders win"); subtitle: small caps reason
-    // (e.g. "Bomb defused"); accent: thin top color bar (team color).
     showRoundEndMessage(title, subtitle = '', accent = '#ffffff') {
         let message = document.getElementById('roundEndMessage');
 
         if (!message) {
             message = document.createElement('div');
             message.id = 'roundEndMessage';
-            // Lives at the TOP of the shared notification column (in flow), so the
-            // notifications + kill feed stack DIRECTLY beneath it with no gap.
-            // Away from the health/shield panel (bottom-left), out of the
-            // crosshair's way — the player can keep fighting while seeing who won.
+
             message.style.cssText = `
                 width: 100%;
                 box-sizing: border-box;
@@ -5440,11 +4810,11 @@ export class Game {
                 pointer-events: none;
                 box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
             `;
-            // Insert as the FIRST child of the column so it sits above everything.
+
             const col = document.getElementById('notifColumn') || document.body;
             col.insertBefore(message, col.firstChild);
         }
-        // Keep the accent on the left border even when reusing the element.
+
         message.style.borderLeftColor = accent;
 
         message.innerHTML = `
@@ -5465,43 +4835,38 @@ export class Game {
             setTimeout(() => { message.style.display = 'none'; }, 300);
         }, 6000);
     }
-    
+
     killPlayer(reason) {
         if (!this.isAlive) return;
-        
+
         this.isAlive = false;
         this.health = 0;
         this.updateHealthDisplay();
         this.activateDeathCam();
-        
-        // Hide weapon
+
         if (this.weaponSystem) {
             this.weaponSystem.hide();
         }
-        
-        // Show death message
+
         this.showDeathMessage(reason || 'You died!', 3);
-        
+
         console.log('Player killed:', reason);
     }
-    
+
     resetRound() {
-        // Respawn all players
+
         this.spawnPlayer();
-        
-        // Reset bomb system
+
         if (this.bombSystem) {
             this.bombSystem.cleanup();
-            this.bombSystem.giveBomb(); // Give bomb again for next round
+            this.bombSystem.giveBomb();
         }
-        
-        // Reset health
+
         this.health = 100;
         this.shield = 100;
         this.isAlive = true;
         this.updateHealthDisplay();
-        
-        // Show weapon
+
         if (this.weaponSystem) {
             this.weaponSystem.show();
             this.weaponSystem.resetWeapon();

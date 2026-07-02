@@ -128,9 +128,6 @@ export class SimpleMiniMap {
         `;
         document.body.appendChild(this.playerIcon);
 
-        // Pin the arrow to the minimap's center, and KEEP it there on resize.
-        // The minimap is anchored top-right (top:20, right:20), so its center X
-        // depends on window width — recompute whenever the window changes size.
         this.positionPlayerIcon();
         this._onResize = () => this.positionPlayerIcon();
         window.addEventListener('resize', this._onResize);
@@ -170,12 +167,6 @@ export class SimpleMiniMap {
         ctx.arc(s / 2, s / 2, s / 2, 0, Math.PI * 2);
         ctx.clip();
 
-        // Walkable paths — drawn as ONE uniform orange shape. Filling each rect
-        // straight onto the map at low alpha makes overlaps STACK into darker
-        // patches (the "two floors on top of each other" look in the minimap).
-        // Instead: render the whole path union OPAQUE on an offscreen buffer
-        // (overlaps merge into solid orange there), then blit that buffer onto
-        // the map ONCE at 0.45 alpha — so the union reads as a single flat tone.
         this.drawPathUnion(scale);
 
         this.applyWorldTransform(ctx, scale);
@@ -183,13 +174,13 @@ export class SimpleMiniMap {
         for (const site of this.mapShapes.sites) {
             ctx.save();
             ctx.translate(site.cx, site.cz);
-            ctx.fillStyle = HUD.orange; // solid orange site
+            ctx.fillStyle = HUD.orange;
             ctx.beginPath();
             ctx.arc(0, 0, 55, 0, Math.PI * 2);
             ctx.fill();
             ctx.scale(1, -1);
             ctx.rotate(-this.cameraRotation - Math.PI);
-            ctx.fillStyle = HUD.navy; // navy letter on orange
+            ctx.fillStyle = HUD.navy;
             ctx.font = 'bold 70px sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -200,10 +191,6 @@ export class SimpleMiniMap {
         ctx.restore();
     }
 
-    // The world→minimap transform: center on the disc, rotate with the camera,
-    // flip+scale world units to map pixels, and offset by the player position
-    // (so the player is always at the disc center). Shared by the main draw and
-    // the offscreen path buffer so they line up exactly.
     applyWorldTransform(c, scale) {
         const s = this.size;
         c.translate(s / 2, s / 2);
@@ -212,10 +199,6 @@ export class SimpleMiniMap {
         c.translate(-this.playerPos.x, -this.playerPos.z);
     }
 
-    // Render the walkable-path rectangles to an offscreen canvas at FULL opacity
-    // (so overlapping rects merge into one solid region), then composite that
-    // buffer onto the minimap once at a single alpha. Result: uniform orange with
-    // no darker "stacked" patches where paths cross.
     drawPathUnion(scale) {
         const s = this.size;
         const dpr = window.devicePixelRatio || 1;
@@ -243,8 +226,6 @@ export class SimpleMiniMap {
         }
         pc.restore();
 
-        // Blit the whole union onto the map at one alpha (the source canvas is
-        // already at device-pixel resolution, so draw it in CSS-pixel space).
         this.ctx.save();
         this.ctx.globalAlpha = 0.45;
         this.ctx.drawImage(this._pathCanvas, 0, 0, s, s);
