@@ -77,6 +77,11 @@ export class Game {
         this.selectedWallType = null;
         this.isDragModeEnabled = false;
         this.buildWalls = [];
+        // Reusable objects for hit detection — avoids allocating a new Raycaster
+        // and Vector3s on every shot (reduces GC pressure on weak machines).
+        this._raycaster = new THREE.Raycaster();
+        this._shootDirVec = new THREE.Vector3();
+        this._dirToPlayerVec = new THREE.Vector3();
         this.isPlacingWall = false;
         this.wallStartPos = null;
         this.wallPreview = null;
@@ -260,7 +265,11 @@ export class Game {
             this.network.onWallHole((message) => this.applyServerWallHole(message));
         }
 
-        this.playerManager = new PlayerManager(this.scene.getScene());
+        this.playerManager = new PlayerManager(
+            this.scene.getScene(),
+            this.renderer ? this.renderer.getRenderer() : null,
+            this.camera ? this.camera.getCamera() : null
+        );
         this.playerManager.setGameMode(this.gameMode);
         this.playerManager.setLocalTeam(this.playerTeam || null);
         this.bulletSystem = new BulletSystem(this.scene.getScene());
@@ -752,6 +761,10 @@ export class Game {
     startGame() {
         if (!this.gameStarted) {
             this.gameStarted = true;
+            this.showLoadingScreen();
+            // Safety net: never let the loading screen get stuck if the intro
+            // path doesn't run for some reason.
+            setTimeout(() => this.hideLoadingScreen(), 6000);
             this.initialize();
 
             this.updateHealthDisplay();
@@ -767,6 +780,54 @@ export class Game {
 
             }, 200);
         }
+    }
+
+    // Delay the intro cinematic until the heavy character models have finished
+    // loading/decoding. The GLB/FBX decode + first GPU upload cause a one-time
+    // main-thread hitch; if the intro camera is already moving when it happens,
+    // you see a stutter. By waiting for playerManager.loaded first, the decode
+    // happens on the static pre-intro screen instead. Capped at ~3s so a failed
+    // model load can never hang the intro forever.
+    _startIntroWhenLoaded(spawnPos, spawnYaw, waited = 0) {
+        const ready = !this.playerManager
+            || this.playerManager.loaded
+            || this.playerManager.loadFailed;
+        if (ready || waited >= 3000) {
+            this.hideLoadingScreen();
+            this.startIntroCinematic(spawnPos, spawnYaw);
+            return;
+        }
+        setTimeout(() => this._startIntroWhenLoaded(spawnPos, spawnYaw, waited + 50), 50);
+    }
+
+    showLoadingScreen() {
+        if (document.getElementById('matchLoadingScreen')) return;
+        const el = document.createElement('div');
+        el.id = 'matchLoadingScreen';
+        el.style.cssText = `
+            position: fixed; inset: 0; z-index: 100000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: #0d1326; color: #cdd6f4;
+            font-family: 'JetBrains Mono', ui-monospace, monospace;`;
+        el.innerHTML = `
+            <div style="font-size: 22px; letter-spacing: 4px; text-transform: uppercase; color:#ef4e23; font-weight:800; margin-bottom: 22px;">RSGO</div>
+            <div style="font-size: 13px; letter-spacing: 2px; opacity: 0.7; margin-bottom: 18px;">LOADING MATCH…</div>
+            <div style="width: 220px; height: 4px; background: rgba(255,255,255,0.12); border-radius: 4px; overflow: hidden;">
+                <div style="width: 40%; height: 100%; background: #ef4e23; border-radius: 4px;
+                    animation: rsgoLoadingBar 1.1s ease-in-out infinite;"></div>
+            </div>
+            <style>
+                @keyframes rsgoLoadingBar {
+                    0%   { transform: translateX(-100%); }
+                    100% { transform: translateX(320%); }
+                }
+            </style>`;
+        document.body.appendChild(el);
+    }
+
+    hideLoadingScreen() {
+        const el = document.getElementById('matchLoadingScreen');
+        if (el) el.remove();
     }
 
     startIntroCinematic(spawnPos, spawnYaw) {
@@ -852,6 +913,7 @@ export class Game {
         if (this.mapBuilder && this.mapBuilder.introDecor) this.mapBuilder.introDecor.visible = false;
 
         this._introCurve = null;
+        this.hideLoadingScreen();
     }
 
     _setHudVisibleForIntro(visible, keepPovWeapon = false) {
@@ -1113,9 +1175,9 @@ export class Game {
 
     checkHit(target) {
         const playerPosition = this.camera.getPosition();
-        const shootDirection = new THREE.Vector3().subVectors(target, playerPosition).normalize();
+        const shootDirection = this._shootDirVec.subVectors(target, playerPosition).normalize();
 
-        const raycaster = new THREE.Raycaster();
+        const raycaster = this._raycaster;
         raycaster.set(playerPosition, shootDirection);
         raycaster.far = 1000;
 
@@ -1140,7 +1202,7 @@ export class Game {
             } else {
 
                 if (distanceToPlayer <= 3) {
-                    const directionToPlayer = new THREE.Vector3().subVectors(playerPos, playerPosition).normalize();
+                    const directionToPlayer = this._dirToPlayerVec.subVectors(playerPos, playerPosition).normalize();
                     const dot = shootDirection.dot(directionToPlayer);
 
                     if (dot > 0.9) {
@@ -1175,7 +1237,7 @@ export class Game {
     }
 
     isShotBlockedByWall(from, dir, playerDistance) {
-        const raycaster = new THREE.Raycaster();
+        const raycaster = this._raycaster;
         raycaster.set(from, dir);
         raycaster.far = playerDistance;
 
@@ -1200,7 +1262,7 @@ export class Game {
     }
 
     checkWallHit(shooterPos, shootDirection) {
-        const raycaster = new THREE.Raycaster();
+        const raycaster = this._raycaster;
         raycaster.set(shooterPos, shootDirection);
         raycaster.far = 1000;
 
@@ -1708,7 +1770,7 @@ export class Game {
             if (!this._introHasPlayed) {
                 this._introHasPlayed = true;
                 const cam = this.camera.getCamera();
-                this.startIntroCinematic(cam.position.clone(), this.input.yaw);
+                this._startIntroWhenLoaded(cam.position.clone(), this.input.yaw);
             }
 
             const healthContainer = document.getElementById('healthContainer');

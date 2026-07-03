@@ -54,8 +54,13 @@ const FEET_BELOW_ORIGIN = 10;
 const DEATH_GROUND_DROP = 6;
 
 export class PlayerManager {
-    constructor(scene) {
+    constructor(scene, renderer = null, camera = null) {
         this.scene = scene;
+        // Optional: used to pre-upload character models to the GPU at load time
+        // (renderer.compile) so the first player spawn doesn't stall on the
+        // first-ever geometry/texture/shader upload. Safe if null (falls back).
+        this.renderer = renderer;
+        this.camera = camera;
         this.otherPlayers = new Map();
         this.playerHealth = new Map();
         this.respawning = new Map();
@@ -100,6 +105,38 @@ export class PlayerManager {
         return clip;
     }
 
+    // Pre-warm the per-model death-clip retargeting during the loading screen,
+    // so the (synchronous, ~1-2ms/model) work doesn't fire on the first player
+    // spawn and cause a visible frame hitch. Safe to call multiple times: it
+    // only runs once both the GLB templates AND the death FBX clip are ready,
+    // and _deathClipForTemplate is itself cached per charIdx.
+    _prewarmDeathClips() {
+        if (!this.deathClipOverride || !this.templates) return;
+        this.templates.forEach((template, idx) => {
+            if (template) this._deathClipForTemplate(template, idx);
+        });
+    }
+
+    // Pre-upload each character model's geometry/textures/shaders to the GPU
+    // during the loading screen. Without this, the FIRST time a player mesh is
+    // rendered it stalls one frame (~20ms) on the initial GPU upload — the
+    // remaining spawn hitch. renderer.compile() only processes what's in the
+    // scene, so we briefly add each template, compile, then remove it.
+    _prewarmGPU() {
+        if (this._gpuPrewarmed || !this.renderer || !this.camera || !this.templates) return;
+        try {
+            this.templates.forEach((template) => {
+                if (!template) return;
+                this.scene.add(template.scene);
+                this.renderer.compile(this.scene, this.camera);
+                this.scene.remove(template.scene);
+            });
+            this._gpuPrewarmed = true;
+        } catch (e) {
+            console.warn('GPU prewarm skipped:', e);
+        }
+    }
+
     loadDeathAnimation() {
         try {
             const loader = new FBXLoader();
@@ -116,6 +153,7 @@ export class PlayerManager {
 
                         this.deathClipOverride = clip;
                         console.log('Custom death animation loaded (FBX). tracks:', clip.tracks.length, '(hip-position removed)');
+                        this._prewarmDeathClips();
                     } else {
                         console.warn('Death FBX had no animation clip; keeping GLB death.');
                     }
@@ -178,6 +216,8 @@ export class PlayerManager {
             this.loaded = true;
             console.log(`Loaded ${ok.length}/${CHARACTER_FILES.length} characters, clips:`,
                 ok[0].clips.map((c) => c.name).join(', '));
+            this._prewarmDeathClips();
+            this._prewarmGPU();
 
         }
         const pending = this.pendingPlayers;

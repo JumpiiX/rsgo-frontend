@@ -115,7 +115,11 @@ export class LightingSystem {
         streetLightPositions.forEach(pos => {
             const streetLight = new THREE.PointLight(0xff8833, 1.2, 120);
             streetLight.position.set(...pos);
-            streetLight.castShadow = true;
+            // No shadow casting: a shadow-casting point light re-renders the scene
+            // to a 6-face cubemap every frame — 6 of them was the biggest GPU cost.
+            // The light still glows and illuminates; only its cast shadows are off.
+            // The moon (directional) still casts the scene's main shadows.
+            streetLight.castShadow = false;
             this.scene.add(streetLight);
 
         });
