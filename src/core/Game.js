@@ -3518,7 +3518,7 @@ export class Game {
                 letter-spacing: 1px;
                 text-transform: uppercase;
                 pointer-events: none;
-            ">Pick a wall, then click to place — place as many as you like</div>
+            ">Drag a wall onto the map to place it — or click to pick, then click to place</div>
 
             <!-- ENEMY-ZONE LEGEND (bottom-left) -->
             <div style="
@@ -3597,6 +3597,7 @@ export class Game {
         this.selectWallType(wallType);
         this.selectedWallType = wallType;
         this.isDraggingFromUI = true;
+        this._lastValidatedCell = null; // force a fresh validation on first hover
         this.createFloatingWallPreview();
         this.setDragCursor();
         this.setupGlobalDragHandlers();
@@ -3640,12 +3641,24 @@ export class Game {
 
             if (wallType === 'barrier' || wallType === 'large' || wallType === 'destructible') {
 
-                option.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); });
+                // Press-and-hold on a slot begins a DRAG: the preview follows
+                // the cursor and releasing the mouse over the map DROPS/places
+                // the wall. (A plain click still enters place-mode too.)
+                option.addEventListener('mousedown', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.startWallPlacementFromHotkey(wallType);
+                    this._dragDropping = true;
+                    // Position the preview immediately under the cursor.
+                    this.onGlobalDragMove(event);
+                });
                 option.addEventListener('mouseup', (e) => { e.stopPropagation(); });
                 option.addEventListener('click', (event) => {
                     event.preventDefault();
                     event.stopPropagation();
-                    this.startWallPlacementFromHotkey(wallType);
+                    // If this was a real drag (mousedown already started it),
+                    // don't re-trigger; the click fires right after mouseup.
+                    if (!this.isDraggingFromUI) this.startWallPlacementFromHotkey(wallType);
                 });
             }
 
@@ -3931,48 +3944,57 @@ export class Game {
     }
 
     onGlobalDragMove(event) {
-        if (!this.isDraggingFromUI || !this.floatingWallPreview) {
-            if (!this.isDraggingFromUI) console.log('DRAG MOVE: Not dragging from UI, ignoring');
-            if (!this.floatingWallPreview) console.log('DRAG MOVE: No floating preview, ignoring');
-            return;
-        }
+        if (!this.isDraggingFromUI || !this.floatingWallPreview) return;
 
         const mapPosition = this.getMapPositionFromMouse(event);
-        if (mapPosition) {
+        if (!mapPosition) return;
 
-            const snappedPosition = this.snapToGrid(mapPosition);
+        const snappedPosition = this.snapToGrid(mapPosition);
 
-            let yPos;
-            if (this.selectedWallType === 'large') {
-                yPos = 10;
-                yPos = 1.5;
-            } else if (this.selectedWallType === 'destructible') {
-                yPos = 10;
-            } else {
-                yPos = 5;
-            }
+        let yPos;
+        if (this.selectedWallType === 'large') {
+            yPos = 10;
+        } else if (this.selectedWallType === 'destructible') {
+            yPos = 10;
+        } else {
+            yPos = 5;
+        }
 
-            const canPlace = this.canPlaceWallAtPosition(snappedPosition, this.selectedWallType);
+        // Cheap every-move update: move the preview to follow the cursor.
+        this.floatingWallPreview.position.set(snappedPosition.x, yPos, snappedPosition.z);
+        this.floatingWallPreview.rotation.y = this.currentWallRotation;
 
-            if (canPlace) {
-                this.floatingWallPreview.material.color.setHex(0x00ff00);
-                this.floatingWallPreview.material.opacity = 0.5;
-            } else {
-                this.floatingWallPreview.material.color.setHex(0xff0000);
-                this.floatingWallPreview.material.opacity = 0.3;
-            }
+        // The expensive validation (BFS tunnel-seal check over every placed
+        // wall) only needs to run when the target GRID CELL or rotation
+        // actually changes. Running it on every raw mousemove is what made WASD
+        // camera panning stutter while a wall was selected. Since placement
+        // snaps to a 20-unit grid, most mousemoves land on the same cell and
+        // now skip the BFS entirely — while still giving instant green/red
+        // feedback the moment you move to a new cell.
+        const cellKey = `${snappedPosition.x}_${snappedPosition.z}_${this.currentWallRotation.toFixed(3)}`;
+        if (cellKey === this._lastValidatedCell) return;
+        this._lastValidatedCell = cellKey;
 
-            this.floatingWallPreview.position.set(snappedPosition.x, yPos, snappedPosition.z);
-
-            this.floatingWallPreview.rotation.y = this.currentWallRotation;
+        const canPlace = this.canPlaceWallAtPosition(snappedPosition, this.selectedWallType);
+        if (canPlace) {
+            this.floatingWallPreview.material.color.setHex(0x00ff00);
+            this.floatingWallPreview.material.opacity = 0.5;
+        } else {
+            this.floatingWallPreview.material.color.setHex(0xff0000);
+            this.floatingWallPreview.material.opacity = 0.3;
         }
     }
 
     onGlobalDragEnd(event) {
+        const wasDragDrop = this._dragDropping;
+        this._dragDropping = false;
+
         if (!this.isDraggingFromUI) return;
 
         if (event && typeof event.button === 'number' && event.button !== 0) return;
 
+        // Released back over the build UI (e.g. on the hotbar): don't place,
+        // just keep the wall selected so a click or another drag can place it.
         if (event && event.target && event.target.closest &&
             event.target.closest('#buildModeUI')) return;
 
@@ -3982,11 +4004,20 @@ export class Game {
             if (this.canPlaceWallAtPosition(snappedPosition, this.selectedWallType, true)) {
                 this.placeWallAtPosition(snappedPosition, this.currentWallRotation);
                 this.refreshBuildBanner();
+                // Walls changed — invalidate the cached validation so the next
+                // hover re-checks (this cell is now occupied).
+                this._lastValidatedCell = null;
+
+                // Drag-and-drop is one-shot: after dropping, deselect so nothing
+                // stays attached to the cursor. (Click-selection keeps the wall
+                // selected for placing many.)
+                if (wasDragDrop) {
+                    this.deselectWallPlacement();
+                }
             } else {
                 console.log('Cannot place wall here - occupied / invalid / enemy tunnel');
             }
         }
-
     }
 
     deselectWallPlacement() {
