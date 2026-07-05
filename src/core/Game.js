@@ -2687,17 +2687,26 @@ export class Game {
             const kcActive = !!(this.killCam && this.killCam.isActive && this.killCam.isActive());
             if (kcActive !== this._kcHudHidden) {
                 this._kcHudHidden = kcActive;
-
                 this._setHudVisibleForIntro(!kcActive, true);
+            }
 
-                if (this.weaponSystem && this.weaponSystem.setTeam) {
-                    if (kcActive) {
-                        const killerId = this.killCam.replayTargetId;
-                        const killerTeam = (this.playerTeams && this.playerTeams[killerId]) || this.playerTeam;
-                        this.weaponSystem.setTeam(killerTeam);
-                    } else {
-                        this.weaponSystem.setTeam(this.playerTeam);
+            // Tint the viewmodel with the team of whoever the camera is watching:
+            // the killer during the replay, the spectated teammate while
+            // spectating, and back to my own team otherwise. Recomputed each
+            // frame (not just on the kcActive edge) so it follows the
+            // replay→spectate switch and target cycling. Only calls setTeam when
+            // the team actually changes.
+            if (this.weaponSystem && this.weaponSystem.setTeam) {
+                let wantTeam = this.playerTeam;
+                if (kcActive && this.killCam.getWatchedPlayerId) {
+                    const watchedId = this.killCam.getWatchedPlayerId();
+                    if (watchedId) {
+                        wantTeam = (this.playerTeams && this.playerTeams[watchedId]) || this.playerTeam;
                     }
+                }
+                if (wantTeam !== this._weaponTeamApplied) {
+                    this._weaponTeamApplied = wantTeam;
+                    this.weaponSystem.setTeam(wantTeam);
                 }
             }
 
