@@ -136,7 +136,9 @@ export class RifleWeapon {
 
     updateWeaponPosition(extraY = 0) {
         if (!this.weaponGroup) return;
-        const offset = this.initialPositionOffset.clone();
+        // Reuse one offset vector instead of cloning every frame (less GC).
+        const offset = (this._posOffset || (this._posOffset = new THREE.Vector3()))
+            .copy(this.initialPositionOffset);
         offset.y += extraY;
         offset.applyQuaternion(this.camera.quaternion);
         this.weaponGroup.position.copy(this.camera.position).add(offset);

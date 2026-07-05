@@ -2721,18 +2721,23 @@ export class Game {
                 this.bombSystem.update(deltaTime);
             }
 
+            // Minimap + compass are visual-only. Their canvas redraw / WebGL
+            // scissor render / DOM writes are CPU-heavy, so throttle them:
+            // minimap ~15fps (every 4th frame), compass ~30fps (every 2nd).
+            // No gameplay impact; big CPU saving under throttle.
+            this._hudTick = (this._hudTick || 0) + 1;
+            const doMinimap = this.miniMap && !this.isBuildMode && !this._introPlaying && (this._hudTick % 4 === 0);
             if (this.miniMap && !this.isBuildMode && !this._introPlaying) {
-                const playerPos = this.camera.getPosition();
                 const cameraRotation = this.input.yaw;
-                this.miniMap.update(playerPos, cameraRotation);
-                this.compass.update(cameraRotation);
+                if (doMinimap) this.miniMap.update(this.camera.getPosition(), cameraRotation);
+                if (this._hudTick % 2 === 0) this.compass.update(cameraRotation);
             }
 
             this.renderer.getRenderer().autoClear = true;
 
             this.renderer.render(this.scene.getScene(), this.camera.getCamera());
 
-            if (this.miniMap && !this.isBuildMode && !this._introPlaying) {
+            if (doMinimap) {
                 this.miniMap.render();
             }
 

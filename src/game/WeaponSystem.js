@@ -166,23 +166,25 @@ export class WeaponSystem {
     }
 
     update(deltaTime) {
+        if (!this.weaponGroup) return;
 
-        this.updateWeaponPosition();
+        // Position (with idle sway) + rotation in a single pass using reusable
+        // vectors — avoids re-doing the work twice and the per-frame Vector3
+        // allocations that hurt GC under CPU throttle.
+        if (!this._swayOffset) this._swayOffset = new THREE.Vector3();
 
-        if (this.weaponGroup) {
-            const time = Date.now() * 0.001;
-            const swayX = Math.sin(time * 1.5) * 0.005;
-            const swayY = Math.sin(time * 2) * 0.003;
+        const time = Date.now() * 0.001;
+        const swayX = Math.sin(time * 1.5) * 0.005;
+        const swayY = Math.sin(time * 2) * 0.003;
 
-            const offset = this.initialPositionOffset.clone();
-            offset.x += swayX;
-            offset.y += swayY;
+        const offset = this._swayOffset.copy(this.initialPositionOffset);
+        offset.x += swayX;
+        offset.y += swayY;
+        offset.applyQuaternion(this.camera.quaternion);
 
-            const weaponPos = new THREE.Vector3();
-            weaponPos.copy(this.camera.position);
-            weaponPos.add(offset.applyQuaternion(this.camera.quaternion));
-            this.weaponGroup.position.copy(weaponPos);
-        }
+        this.weaponGroup.position.copy(this.camera.position).add(offset);
+        this.weaponGroup.quaternion.copy(this.camera.quaternion);
+        this.weaponGroup.rotateY(this.initialRotationOffset.y);
     }
 
     updateWeaponPosition() {
