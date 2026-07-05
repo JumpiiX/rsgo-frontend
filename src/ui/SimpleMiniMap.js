@@ -151,7 +151,33 @@ export class SimpleMiniMap {
         this.draw();
     }
 
+    // Show a red dot where the bomb is planted (pass {x, z}); pass null to clear.
+    setBombPosition(pos) {
+        this.bombPos = (pos && typeof pos.x === 'number') ? { x: pos.x, z: pos.z } : null;
+    }
+
+    // Living teammates to draw as small facing arrows: [{ x, z, yaw, alive }].
+    setTeammates(list) {
+        this.teammates = Array.isArray(list) ? list : [];
+    }
+
     render() {
+    }
+
+    // World (x,z) -> minimap screen pixel. Derived to EXACTLY match
+    // applyWorldTransform (translate center; rotate cam+π; scale -scale; translate -player):
+    //   sx = center + scale*( cos(cam)*dx - sin(cam)*dz)
+    //   sy = center + scale*( sin(cam)*dx + cos(cam)*dz)
+    worldToScreen(x, z, scale) {
+        const cx = this.size / 2, cy = this.size / 2;
+        const ca = Math.cos(this.cameraRotation);
+        const sa = Math.sin(this.cameraRotation);
+        const dx = x - this.playerPos.x;
+        const dz = z - this.playerPos.z;
+        return {
+            x: cx + (ca * dx - sa * dz) * scale,
+            y: cy + (sa * dx + ca * dz) * scale,
+        };
     }
 
     draw() {
@@ -162,13 +188,13 @@ export class SimpleMiniMap {
 
         ctx.clearRect(0, 0, s, s);
 
+        // --- World-transformed layer: paths + bomb-site circles/labels ---
         ctx.save();
         ctx.beginPath();
         ctx.arc(s / 2, s / 2, s / 2, 0, Math.PI * 2);
         ctx.clip();
 
         this.drawPathUnion(scale);
-
         this.applyWorldTransform(ctx, scale);
 
         for (const site of this.mapShapes.sites) {
@@ -185,6 +211,68 @@ export class SimpleMiniMap {
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(site.letter, 0, 4);
+            ctx.restore();
+        }
+        ctx.restore();
+
+        // --- Screen-space layer: teammates + bomb dot (unambiguous facing) ---
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(s / 2, s / 2, s / 2, 0, Math.PI * 2);
+        ctx.clip();
+
+        if (this.teammates && this.teammates.length) {
+            for (const t of this.teammates) {
+                if (t.alive === false) continue;
+                const yaw = t.yaw || 0;
+                // Teammate's WORLD position and a point one step in front of them
+                // (forward = (sin(yaw), cos(yaw)), matching the game's yaw =
+                // atan2(x, z) convention). Map BOTH through the exact same
+                // world->screen transform, then aim the arrow along the screen
+                // vector between them. This locks the arrow to the teammate's
+                // true world facing — it does NOT spin when the local player
+                // rotates the camera (the map rotation cancels out correctly).
+                const p = this.worldToScreen(t.x, t.z, scale);
+                // Step BEHIND->AHEAD reversed: the model's forward mapped to the
+                // opposite on screen, so negate the forward step to flip it 180°.
+                const f = this.worldToScreen(t.x - Math.sin(yaw), t.z - Math.cos(yaw), scale);
+                const screenAngle = Math.atan2(f.y - p.y, f.x - p.x);
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                // Arrow is modelled pointing along +X at angle 0; rotate to the
+                // computed screen facing.
+                ctx.rotate(screenAngle);
+                ctx.beginPath();
+                ctx.moveTo(8, 0);
+                ctx.lineTo(-6, 6);
+                ctx.lineTo(-3, 0);
+                ctx.lineTo(-6, -6);
+                ctx.closePath();
+                ctx.fillStyle = '#6ee7b7';
+                ctx.strokeStyle = HUD.navy;
+                ctx.lineWidth = 1.2;
+                ctx.fill();
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        if (this.bombPos) {
+            const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.006);
+            const p = this.worldToScreen(this.bombPos.x, this.bombPos.z, scale);
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.fillStyle = `rgba(229, 62, 62, ${0.3 + 0.3 * pulse})`;
+            ctx.beginPath();
+            ctx.arc(0, 0, 9 + 4 * pulse, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ff2b2b';
+            ctx.beginPath();
+            ctx.arc(0, 0, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.2;
+            ctx.stroke();
             ctx.restore();
         }
 

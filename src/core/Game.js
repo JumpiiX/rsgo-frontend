@@ -125,6 +125,10 @@ export class Game {
                 this.redScore = message.red_score;
                 this.attackingTeam = message.attacking_team;
 
+                // Clear the minimap bomb dot for the new round (covers rounds
+                // that end by elimination, with no defuse/explode message).
+                if (this.miniMap && this.miniMap.setBombPosition) this.miniMap.setBombPosition(null);
+
                 if (message.round_number === 1) this._track('match-started');
                 this.startBuildPhaseTimer(message.buy_time);
                 this.updateRoundDisplay();
@@ -235,6 +239,10 @@ export class Game {
                         console.log('Bomb removed from local player hand after server confirmation');
                     }
                 }
+                // Show the plant location on everyone's minimap.
+                if (this.miniMap && this.miniMap.setBombPosition) {
+                    this.miniMap.setBombPosition(position);
+                }
                 this.notify('Bomb planted', 'Site under attack');
                 this._track('bomb-planted', { is_local: message.player_id === this.network.playerId });
             };
@@ -244,6 +252,7 @@ export class Game {
                 if (this.bombSystem) {
                     this.bombSystem.onBombDefused();
                 }
+                if (this.miniMap && this.miniMap.setBombPosition) this.miniMap.setBombPosition(null);
                 this.notify('Bomb defused', 'Site secured');
                 this._track('bomb-defused', { is_local: message.player_id === this.network.playerId });
             };
@@ -253,6 +262,7 @@ export class Game {
                 if (this.bombSystem) {
                     this.bombSystem.onBombExploded();
                 }
+                if (this.miniMap && this.miniMap.setBombPosition) this.miniMap.setBombPosition(null);
                 this.notify('Bomb detonated');
                 this._track('bomb-exploded');
             };
@@ -566,17 +576,21 @@ export class Game {
 
                     this.network.onBombPlantedCallback = (message) => {
                         console.log(`Bomb planted by player ${message.player_id} - Timer: ${message.timer}s at position:`, message.position_x, message.position_z);
+                        const position = {
+                            x: message.position_x || 0,
+                            z: message.position_z || 0
+                        };
                         if (this.bombSystem) {
-                            const position = {
-                                x: message.position_x || 0,
-                                z: message.position_z || 0
-                            };
                             this.bombSystem.onBombPlanted(message.timer, position);
 
                             if (message.player_id === this.network.playerId) {
                                 this.bombSystem.onLocalBombPlanted();
                                 console.log('Bomb removed from local player hand after server confirmation');
                             }
+                        }
+                        // Show the plant location on everyone's minimap.
+                        if (this.miniMap && this.miniMap.setBombPosition) {
+                            this.miniMap.setBombPosition(position);
                         }
                         this.notify('Bomb planted', 'Site under attack');
                     };
@@ -586,6 +600,7 @@ export class Game {
                         if (this.bombSystem) {
                             this.bombSystem.onBombDefused();
                         }
+                        if (this.miniMap && this.miniMap.setBombPosition) this.miniMap.setBombPosition(null);
                         this.notify('Bomb defused', 'Site secured');
                     };
 
@@ -594,6 +609,7 @@ export class Game {
                         if (this.bombSystem) {
                             this.bombSystem.onBombExploded();
                         }
+                        if (this.miniMap && this.miniMap.setBombPosition) this.miniMap.setBombPosition(null);
                         this.notify('Bomb detonated');
                     };
 
@@ -2729,7 +2745,10 @@ export class Game {
             const doMinimap = this.miniMap && !this.isBuildMode && !this._introPlaying && (this._hudTick % 4 === 0);
             if (this.miniMap && !this.isBuildMode && !this._introPlaying) {
                 const cameraRotation = this.input.yaw;
-                if (doMinimap) this.miniMap.update(this.camera.getPosition(), cameraRotation);
+                if (doMinimap) {
+                    if (this.miniMap.setTeammates) this.miniMap.setTeammates(this.collectMinimapTeammates());
+                    this.miniMap.update(this.camera.getPosition(), cameraRotation);
+                }
                 if (this._hudTick % 2 === 0) this.compass.update(cameraRotation);
             }
 
@@ -2745,6 +2764,26 @@ export class Game {
 
             this._sampleLowFps(realDelta);
         }
+    }
+
+    // Collect this player's living teammates (not self, not enemies) as
+    // { x, z, yaw, alive } for the minimap. yaw is their facing direction.
+    collectMinimapTeammates() {
+        const out = [];
+        if (!this.playerManager || !this.playerManager.otherPlayers) return out;
+        const myTeam = this.playerTeam || null;
+        this.playerManager.otherPlayers.forEach((entry) => {
+            const team = entry.data && entry.data.team;
+            if (myTeam && team && team !== myTeam) return; // skip enemies
+            if (!entry.mesh) return;
+            out.push({
+                x: entry.mesh.position.x,
+                z: entry.mesh.position.z,
+                yaw: (entry.targetYaw !== undefined ? entry.targetYaw : entry.mesh.rotation.y),
+                alive: !entry.dead,
+            });
+        });
+        return out;
     }
 
     updatePerfOverlay(realDelta) {
