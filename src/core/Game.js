@@ -1665,6 +1665,11 @@ export class Game {
     handlePlayerDied(message) {
         console.log('Player died message received:', message);
 
+        // Grey out the victim on the scoreboard immediately.
+        if (this.scoreboard && message.player_id) {
+            this.scoreboard.setAlive(message.player_id, false);
+        }
+
         const killerName = message.killer_name || this.getPlayerName(message.killer_id) || 'Unknown';
         const victimName = message.victim_name || this.getPlayerName(message.player_id) || 'Unknown';
 
@@ -1716,6 +1721,12 @@ export class Game {
         if (this._postRoundCleanupTimer) {
             clearTimeout(this._postRoundCleanupTimer);
             this._postRoundCleanupTimer = null;
+        }
+
+        // Un-grey this player on the scoreboard immediately (covers both the
+        // local player and others), independent of scoreboard-push timing.
+        if (this.scoreboard && message.player && message.player.id) {
+            this.scoreboard.setAlive(message.player.id, true);
         }
 
         if (message.player.id === this.network.playerId &&
@@ -2801,16 +2812,25 @@ export class Game {
     }
 
     handleScoreboardUpdate(data) {
-        console.log('handleScoreboardUpdate called with data:', data);
-        console.log('Current player ID:', this.network.playerId);
         const playersData = data.players.map(player => ({
+            id: player.id,
             name: player.name,
             kills: player.kills,
+            deaths: player.deaths ?? 0,
+            team: player.team || this.playerTeams?.[player.id] || null,
+            money: (player.money === null || player.money === undefined) ? null : player.money,
+            alive: player.alive !== false,
+            hasBomb: !!player.has_bomb,
             isCurrentPlayer: player.id === this.network.playerId
         }));
-        console.log('Processed players data:', playersData);
 
-        this.scoreboard.updatePlayers(playersData);
+        this.scoreboard.updatePlayers(playersData, {
+            gameMode: this.gameMode,
+            localTeam: this.playerTeam || null,
+            orangeScore: this.orangeScore,
+            redScore: this.redScore,
+            roundNumber: this.roundNumber,
+        });
     }
 
     addCameraRecoil() {
@@ -4145,6 +4165,15 @@ export class Game {
         return false;
     }
 
+    // Single source of truth for wall prices — MUST match the backend
+    // (message_handler.rs handle_place_structure). A mismatch desyncs the
+    // client's displayed money from the server's authoritative value.
+    wallCost(wallType) {
+        if (wallType === 'large') return 800;
+        if (wallType === 'destructible') return 600;
+        return 400; // barrier / small
+    }
+
     canPlaceWallAtPosition(position, wallType, shouldFlash = false) {
         const gridPos = this.snapToGrid(position);
 
@@ -4158,7 +4187,7 @@ export class Game {
             return false;
         }
 
-        const cost = wallType === 'large' ? 200 : 100;
+        const cost = this.wallCost(wallType);
         if (this.buildMoney < cost) {
 
             if (shouldFlash) {
@@ -4298,21 +4327,19 @@ export class Game {
         const wallLength = 20;
         const wallThickness = 2;
 
-        let height, yPos, cost;
+        let height, yPos;
         if (this.selectedWallType === 'large') {
             height = 20;
             yPos = 10;
-            cost = 800;
         } else if (this.selectedWallType === 'destructible') {
             height = 20;
             yPos = 10;
-            cost = 600;
         } else {
 
             height = 10;
             yPos = 5;
-            cost = 400;
         }
+        const cost = this.wallCost(this.selectedWallType);
 
         const width = wallLength;
         const depth = wallThickness;
@@ -4597,7 +4624,7 @@ export class Game {
         const distance = startPos.distanceTo(endPos);
         if (distance < 5) return;
 
-        const cost = wallType === 'large' ? 200 : 100;
+        const cost = this.wallCost(wallType);
         if (this.buildMoney < cost) {
             console.log('Not enough money for wall');
             return;
@@ -4645,7 +4672,7 @@ export class Game {
         const distance = startPos.distanceTo(endPos);
         if (distance < 3) return;
 
-        const cost = 100;
+        const cost = this.wallCost('barrier');
         if (this.buildMoney < cost) {
             console.log('Not enough money for barrier');
             return;
