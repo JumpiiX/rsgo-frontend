@@ -151,12 +151,10 @@ export class SimpleMiniMap {
         this.draw();
     }
 
-    // Show a red dot where the bomb is planted (pass {x, z}); pass null to clear.
     setBombPosition(pos) {
         this.bombPos = (pos && typeof pos.x === 'number') ? { x: pos.x, z: pos.z } : null;
     }
 
-    // Living teammates to draw as small facing arrows: [{ x, z, yaw, alive }].
     setTeammates(list) {
         this.teammates = Array.isArray(list) ? list : [];
     }
@@ -164,10 +162,6 @@ export class SimpleMiniMap {
     render() {
     }
 
-    // World (x,z) -> minimap screen pixel. Derived to EXACTLY match
-    // applyWorldTransform (translate center; rotate cam+π; scale -scale; translate -player):
-    //   sx = center + scale*( cos(cam)*dx - sin(cam)*dz)
-    //   sy = center + scale*( sin(cam)*dx + cos(cam)*dz)
     worldToScreen(x, z, scale) {
         const cx = this.size / 2, cy = this.size / 2;
         const ca = Math.cos(this.cameraRotation);
@@ -188,7 +182,6 @@ export class SimpleMiniMap {
 
         ctx.clearRect(0, 0, s, s);
 
-        // --- World-transformed layer: paths + bomb-site circles/labels ---
         ctx.save();
         ctx.beginPath();
         ctx.arc(s / 2, s / 2, s / 2, 0, Math.PI * 2);
@@ -215,7 +208,6 @@ export class SimpleMiniMap {
         }
         ctx.restore();
 
-        // --- Screen-space layer: teammates + bomb dot (unambiguous facing) ---
         ctx.save();
         ctx.beginPath();
         ctx.arc(s / 2, s / 2, s / 2, 0, Math.PI * 2);
@@ -225,22 +217,14 @@ export class SimpleMiniMap {
             for (const t of this.teammates) {
                 if (t.alive === false) continue;
                 const yaw = t.yaw || 0;
-                // Teammate's WORLD position and a point one step in front of them
-                // (forward = (sin(yaw), cos(yaw)), matching the game's yaw =
-                // atan2(x, z) convention). Map BOTH through the exact same
-                // world->screen transform, then aim the arrow along the screen
-                // vector between them. This locks the arrow to the teammate's
-                // true world facing — it does NOT spin when the local player
-                // rotates the camera (the map rotation cancels out correctly).
+
                 const p = this.worldToScreen(t.x, t.z, scale);
-                // Step BEHIND->AHEAD reversed: the model's forward mapped to the
-                // opposite on screen, so negate the forward step to flip it 180°.
+
                 const f = this.worldToScreen(t.x - Math.sin(yaw), t.z - Math.cos(yaw), scale);
                 const screenAngle = Math.atan2(f.y - p.y, f.x - p.x);
                 ctx.save();
                 ctx.translate(p.x, p.y);
-                // Arrow is modelled pointing along +X at angle 0; rotate to the
-                // computed screen facing.
+
                 ctx.rotate(screenAngle);
                 ctx.beginPath();
                 ctx.moveTo(8, 0);

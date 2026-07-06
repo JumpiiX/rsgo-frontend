@@ -67,8 +67,6 @@ export class Scoreboard {
         if (this.visible) this.updateDisplay();
     }
 
-    // Proactively flip a player's alive flag (e.g. on respawn) so the row
-    // un-greys immediately, without waiting for the next full scoreboard push.
     setAlive(playerId, alive) {
         let changed = false;
         for (const p of this.players) {
@@ -86,16 +84,13 @@ export class Scoreboard {
         }
     }
 
-    // ---- Team view: two columns, side by side ----
-
     _renderTeamView() {
         const local = this.meta.localTeam;
-        // Your team on the left, enemy on the right.
+
         const left = local === 'red' ? 'red' : 'orange';
         const right = left === 'orange' ? 'red' : 'orange';
         const scoreOf = (t) => (t === 'orange' ? this.meta.orangeScore : this.meta.redScore) || 0;
 
-        // Centered score header
         const header = document.createElement('div');
         header.style.cssText = `
             display: flex; align-items: center; justify-content: center;
@@ -115,7 +110,6 @@ export class Scoreboard {
         `;
         this.bodyContainer.appendChild(header);
 
-        // Two columns
         const cols = document.createElement('div');
         cols.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 20px;';
         cols.appendChild(this._teamColumn(left, local));
@@ -133,7 +127,6 @@ export class Scoreboard {
 
         const col = document.createElement('div');
 
-        // Column header row (labels)
         const head = document.createElement('div');
         head.style.cssText = `
             display: grid;
@@ -176,7 +169,6 @@ export class Scoreboard {
                 ${p.isCurrentPlayer ? `background: rgba(${this._accentRGB(team, local)}, 0.10); border-radius: 6px;` : ''}
             `;
 
-            // marker: accent bar for local team, faint for enemy; carrier = filled dot
             const marker = p.hasBomb
                 ? `<span title="carrier" style="flex:0 0 auto; width:6px; height:6px; border-radius:50%; background:${accent};"></span>`
                 : `<span style="flex:0 0 auto; width:2px; height:12px; border-radius:2px; background:${isLocal ? accent : 'rgba(255,255,255,0.15)'};"></span>`;
@@ -203,8 +195,6 @@ export class Scoreboard {
 
         return col;
     }
-
-    // ---- Deathmatch fallback (single ranked list) ----
 
     _renderListView() {
         const header = document.createElement('div');
@@ -255,11 +245,6 @@ export class Scoreboard {
         this.bodyContainer.appendChild(list);
     }
 
-    // ---- helpers ----
-
-    // The two teams are the brand's two colors: Orange (#ef4e23) and Navy
-    // (#5b7bb4). Internal team id 'red' is displayed as "Navy" everywhere in
-    // the UI, so we mirror that here.
     _accent(team) {
         return team === 'orange' ? HUD.orange : '#5b7bb4';
     }

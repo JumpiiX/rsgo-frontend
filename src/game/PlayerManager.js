@@ -56,9 +56,7 @@ const DEATH_GROUND_DROP = 6;
 export class PlayerManager {
     constructor(scene, renderer = null, camera = null) {
         this.scene = scene;
-        // Optional: used to pre-upload character models to the GPU at load time
-        // (renderer.compile) so the first player spawn doesn't stall on the
-        // first-ever geometry/texture/shader upload. Safe if null (falls back).
+
         this.renderer = renderer;
         this.camera = camera;
         this.otherPlayers = new Map();
@@ -105,11 +103,6 @@ export class PlayerManager {
         return clip;
     }
 
-    // Pre-warm the per-model death-clip retargeting during the loading screen,
-    // so the (synchronous, ~1-2ms/model) work doesn't fire on the first player
-    // spawn and cause a visible frame hitch. Safe to call multiple times: it
-    // only runs once both the GLB templates AND the death FBX clip are ready,
-    // and _deathClipForTemplate is itself cached per charIdx.
     _prewarmDeathClips() {
         if (!this.deathClipOverride || !this.templates) return;
         this.templates.forEach((template, idx) => {
@@ -117,11 +110,6 @@ export class PlayerManager {
         });
     }
 
-    // Pre-upload each character model's geometry/textures/shaders to the GPU
-    // during the loading screen. Without this, the FIRST time a player mesh is
-    // rendered it stalls one frame (~20ms) on the initial GPU upload — the
-    // remaining spawn hitch. renderer.compile() only processes what's in the
-    // scene, so we briefly add each template, compile, then remove it.
     _prewarmGPU() {
         if (this._gpuPrewarmed || !this.renderer || !this.camera || !this.templates) return;
         try {

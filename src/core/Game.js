@@ -77,8 +77,7 @@ export class Game {
         this.selectedWallType = null;
         this.isDragModeEnabled = false;
         this.buildWalls = [];
-        // Reusable objects for hit detection — avoids allocating a new Raycaster
-        // and Vector3s on every shot (reduces GC pressure on weak machines).
+
         this._raycaster = new THREE.Raycaster();
         this._shootDirVec = new THREE.Vector3();
         this._dirToPlayerVec = new THREE.Vector3();
@@ -125,8 +124,6 @@ export class Game {
                 this.redScore = message.red_score;
                 this.attackingTeam = message.attacking_team;
 
-                // Clear the minimap bomb dot for the new round (covers rounds
-                // that end by elimination, with no defuse/explode message).
                 if (this.miniMap && this.miniMap.setBombPosition) this.miniMap.setBombPosition(null);
 
                 if (message.round_number === 1) this._track('match-started');
@@ -239,7 +236,7 @@ export class Game {
                         console.log('Bomb removed from local player hand after server confirmation');
                     }
                 }
-                // Show the plant location on everyone's minimap.
+
                 if (this.miniMap && this.miniMap.setBombPosition) {
                     this.miniMap.setBombPosition(position);
                 }
@@ -588,7 +585,7 @@ export class Game {
                                 console.log('Bomb removed from local player hand after server confirmation');
                             }
                         }
-                        // Show the plant location on everyone's minimap.
+
                         if (this.miniMap && this.miniMap.setBombPosition) {
                             this.miniMap.setBombPosition(position);
                         }
@@ -778,8 +775,7 @@ export class Game {
         if (!this.gameStarted) {
             this.gameStarted = true;
             this.showLoadingScreen();
-            // Safety net: never let the loading screen get stuck if the intro
-            // path doesn't run for some reason.
+
             setTimeout(() => this.hideLoadingScreen(), 6000);
             this.initialize();
 
@@ -798,12 +794,6 @@ export class Game {
         }
     }
 
-    // Delay the intro cinematic until the heavy character models have finished
-    // loading/decoding. The GLB/FBX decode + first GPU upload cause a one-time
-    // main-thread hitch; if the intro camera is already moving when it happens,
-    // you see a stutter. By waiting for playerManager.loaded first, the decode
-    // happens on the static pre-intro screen instead. Capped at ~3s so a failed
-    // model load can never hang the intro forever.
     _startIntroWhenLoaded(spawnPos, spawnYaw, waited = 0) {
         const ready = !this.playerManager
             || this.playerManager.loaded
@@ -1681,7 +1671,6 @@ export class Game {
     handlePlayerDied(message) {
         console.log('Player died message received:', message);
 
-        // Grey out the victim on the scoreboard immediately.
         if (this.scoreboard && message.player_id) {
             this.scoreboard.setAlive(message.player_id, false);
         }
@@ -1739,8 +1728,6 @@ export class Game {
             this._postRoundCleanupTimer = null;
         }
 
-        // Un-grey this player on the scoreboard immediately (covers both the
-        // local player and others), independent of scoreboard-push timing.
         if (this.scoreboard && message.player && message.player.id) {
             this.scoreboard.setAlive(message.player.id, true);
         }
@@ -2690,12 +2677,6 @@ export class Game {
                 this._setHudVisibleForIntro(!kcActive, true);
             }
 
-            // Tint the viewmodel with the team of whoever the camera is watching:
-            // the killer during the replay, the spectated teammate while
-            // spectating, and back to my own team otherwise. Recomputed each
-            // frame (not just on the kcActive edge) so it follows the
-            // replay→spectate switch and target cycling. Only calls setTeam when
-            // the team actually changes.
             if (this.weaponSystem && this.weaponSystem.setTeam) {
                 let wantTeam = this.playerTeam;
                 if (kcActive && this.killCam.getWatchedPlayerId) {
@@ -2746,10 +2727,6 @@ export class Game {
                 this.bombSystem.update(deltaTime);
             }
 
-            // Minimap + compass are visual-only. Their canvas redraw / WebGL
-            // scissor render / DOM writes are CPU-heavy, so throttle them:
-            // minimap ~15fps (every 4th frame), compass ~30fps (every 2nd).
-            // No gameplay impact; big CPU saving under throttle.
             this._hudTick = (this._hudTick || 0) + 1;
             const doMinimap = this.miniMap && !this.isBuildMode && !this._introPlaying && (this._hudTick % 4 === 0);
             if (this.miniMap && !this.isBuildMode && !this._introPlaying) {
@@ -2775,15 +2752,13 @@ export class Game {
         }
     }
 
-    // Collect this player's living teammates (not self, not enemies) as
-    // { x, z, yaw, alive } for the minimap. yaw is their facing direction.
     collectMinimapTeammates() {
         const out = [];
         if (!this.playerManager || !this.playerManager.otherPlayers) return out;
         const myTeam = this.playerTeam || null;
         this.playerManager.otherPlayers.forEach((entry) => {
             const team = entry.data && entry.data.team;
-            if (myTeam && team && team !== myTeam) return; // skip enemies
+            if (myTeam && team && team !== myTeam) return;
             if (!entry.mesh) return;
             out.push({
                 x: entry.mesh.position.x,
@@ -3650,7 +3625,7 @@ export class Game {
         this.selectWallType(wallType);
         this.selectedWallType = wallType;
         this.isDraggingFromUI = true;
-        this._lastValidatedCell = null; // force a fresh validation on first hover
+        this._lastValidatedCell = null;
         this.createFloatingWallPreview();
         this.setDragCursor();
         this.setupGlobalDragHandlers();
@@ -3694,23 +3669,19 @@ export class Game {
 
             if (wallType === 'barrier' || wallType === 'large' || wallType === 'destructible') {
 
-                // Press-and-hold on a slot begins a DRAG: the preview follows
-                // the cursor and releasing the mouse over the map DROPS/places
-                // the wall. (A plain click still enters place-mode too.)
                 option.addEventListener('mousedown', (event) => {
                     event.preventDefault();
                     event.stopPropagation();
                     this.startWallPlacementFromHotkey(wallType);
                     this._dragDropping = true;
-                    // Position the preview immediately under the cursor.
+
                     this.onGlobalDragMove(event);
                 });
                 option.addEventListener('mouseup', (e) => { e.stopPropagation(); });
                 option.addEventListener('click', (event) => {
                     event.preventDefault();
                     event.stopPropagation();
-                    // If this was a real drag (mousedown already started it),
-                    // don't re-trigger; the click fires right after mouseup.
+
                     if (!this.isDraggingFromUI) this.startWallPlacementFromHotkey(wallType);
                 });
             }
@@ -4013,17 +3984,9 @@ export class Game {
             yPos = 5;
         }
 
-        // Cheap every-move update: move the preview to follow the cursor.
         this.floatingWallPreview.position.set(snappedPosition.x, yPos, snappedPosition.z);
         this.floatingWallPreview.rotation.y = this.currentWallRotation;
 
-        // The expensive validation (BFS tunnel-seal check over every placed
-        // wall) only needs to run when the target GRID CELL or rotation
-        // actually changes. Running it on every raw mousemove is what made WASD
-        // camera panning stutter while a wall was selected. Since placement
-        // snaps to a 20-unit grid, most mousemoves land on the same cell and
-        // now skip the BFS entirely — while still giving instant green/red
-        // feedback the moment you move to a new cell.
         const cellKey = `${snappedPosition.x}_${snappedPosition.z}_${this.currentWallRotation.toFixed(3)}`;
         if (cellKey === this._lastValidatedCell) return;
         this._lastValidatedCell = cellKey;
@@ -4046,8 +4009,6 @@ export class Game {
 
         if (event && typeof event.button === 'number' && event.button !== 0) return;
 
-        // Released back over the build UI (e.g. on the hotbar): don't place,
-        // just keep the wall selected so a click or another drag can place it.
         if (event && event.target && event.target.closest &&
             event.target.closest('#buildModeUI')) return;
 
@@ -4057,13 +4018,9 @@ export class Game {
             if (this.canPlaceWallAtPosition(snappedPosition, this.selectedWallType, true)) {
                 this.placeWallAtPosition(snappedPosition, this.currentWallRotation);
                 this.refreshBuildBanner();
-                // Walls changed — invalidate the cached validation so the next
-                // hover re-checks (this cell is now occupied).
+
                 this._lastValidatedCell = null;
 
-                // Drag-and-drop is one-shot: after dropping, deselect so nothing
-                // stays attached to the cursor. (Click-selection keeps the wall
-                // selected for placing many.)
                 if (wasDragDrop) {
                     this.deselectWallPlacement();
                 }
@@ -4249,13 +4206,10 @@ export class Game {
         return false;
     }
 
-    // Single source of truth for wall prices — MUST match the backend
-    // (message_handler.rs handle_place_structure). A mismatch desyncs the
-    // client's displayed money from the server's authoritative value.
     wallCost(wallType) {
         if (wallType === 'large') return 800;
         if (wallType === 'destructible') return 600;
-        return 400; // barrier / small
+        return 400;
     }
 
     canPlaceWallAtPosition(position, wallType, shouldFlash = false) {

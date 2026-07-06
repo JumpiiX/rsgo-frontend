@@ -137,10 +137,6 @@ export class AmmoDisplay {
     updateDisplay() {
         if (!this.currentEl) return;
 
-        // Skip the ~10 DOM writes below when nothing actually changed. This is
-        // called every frame; DOM writes force reflow and are costly under CPU
-        // throttle. The reload-progress bar animates, so include progress in the
-        // signature only while reloading.
         const sig = this.isReloading
             ? `r|${this.currentAmmo}|${this.maxAmmo}|${Math.round(this.reloadProgress * 100)}`
             : `n|${this.currentAmmo}|${this.maxAmmo}`;

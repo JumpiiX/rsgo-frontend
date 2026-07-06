@@ -163,10 +163,6 @@ export class KillCamSystem {
         if (this.ui) this.ui.style.display = 'none';
     }
 
-    // While spectating a teammate, hide THAT teammate's character model so the
-    // spectator (whose camera sits at the teammate's head) doesn't see the body
-    // clipping through the view. Every other player's model stays visible.
-    // Pass null to restore all models (spectating ended).
     _setSpectatedModelHidden(targetId) {
         if (!this.playerManager || !this.playerManager.otherPlayers) return;
         this.playerManager.otherPlayers.forEach((entry, id) => {
@@ -183,13 +179,10 @@ export class KillCamSystem {
         this.state = 'idle';
         this.replayTargetId = null;
         this.spectateTargetId = null;
-        this._setSpectatedModelHidden(null); // restore all character models
+        this._setSpectatedModelHidden(null);
         this.hideUI();
     }
 
-    // Who is the camera currently watching? The killer during the replay,
-    // the spectated teammate while spectating. Used to tint the viewmodel with
-    // the correct team's colour.
     getWatchedPlayerId() {
         if (this.state === 'replaying') return this.replayTargetId;
         if (this.state === 'spectating') return this.spectateTargetId;

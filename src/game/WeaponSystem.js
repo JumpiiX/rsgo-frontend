@@ -168,9 +168,6 @@ export class WeaponSystem {
     update(deltaTime) {
         if (!this.weaponGroup) return;
 
-        // Position (with idle sway) + rotation in a single pass using reusable
-        // vectors — avoids re-doing the work twice and the per-frame Vector3
-        // allocations that hurt GC under CPU throttle.
         if (!this._swayOffset) this._swayOffset = new THREE.Vector3();
 
         const time = Date.now() * 0.001;

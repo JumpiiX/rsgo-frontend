@@ -136,7 +136,7 @@ export class RifleWeapon {
 
     updateWeaponPosition(extraY = 0) {
         if (!this.weaponGroup) return;
-        // Reuse one offset vector instead of cloning every frame (less GC).
+
         const offset = (this._posOffset || (this._posOffset = new THREE.Vector3()))
             .copy(this.initialPositionOffset);
         offset.y += extraY;
