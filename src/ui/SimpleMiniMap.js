@@ -155,6 +155,10 @@ export class SimpleMiniMap {
         this.bombPos = (pos && typeof pos.x === 'number') ? { x: pos.x, z: pos.z } : null;
     }
 
+    setBombIcon(info) {
+        this.bombIcon = (info && typeof info.x === 'number') ? { x: info.x, z: info.z, dropped: !!info.dropped } : null;
+    }
+
     setTeammates(list) {
         this.teammates = Array.isArray(list) ? list : [];
     }
@@ -222,19 +226,19 @@ export class SimpleMiniMap {
 
                 const f = this.worldToScreen(t.x - Math.sin(yaw), t.z - Math.cos(yaw), scale);
                 const screenAngle = Math.atan2(f.y - p.y, f.x - p.x);
+                const k = t.carrier ? 1.7 : 1;
                 ctx.save();
                 ctx.translate(p.x, p.y);
-
                 ctx.rotate(screenAngle);
                 ctx.beginPath();
-                ctx.moveTo(8, 0);
-                ctx.lineTo(-6, 6);
-                ctx.lineTo(-3, 0);
-                ctx.lineTo(-6, -6);
+                ctx.moveTo(8 * k, 0);
+                ctx.lineTo(-6 * k, 6 * k);
+                ctx.lineTo(-3 * k, 0);
+                ctx.lineTo(-6 * k, -6 * k);
                 ctx.closePath();
-                ctx.fillStyle = '#6ee7b7';
-                ctx.strokeStyle = HUD.navy;
-                ctx.lineWidth = 1.2;
+                ctx.fillStyle = t.carrier ? '#0a0a0a' : '#6ee7b7';
+                ctx.strokeStyle = t.carrier ? '#ffffff' : HUD.navy;
+                ctx.lineWidth = t.carrier ? 1.6 : 1.2;
                 ctx.fill();
                 ctx.stroke();
                 ctx.restore();
@@ -256,6 +260,19 @@ export class SimpleMiniMap {
             ctx.fill();
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 1.2;
+            ctx.stroke();
+            ctx.restore();
+        }
+        if (this.bombIcon) {
+            const p = this.worldToScreen(this.bombIcon.x, this.bombIcon.z, scale);
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.beginPath();
+            ctx.arc(0, 0, 5, 0, Math.PI * 2);
+            ctx.fillStyle = '#0a0a0a';
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.4;
             ctx.stroke();
             ctx.restore();
         }

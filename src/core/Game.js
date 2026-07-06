@@ -125,6 +125,8 @@ export class Game {
                 this.attackingTeam = message.attacking_team;
 
                 if (this.miniMap && this.miniMap.setBombPosition) this.miniMap.setBombPosition(null);
+                if (this.miniMap && this.miniMap.setBombIcon) this.miniMap.setBombIcon(null);
+                this.bombCarrierId = null;
 
                 if (message.round_number === 1) this._track('match-started');
                 this.startBuildPhaseTimer(message.buy_time);
@@ -204,6 +206,7 @@ export class Game {
             };
 
             this.network.onGiveBombCallback = (message) => {
+                this.bombCarrierId = message.player_id;
                 if (message.player_id === this.network.playerId) {
                     this.bombSystem.giveBomb();
                     console.log('You have the bomb!');
@@ -211,13 +214,14 @@ export class Game {
             };
 
             this.network.onBombDroppedCallback = (message) => {
-
+                this.bombCarrierId = null;
                 this.bombSystem.onBombDropped(message.position_x, message.position_y, message.position_z);
                 console.log('Bomb dropped at:', message.position_x, message.position_y, message.position_z);
             };
 
             this.network.onBombPickedUpCallback = (message) => {
                 const isMe = message.player_id === this.network.playerId;
+                this.bombCarrierId = message.player_id;
                 this.bombSystem.onBombPickedUp(message.player_id, isMe);
                 console.log(`${message.player_name} picked up the bomb`);
             };
@@ -459,6 +463,13 @@ export class Game {
         nameInput.addEventListener('input', refreshArrow);
         refreshArrow();
 
+        nameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && nameInput.value.trim().length > 0) {
+                e.preventDefault();
+                joinButton.click();
+            }
+        });
+
         joinButton.addEventListener('click', () => {
             const name = nameInput.value.trim();
             if (name) {
@@ -553,6 +564,7 @@ export class Game {
                     };
 
                     this.network.onGiveBombCallback = (message) => {
+                        this.bombCarrierId = message.player_id;
                         if (message.player_id === this.network.playerId) {
                             this.bombSystem.giveBomb();
                             console.log('You have the bomb!');
@@ -560,13 +572,14 @@ export class Game {
                     };
 
                     this.network.onBombDroppedCallback = (message) => {
-
+                        this.bombCarrierId = null; // bomb on the ground
                         this.bombSystem.onBombDropped(message.position_x, message.position_y, message.position_z);
                         console.log('Bomb dropped at:', message.position_x, message.position_y, message.position_z);
                     };
 
                     this.network.onBombPickedUpCallback = (message) => {
                         const isMe = message.player_id === this.network.playerId;
+                        this.bombCarrierId = message.player_id;
                         this.bombSystem.onBombPickedUp(message.player_id, isMe);
                         console.log(`${message.player_name} picked up the bomb`);
                     };
@@ -2733,6 +2746,7 @@ export class Game {
                 const cameraRotation = this.input.yaw;
                 if (doMinimap) {
                     if (this.miniMap.setTeammates) this.miniMap.setTeammates(this.collectMinimapTeammates());
+                    if (this.miniMap.setBombIcon) this.miniMap.setBombIcon(this.collectBombIcon());
                     this.miniMap.update(this.camera.getPosition(), cameraRotation);
                 }
                 if (this._hudTick % 2 === 0) this.compass.update(cameraRotation);
@@ -2756,7 +2770,9 @@ export class Game {
         const out = [];
         if (!this.playerManager || !this.playerManager.otherPlayers) return out;
         const myTeam = this.playerTeam || null;
-        this.playerManager.otherPlayers.forEach((entry) => {
+        const showCarrier = this.attackingTeam && this.playerTeam && this.playerTeam === this.attackingTeam
+            && this.bombSystem && !this.bombSystem.bombPlanted;
+        this.playerManager.otherPlayers.forEach((entry, id) => {
             const team = entry.data && entry.data.team;
             if (myTeam && team && team !== myTeam) return;
             if (!entry.mesh) return;
@@ -2765,9 +2781,23 @@ export class Game {
                 z: entry.mesh.position.z,
                 yaw: (entry.targetYaw !== undefined ? entry.targetYaw : entry.mesh.rotation.y),
                 alive: !entry.dead,
+                carrier: showCarrier && id === this.bombCarrierId,
             });
         });
         return out;
+    }
+
+    collectBombIcon() {
+        const bs = this.bombSystem;
+        if (!bs) return null;
+        if (!(this.attackingTeam && this.playerTeam && this.playerTeam === this.attackingTeam)) return null;
+        if (bs.bombPlanted) return null;
+        if (bs.hasBomb) return null;
+        if (this.bombCarrierId) return null;
+        if (bs.droppedBombPosition) {
+            return { x: bs.droppedBombPosition.x, z: bs.droppedBombPosition.z, dropped: true };
+        }
+        return null;
     }
 
     updatePerfOverlay(realDelta) {
