@@ -22,6 +22,8 @@ import { KillCamSystem } from '../game/KillCamSystem.js';
 import { ReplayRecorder } from '../game/ReplayRecorder.js';
 
 export class Game {
+    static MAX_TEAM_SIZE = 5;
+
     constructor() {
         ensureHudKeyframes();
         this.renderer = null;
@@ -728,11 +730,38 @@ export class Game {
 
     joinTeam(team) {
         console.log('joinTeam called with:', team);
+
+        const roster = team === 'orange' ? this.teamPlayers.orange : this.teamPlayers.red;
+        const alreadyMine = this.selectedTeam === team;
+        if (!alreadyMine && roster && roster.length >= Game.MAX_TEAM_SIZE) {
+            const label = team === 'orange' ? 'ORANGE' : 'NAVY';
+            this.showTeamToast(`${label} team is full`);
+            return;
+        }
+
         this.selectedTeam = team;
         this.network.joinTeam(team);
 
         this.updateTeamDisplay();
         console.log('Sent join team request for:', team);
+    }
+
+    showTeamToast(message) {
+        let toast = document.getElementById('teamToast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'teamToast';
+            toast.className = 'rsgo-toast';
+            const screen = document.getElementById('teamSelectionScreen');
+            (screen || document.body).appendChild(toast);
+        }
+        toast.textContent = message;
+        toast.classList.remove('show');
+        void toast.offsetWidth;
+        toast.classList.add('show');
+
+        clearTimeout(this._teamToastTimer);
+        this._teamToastTimer = setTimeout(() => toast.classList.remove('show'), 2000);
     }
 
     updateTeamDisplay() {
@@ -765,6 +794,11 @@ export class Game {
         if (orangeHalf) orangeHalf.classList.toggle('selected', this.selectedTeam === 'orange');
         if (navyHalf) navyHalf.classList.toggle('selected', this.selectedTeam === 'red');
         if (screen) screen.classList.toggle('has-pick', !!this.selectedTeam);
+
+        const orangeFull = (this.teamPlayers.orange?.length || 0) >= Game.MAX_TEAM_SIZE && this.selectedTeam !== 'orange';
+        const navyFull = (this.teamPlayers.red?.length || 0) >= Game.MAX_TEAM_SIZE && this.selectedTeam !== 'red';
+        if (orangeHalf) orangeHalf.classList.toggle('full', orangeFull);
+        if (navyHalf) navyHalf.classList.toggle('full', navyFull);
 
         const statusElement = document.getElementById('teamStatus');
         if (statusElement) {

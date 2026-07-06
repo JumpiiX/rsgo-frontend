@@ -163,7 +163,7 @@
 
         /* ===== Minimalist name + loader ===== */
         .rsgo-name-card, .rsgo-load-card {
-            width: min(90vw, 480px); text-align: center;
+            width: min(90vw, 440px); text-align: center;
             display: flex; flex-direction: column; align-items: center;
         }
         /* Small spaced wordmark, the only chrome. */
@@ -174,19 +174,42 @@
         }
         /* Logo image used in place of the wordmark on the name screen. */
         .rsgo-logo-mark { width: 64px; height: 64px; object-fit: contain; margin-bottom: 40px; }
-        /* Underline-only input — no box. Big, clean, centered. */
+
+        /* ---- Minimal brand mark on the name screen ---- */
+        .rsgo-brand { margin-bottom: clamp(44px, 8vh, 72px); }
+        .rsgo-brand-word {
+            font-size: clamp(34px, 6vw, 52px); font-weight: 800;
+            letter-spacing: 7px; color: var(--ink); line-height: 1;
+            padding-left: 7px; /* balance the tracking */
+        }
+        .rsgo-brand-dot {
+            color: var(--orange);
+            /* subtle breathing accent so the mark feels alive */
+            animation: rsgoDot 2.4s ease-in-out infinite;
+        }
+        @keyframes rsgoDot { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+        /* ---- Clean underline input, centered, no box ---- */
         .rsgo-namefield {
             display: flex; align-items: center; gap: 14px;
-            width: 100%; border-bottom: 2px solid var(--line);
+            width: 100%; border-bottom: 1.5px solid var(--line);
             padding-bottom: 12px; transition: border-color 0.25s;
         }
         .rsgo-namefield:focus-within { border-color: var(--orange); }
         .rsgo-underline-input {
             flex: 1; background: none; border: none; outline: none;
             color: var(--ink); font-family: inherit; font-weight: 500;
-            font-size: clamp(24px, 5vw, 38px); letter-spacing: 0.5px;
+            font-size: clamp(22px, 4.5vw, 32px); letter-spacing: 0.5px; min-width: 0;
         }
-        .rsgo-underline-input::placeholder { color: var(--ink-dim); opacity: 0.5; font-weight: 400; }
+        .rsgo-underline-input::placeholder { color: var(--ink-dim); opacity: 0.4; font-weight: 400; }
+
+        /* (legacy hint styles kept harmless in case markup references them) */
+        .rsgo-enter-hint { display: none; }
+        .rsgo-enter-hint kbd {
+            font-family: inherit; font-size: 11px; font-weight: 700;
+            padding: 2px 8px; border-radius: 6px; margin: 0 2px;
+            background: var(--navy-soft); border: 1px solid var(--line); color: var(--ink);
+        }
         /* Inline circular arrow submit. */
         .rsgo-arrow {
             flex: 0 0 auto; width: 46px; height: 46px; border-radius: 50%;
@@ -248,92 +271,179 @@
         .rsgo-steps li.active .dot { background: var(--orange); border-color: var(--orange); animation: rsgoPulse 0.9s ease infinite; }
         @keyframes rsgoPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(239,78,35,0.6);} 50% { box-shadow: 0 0 0 6px rgba(239,78,35,0);} }
 
-        /* ===== Team select: navy-dominant split, each team an ACCENT color =====
-           Both halves are navy (so the orange cursor stays visible everywhere); the
-           teams are told apart by a colored accent — orange for one, steel-blue for
-           the other — on the name, top bar, and roster chips. */
+        /* ===== Team select: full-bleed split where each side owns its color =====
+           Left half breathes warm ORANGE, right half stays cool steel-NAVY. Each
+           carries a giant ghosted index numeral, an accent top bar, and — on hover /
+           selection — its accent color blooms up from the base of the half. */
         .rsgo-split { padding: 0; align-items: stretch; }     /* halves fill the screen */
         .rsgo-half {
             flex: 1; display: flex; align-items: center; justify-content: center;
             cursor: url("models/rsgo-cursor.png") 16 16, pointer; position: relative;
-            transition: filter 0.2s ease, background 0.25s ease;
-            color: var(--ink);
+            overflow: hidden; color: var(--ink);
+            transition: filter 0.25s ease, background 0.3s ease;
         }
-        /* Both halves navy; a subtle accent-tinted gradient hints the team color. */
-        .navy-half   { --accent: #ef4e23; background: linear-gradient(180deg, var(--navy) 0%, var(--navy-deep) 100%); }
-        .orange-half { --accent: #5b7bb4; background: linear-gradient(180deg, var(--navy) 0%, var(--navy-deep) 100%); }
-        /* A thin accent bar along the top edge of each half = team identity. */
+        /* ORANGE side: warm base + an orange glow rising from the bottom. */
+        .team-orange {
+            --accent: var(--orange);
+            background:
+                radial-gradient(120% 80% at 50% 118%, rgba(239,78,35,0.28) 0%, transparent 60%),
+                linear-gradient(180deg, var(--navy) 0%, var(--navy-deep) 100%);
+        }
+        /* NAVY side: cool steel-blue accent + a matching cool glow. */
+        .team-navy {
+            --accent: #5b8dd6;
+            background:
+                radial-gradient(120% 80% at 50% 118%, rgba(91,141,214,0.24) 0%, transparent 60%),
+                linear-gradient(180deg, var(--navy) 0%, var(--navy-deep) 100%);
+        }
+        /* Accent bar along the top edge = team color signature. */
         .rsgo-half::before {
             content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
-            background: var(--accent);
+            background: var(--accent); box-shadow: 0 0 18px var(--accent);
+            opacity: 0.9;
         }
-        /* The center seam line. */
-        .navy-half::after {
-            content: ''; position: absolute; top: 12%; bottom: 12%; right: 0; width: 1px;
-            background: var(--line);
+        /* Giant ghosted index numeral in the corner. */
+        .half-ghost {
+            position: absolute; bottom: -3vh; font-size: 34vh; line-height: 0.8;
+            font-weight: 900; color: var(--accent); opacity: 0.06;
+            pointer-events: none; user-select: none; letter-spacing: -0.04em;
+            transition: opacity 0.3s ease;
+        }
+        .team-orange .half-ghost { left: 3vw; }
+        .team-navy   .half-ghost { right: 3vw; }
+
+        /* Center seam. */
+        .team-orange::after {
+            content: ''; position: absolute; top: 14%; bottom: 14%; right: 0; width: 1px;
+            background: var(--line); z-index: 2;
         }
 
-        /* Hover/selected feedback. Halves stay 50/50 so the seam never moves. */
-        .rsgo-half:hover { background: linear-gradient(180deg, var(--navy-soft) 0%, var(--navy) 100%); }
-        .rsgo-split.has-pick .rsgo-half:not(.selected) { filter: brightness(0.7); }
-        .rsgo-half.selected .half-inner {
-            outline: 2px solid var(--accent); outline-offset: 18px; border-radius: 14px;
+        /* Hover: accent blooms, numeral brightens. */
+        .rsgo-half:hover { filter: brightness(1.12); }
+        .rsgo-half:hover .half-ghost { opacity: 0.11; }
+        /* When one side is picked, the other dims back. */
+        .rsgo-split.has-pick .rsgo-half:not(.selected) { filter: brightness(0.5) saturate(0.55); }
+        /* The picked half glows from within instead of getting a hard outline box. */
+        .rsgo-half.selected { box-shadow: inset 0 0 140px -40px var(--accent); }
+        .rsgo-half.selected .half-ghost { opacity: 0.16; }
+        .rsgo-half.selected .half-name {
+            text-shadow: 0 0 34px color-mix(in srgb, var(--accent) 70%, transparent);
         }
 
-        .half-inner { width: 80%; max-width: 360px; text-align: center; }
+        /* Small centered prompt hovering over the seam. */
+        .rsgo-split-prompt {
+            position: absolute; top: 8%; left: 50%; transform: translateX(-50%);
+            z-index: 4; font-size: 12px; letter-spacing: 4px; text-transform: uppercase;
+            font-weight: 600; color: var(--ink-dim); opacity: 0.7;
+        }
+        .rsgo-split.has-pick .rsgo-split-prompt { opacity: 0; }
+
+        .half-inner { position: relative; z-index: 2; width: 80%; max-width: 360px; text-align: center; }
         .half-name {
-            font-size: clamp(28px, 4vw, 44px); font-weight: 800; letter-spacing: 4px;
+            font-size: clamp(30px, 4.4vw, 48px); font-weight: 800; letter-spacing: 5px;
             margin-bottom: 22px; color: var(--accent);
+            text-shadow: 0 0 24px color-mix(in srgb, var(--accent) 45%, transparent);
         }
-        .half-roster { display: flex; flex-direction: column; gap: 8px; min-height: 60px; }
-        /* Player chips: soft navy surface, accent-colored left edge + light text. */
+        .half-roster { display: flex; flex-direction: column; gap: 8px; min-height: 60px; align-items: center; }
+        /* Player chips: soft navy surface + light text. "You" chip carries the accent. */
         .roster-chip {
-            font-size: 15px; font-weight: 600; padding: 10px 14px; border-radius: 10px;
+            display: inline-flex; align-items: center; gap: 8px;
+            font-size: 15px; font-weight: 600; padding: 9px 16px; border-radius: 999px;
             animation: rsgoRise 0.35s ease both;
             background: var(--navy-soft); color: var(--ink);
-            border-left: 3px solid var(--accent);
+            border: 1px solid var(--line);
         }
-        .roster-chip.you::after { content: ' (you)'; font-weight: 400; color: var(--ink-dim); }
-        .half-empty { font-size: 14px; padding: 10px; font-weight: 500; color: var(--ink-dim); }
+        .roster-chip.you {
+            background: color-mix(in srgb, var(--accent) 16%, var(--navy-soft));
+            border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+            color: var(--ink);
+        }
+        /* Accent dot marker before every player. */
+        .roster-chip::before {
+            content: ''; width: 7px; height: 7px; border-radius: 50%;
+            background: var(--accent); flex: 0 0 auto; opacity: 0.7;
+        }
+        .roster-chip.you::before { opacity: 1; box-shadow: 0 0 8px var(--accent); }
+        .roster-chip.you::after { content: 'you'; font-size: 11px; font-weight: 700;
+            letter-spacing: 1px; text-transform: uppercase; color: var(--accent); }
+        .half-empty { font-size: 14px; padding: 10px; font-weight: 500; color: var(--ink-dim); opacity: 0.7; }
+        /* Join prompt turns into a confirmation once this side is picked. */
         .half-join {
-            margin-top: 22px; font-size: 13px; letter-spacing: 2px; text-transform: uppercase;
-            font-weight: 700; color: var(--accent);
+            margin-top: 24px; font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
+            font-weight: 700; color: var(--accent); transition: opacity 0.25s;
         }
         .rsgo-half.selected .half-join { visibility: hidden; }
+        .rsgo-half.selected .half-inner::after {
+            content: '\2713  You\2019 re in'; display: block; margin-top: 24px;
+            font-size: 12px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700;
+            color: var(--accent);
+        }
 
-        /* Start button straddling the seam. Built from two SOLID half-panels (no
-           gradient, no transparency) so neither half can blend with the
-           background behind it — the navy half stays pure navy, the orange half
-           pure orange, regardless of what's underneath. */
+        /* Start button, centered on the seam. When enabled it's the ONE place the
+           brand orange fully takes over — a solid pill that reads as THE action. */
         .rsgo-split-start {
-            position: absolute; top: 72%; left: 50%; transform: translate(-50%, -50%);
-            z-index: 3; width: 260px; height: 60px; padding: 0; cursor: url("models/rsgo-cursor.png") 16 16, pointer;
-            border: none; background: none; border-radius: 12px; overflow: hidden;
-            isolation: isolate; /* own stacking context — nothing composites through */
-            font-family: inherit; transition: transform 0.15s ease;
-            display: flex;
+            position: absolute; top: 76%; left: 50%; transform: translate(-50%, -50%);
+            z-index: 5; height: 58px; padding: 0 40px; cursor: url("models/rsgo-cursor.png") 16 16, pointer;
+            border-radius: 999px; border: none;
+            font-family: inherit; display: inline-flex; align-items: center;
+            transition: transform 0.16s ease, box-shadow 0.25s ease, background 0.2s ease, opacity 0.2s;
         }
         .rsgo-split-start span {
-            flex: 1; display: flex; align-items: center; justify-content: center;
-            font-size: 17px; font-weight: 700; letter-spacing: 0.5px;
+            display: inline-flex; align-items: center;
+            font-size: 15px; font-weight: 800; letter-spacing: 3px; text-transform: uppercase;
         }
-        /* Navy pill with an ORANGE outline + orange text — contrasts cleanly and
-           keeps the orange cursor visible (no full-orange fill). One unified button. */
-        .rsgo-split-start {
-            border: 1.5px solid var(--orange);
-            background: var(--navy-deep);
-            box-shadow: 0 6px 22px rgba(0,0,0,0.35);
+        .rsgo-split-start .lbl-navy { margin-right: 8px; }
+        /* Enabled: solid orange fill, navy text, soft orange halo + gentle pulse. */
+        .rsgo-split-start:not(:disabled) {
+            background: var(--orange); color: var(--navy-deep);
+            box-shadow: 0 10px 30px -6px rgba(239,78,35,0.55);
+            animation: rsgoStartPulse 2.2s ease-in-out infinite;
         }
-        .rsgo-split-start .lbl-navy,
-        .rsgo-split-start .lbl-orange { background: transparent; color: var(--orange); }
+        .rsgo-split-start:not(:disabled) .lbl-navy,
+        .rsgo-split-start:not(:disabled) .lbl-orange { color: var(--navy-deep); }
+        @keyframes rsgoStartPulse {
+            0%,100% { box-shadow: 0 10px 30px -6px rgba(239,78,35,0.45); }
+            50%     { box-shadow: 0 10px 40px -2px rgba(239,78,35,0.75); }
+        }
         .rsgo-split-start:hover:not(:disabled) {
             transform: translate(-50%, -50%) scale(1.06);
-            background: rgba(239,78,35,0.12); box-shadow: 0 8px 28px rgba(239,78,35,0.25);
+            box-shadow: 0 14px 40px -4px rgba(239,78,35,0.7);
         }
-        /* Disabled: muted navy surface + dim border/text so it reads as not-ready. */
-        .rsgo-split-start:disabled { cursor: url("models/rsgo-cursor.png") 16 16, default; border-color: var(--line); background: var(--navy-soft); }
+        .rsgo-split-start:active:not(:disabled) { transform: translate(-50%, -50%) scale(0.98); }
+        /* Disabled: hollow ghost pill — dim outline, muted text, no pulse. */
+        .rsgo-split-start:disabled {
+            cursor: url("models/rsgo-cursor.png") 16 16, default;
+            background: transparent; border: 1.5px solid var(--line);
+            box-shadow: none; opacity: 0.65;
+        }
         .rsgo-split-start:disabled .lbl-navy,
         .rsgo-split-start:disabled .lbl-orange { color: var(--ink-dim); }
+
+        /* A full team half: dimmed, not-allowed cursor, shows a FULL badge. */
+        .rsgo-half.full {
+            cursor: not-allowed; filter: brightness(0.42) saturate(0.5);
+        }
+        .rsgo-half.full:hover { filter: brightness(0.42) saturate(0.5); }
+        .rsgo-half.full .half-ghost { opacity: 0.05; }
+        .rsgo-half.full .half-join { visibility: hidden; }
+        .rsgo-half.full .half-inner::after {
+            content: 'Team full'; display: block; margin-top: 24px;
+            font-size: 12px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700;
+            color: var(--ink-dim);
+        }
+
+        /* Small transient popup ("team is full") on the team screen. */
+        .rsgo-toast {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.94);
+            z-index: 20; padding: 14px 26px; border-radius: 999px;
+            background: var(--navy-deep); border: 1.5px solid var(--orange);
+            color: var(--ink); font-size: 14px; font-weight: 700;
+            letter-spacing: 1px; text-transform: uppercase; white-space: nowrap;
+            box-shadow: 0 12px 40px -6px rgba(0,0,0,0.5), 0 0 24px -6px rgba(239,78,35,0.5);
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        .rsgo-toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
     </style>
 </head>
 <body>
@@ -344,8 +454,13 @@
             if (!window.isMapBuilderMode) document.currentScript.parentElement.classList.add('show');
         </script>
         <div class="rsgo-card rsgo-name-card">
-            <!-- Just the input + arrow — fully minimal, no header. -->
-            <div class="rsgo-namefield rsgo-rise d1">
+            <!-- Minimal: wordmark with a breathing orange dot, then the input. -->
+            <div class="rsgo-brand rsgo-rise d1">
+                <span class="rsgo-brand-word">RSGO<span class="rsgo-brand-dot">.</span></span>
+            </div>
+
+            <!-- Underline input + inline arrow. -->
+            <div class="rsgo-namefield rsgo-rise d2">
                 <input type="text" id="playerName" class="rsgo-underline-input" placeholder="enter your name" maxlength="16" autocomplete="off" spellcheck="false">
                 <button id="joinGame" class="rsgo-arrow" aria-label="Continue">→</button>
             </div>
@@ -371,10 +486,14 @@
         <div id="teamVsTeamButton" style="display:none;"></div>
     </div>
 
-    <!-- STEP 3 — Team selection: full-bleed vertical split (navy | orange) -->
+    <!-- STEP 3 — Team selection: full-bleed vertical split, each side its own color -->
     <div id="teamSelectionScreen" class="rsgo-screen rsgo-split">
-        <!-- LEFT half = ORANGE team, on a NAVY background -->
-        <div class="rsgo-half navy-half" data-team="orange" id="joinOrangeTeam">
+        <!-- Tiny prompt centered over the seam -->
+        <div class="rsgo-split-prompt">Choose your side</div>
+
+        <!-- LEFT half = ORANGE team (warm orange energy) -->
+        <div class="rsgo-half team-orange" data-team="orange" id="joinOrangeTeam">
+            <span class="half-ghost">01</span>
             <div class="half-inner">
                 <div class="half-name">ORANGE</div>
                 <div class="half-roster" id="orangeTeamSlots"></div>
@@ -382,8 +501,9 @@
             </div>
         </div>
 
-        <!-- RIGHT half = NAVY team (internal id 'red'), on an ORANGE background -->
-        <div class="rsgo-half orange-half" data-team="navy" id="joinRedTeam">
+        <!-- RIGHT half = NAVY team (internal id 'red'), cool steel energy -->
+        <div class="rsgo-half team-navy" data-team="navy" id="joinRedTeam">
+            <span class="half-ghost">02</span>
             <div class="half-inner">
                 <div class="half-name">NAVY</div>
                 <div class="half-roster" id="redTeamSlots"></div>
@@ -391,8 +511,7 @@
             </div>
         </div>
 
-        <!-- Start button straddling the seam: "Start" centered in left half,
-             "match" centered in right half. -->
+        <!-- Start button straddling the seam. -->
         <button id="startTeamGame" class="rsgo-split-start" disabled>
             <span class="lbl-navy">Start</span>
             <span class="lbl-orange">match</span>
