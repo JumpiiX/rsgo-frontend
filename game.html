@@ -175,31 +175,38 @@
         /* Logo image used in place of the wordmark on the name screen. */
         .rsgo-logo-mark { width: 64px; height: 64px; object-fit: contain; margin-bottom: 40px; }
 
-        /* ---- Minimal brand mark on the name screen ---- */
-        .rsgo-brand { margin-bottom: clamp(44px, 8vh, 72px); }
+        /* ===== Name screen: clean, editorial, left-aligned ===== */
+        .rsgo-name-card {
+            align-items: flex-start; text-align: left; width: min(90vw, 460px);
+        }
+        /* Tiny step indicator above the wordmark. */
+        .rsgo-step {
+            font-size: 11px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase;
+            color: var(--orange); margin-bottom: 18px;
+        }
+        .rsgo-brand { margin-bottom: 6px; }
         .rsgo-brand-word {
-            font-size: clamp(34px, 6vw, 52px); font-weight: 800;
-            letter-spacing: 7px; color: var(--ink); line-height: 1;
-            padding-left: 7px; /* balance the tracking */
+            font-size: clamp(40px, 8vw, 64px); font-weight: 800;
+            letter-spacing: -1px; color: var(--ink); line-height: 0.95;
         }
-        .rsgo-brand-dot {
-            color: var(--orange);
-            /* subtle breathing accent so the mark feels alive */
-            animation: rsgoDot 2.4s ease-in-out infinite;
+        /* Large friendly prompt — this is the modern touch: type, not chrome. */
+        .rsgo-name-prompt {
+            font-size: clamp(18px, 3.4vw, 24px); font-weight: 500;
+            color: var(--ink-dim); margin: 4px 0 clamp(36px, 6vh, 52px);
         }
-        @keyframes rsgoDot { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 
-        /* ---- Clean underline input, centered, no box ---- */
+        /* ---- Clean underline input, no box, no glow ---- */
         .rsgo-namefield {
             display: flex; align-items: center; gap: 14px;
-            width: 100%; border-bottom: 1.5px solid var(--line);
-            padding-bottom: 12px; transition: border-color 0.25s;
+            width: 100%; border-bottom: 2px solid var(--line);
+            padding-bottom: 14px; transition: border-color 0.25s;
         }
         .rsgo-namefield:focus-within { border-color: var(--orange); }
         .rsgo-underline-input {
             flex: 1; background: none; border: none; outline: none;
-            color: var(--ink); font-family: inherit; font-weight: 500;
-            font-size: clamp(22px, 4.5vw, 32px); letter-spacing: 0.5px; min-width: 0;
+            color: var(--ink); font-family: inherit; font-weight: 600;
+            font-size: clamp(22px, 4.5vw, 32px); letter-spacing: 0; min-width: 0;
+            caret-color: var(--orange);
         }
         .rsgo-underline-input::placeholder { color: var(--ink-dim); opacity: 0.4; font-weight: 400; }
 
@@ -212,20 +219,19 @@
         }
         /* Inline circular arrow submit. */
         .rsgo-arrow {
-            flex: 0 0 auto; width: 46px; height: 46px; border-radius: 50%;
-            border: 1.5px solid var(--line); background: var(--navy-soft); color: var(--ink-dim);
-            font-size: 22px; font-weight: 700; cursor: url("models/rsgo-cursor.png") 16 16, pointer; font-family: inherit;
+            flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%;
+            border: none; background: var(--navy-soft); color: var(--ink-dim);
+            font-size: 20px; font-weight: 700; cursor: url("models/rsgo-cursor.png") 16 16, pointer; font-family: inherit;
             display: flex; align-items: center; justify-content: center;
-            opacity: 0.5; transform: scale(0.9);
-            transition: opacity 0.25s ease, transform 0.25s ease, background 0.25s, color 0.25s, border-color 0.25s;
+            opacity: 0.45; transform: scale(0.92);
+            transition: opacity 0.25s ease, transform 0.2s ease, background 0.2s, color 0.2s;
         }
-        /* Arrow activates once a name is typed (JS toggles .ready): orange ring +
-           orange glyph on navy, so it stands out without an orange fill. */
+        /* Arrow activates once a name is typed (JS toggles .ready): solid orange fill. */
         .rsgo-arrow.ready {
             opacity: 1; transform: scale(1);
-            border-color: var(--orange); color: var(--orange); background: var(--navy-soft);
+            background: var(--orange); color: var(--navy-deep);
         }
-        .rsgo-arrow.ready:hover { transform: scale(1.1); background: rgba(239,78,35,0.12); }
+        .rsgo-arrow.ready:hover { transform: scale(1.08); }
 
         .rsgo-hint {
             margin-top: 20px; font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
@@ -448,20 +454,22 @@
 </head>
 <body>
     <!-- STEP 1 — Name entry -->
-    <div id="nameScreen" class="rsgo-screen">
+    <div id="nameScreen" class="rsgo-screen rsgo-name-screen">
         <script>
             // Show only outside map-builder mode; the new flow shows it itself.
             if (!window.isMapBuilderMode) document.currentScript.parentElement.classList.add('show');
         </script>
         <div class="rsgo-card rsgo-name-card">
-            <!-- Minimal: wordmark with a breathing orange dot, then the input. -->
+            <!-- Small step label + wordmark. -->
+            <div class="rsgo-step rsgo-rise d1">Step 01 / 03</div>
             <div class="rsgo-brand rsgo-rise d1">
-                <span class="rsgo-brand-word">RSGO<span class="rsgo-brand-dot">.</span></span>
+                <span class="rsgo-brand-word">RSGO</span>
             </div>
+            <div class="rsgo-name-prompt rsgo-rise d2">Who's playing?</div>
 
-            <!-- Underline input + inline arrow. -->
-            <div class="rsgo-namefield rsgo-rise d2">
-                <input type="text" id="playerName" class="rsgo-underline-input" placeholder="enter your name" maxlength="16" autocomplete="off" spellcheck="false">
+            <!-- Clean underline input + arrow. -->
+            <div class="rsgo-namefield rsgo-rise d3">
+                <input type="text" id="playerName" class="rsgo-underline-input" placeholder="Enter your name" maxlength="16" autocomplete="off" spellcheck="false">
                 <button id="joinGame" class="rsgo-arrow" aria-label="Continue">→</button>
             </div>
         </div>
